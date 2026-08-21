@@ -17,6 +17,7 @@ struct ReceiptListView: View {
     private var receipts: [Receipt]
 
     @State private var showingScanner = false
+    @State private var showingPhotoPicker = false
     @State private var showingSettings = false
     @State private var errorMessage: String?
     @State private var showingError = false
@@ -49,7 +50,7 @@ struct ReceiptListView: View {
                     ContentUnavailableView(
                         "No Receipts Yet",
                         systemImage: "doc.viewfinder",
-                        description: Text("Tap the camera to scan your first receipt.")
+                        description: Text("Tap + to scan or upload your first receipt.")
                     )
                 } else {
                     receiptList
@@ -66,10 +67,19 @@ struct ReceiptListView: View {
                     }
                 }
                 ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        showingScanner = true
+                    Menu {
+                        Button {
+                            showingScanner = true
+                        } label: {
+                            Label("Scan with Camera", systemImage: "camera.viewfinder")
+                        }
+                        Button {
+                            showingPhotoPicker = true
+                        } label: {
+                            Label("Choose from Library", systemImage: "photo.on.rectangle")
+                        }
                     } label: {
-                        Label("Scan Receipt", systemImage: "camera.viewfinder")
+                        Label("Add Receipt", systemImage: "plus")
                     }
                 }
             }
@@ -99,6 +109,18 @@ struct ReceiptListView: View {
                         errorMessage = error.localizedDescription
                         showingError = true
                         showingScanner = false
+                    }
+                )
+                .ignoresSafeArea()
+            }
+            .sheet(isPresented: $showingPhotoPicker) {
+                PhotoLibraryPickerView(
+                    onPick: { image in
+                        saveScannedReceipt(images: [image])
+                        showingPhotoPicker = false
+                    },
+                    onCancel: {
+                        showingPhotoPicker = false
                     }
                 )
                 .ignoresSafeArea()

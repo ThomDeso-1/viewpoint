@@ -36,11 +36,9 @@
     </array>
     <key>NSCameraUsageDescription</key>
     <string>Viewpoint uses the camera to scan your receipts.</string>
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>Viewpoint uses your photo library to upload receipt images.</string>
     <key>NSUbiquitousContainers</key>
-    <key>NSCameraUsageDescription</key>
-   	<string>We need camera access to capture receipt images</string>
-   	<key>NSPhotoLibraryUsageDescription</key>
-   	<string>We need access to your photo library to upload receipt images</string>
     <dict>
         <key>iCloud.com.viewpoint.receipts</key>
         <dict>
