@@ -1,0 +1,467 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		04035E02DC546BFA7D0DF11A /* ReceiptDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7A23B1B072473E772BB3CB5 /* ReceiptDetailView.swift */; };
+		0689A8EA8F8AC1FC43F50B5A /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B2084A17CCE9249982FE31B /* AppSettings.swift */; };
+		06C95645B878AF189262B400 /* ReceiptListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBF9A53EF19E01AC18CCFEE0 /* ReceiptListView.swift */; };
+		160267930570DDBC80FE3D27 /* ClaudeAPIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 424320E6DBCD41BA7ED15C7D /* ClaudeAPIService.swift */; };
+		1D5999942085CE520B766B81 /* HealthCheckService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FE8AC03289A0F443EA2559B /* HealthCheckService.swift */; };
+		5E1BE59F3A07526995F91F32 /* WaveAPIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 132317F3A3DA7A6B5EB0B7B2 /* WaveAPIService.swift */; };
+		63DBC20D2DEB20FFEF8697E0 /* KeychainService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0ED743A39138B7FEE8A570FE /* KeychainService.swift */; };
+		65FDD2A2892E71501ADB8BC9 /* StorageChoiceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F794B41D5F09DB5D97DA3FA8 /* StorageChoiceView.swift */; };
+		6EE1DB576EE0EB6B5920121B /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65E103A425E626F1226542B7 /* SettingsView.swift */; };
+		8180864325E30498890789D8 /* DocumentScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64BD83A7C080F4DF841DD743 /* DocumentScannerView.swift */; };
+		8D0DC7D0F697FA70C2E9FDBE /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC183889A54C2A200F029228 /* NotificationService.swift */; };
+		97E3A055760A8301437A44FC /* APIKeySetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FE4694C83517FF176D81B69 /* APIKeySetupView.swift */; };
+		9CFFA89B653BCC4471AC72D0 /* Receipt.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B59C1C205F928CEE5264DD9 /* Receipt.swift */; };
+		A792128FE0CF4429096948E7 /* UploadService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E92AC3B6626CB52EEEA460BB /* UploadService.swift */; };
+		AC0EE4F7AAEDB10C1782CBA5 /* WaveSetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BFE3E844FAF1DF78CA78928 /* WaveSetupView.swift */; };
+		B34FDB7425FDB8DA650FECA8 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 386091F4D369B4C4F3C1FC06 /* ContentView.swift */; };
+		B9E49145B03E78502E893D13 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 25C30E88EF87172CD14D941A /* Assets.xcassets */; };
+		CB993AB4A41C76542CA4AB4B /* ViewpointReceiptsApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 655C932A9D19D1DD4D7EA543 /* ViewpointReceiptsApp.swift */; };
+		D6E57F871657471DD21B26C6 /* ReceiptReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C783DA994CF47BE8076141B /* ReceiptReviewView.swift */; };
+		D74BB1D636D6B9DB8C7F3AF8 /* StorageService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCEEBE94E69193B91860C8C8 /* StorageService.swift */; };
+		DD5BCC4B85F337D151D19883 /* ExtractionResult.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC80A9AF01A34796FD0A78D4 /* ExtractionResult.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		0ED743A39138B7FEE8A570FE /* KeychainService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainService.swift; sourceTree = "<group>"; };
+		132317F3A3DA7A6B5EB0B7B2 /* WaveAPIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaveAPIService.swift; sourceTree = "<group>"; };
+		1B59C1C205F928CEE5264DD9 /* Receipt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Receipt.swift; sourceTree = "<group>"; };
+		25C30E88EF87172CD14D941A /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		2FE8AC03289A0F443EA2559B /* HealthCheckService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthCheckService.swift; sourceTree = "<group>"; };
+		386091F4D369B4C4F3C1FC06 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		424320E6DBCD41BA7ED15C7D /* ClaudeAPIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeAPIService.swift; sourceTree = "<group>"; };
+		5BFE3E844FAF1DF78CA78928 /* WaveSetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaveSetupView.swift; sourceTree = "<group>"; };
+		5C783DA994CF47BE8076141B /* ReceiptReviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReceiptReviewView.swift; sourceTree = "<group>"; };
+		64BD83A7C080F4DF841DD743 /* DocumentScannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentScannerView.swift; sourceTree = "<group>"; };
+		655C932A9D19D1DD4D7EA543 /* ViewpointReceiptsApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewpointReceiptsApp.swift; sourceTree = "<group>"; };
+		65E103A425E626F1226542B7 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		73DEC5727E6A704A0E18979C /* ViewpointReceipts.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = ViewpointReceipts.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		8B2084A17CCE9249982FE31B /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
+		8FE4694C83517FF176D81B69 /* APIKeySetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIKeySetupView.swift; sourceTree = "<group>"; };
+		BC80A9AF01A34796FD0A78D4 /* ExtractionResult.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExtractionResult.swift; sourceTree = "<group>"; };
+		DBF9A53EF19E01AC18CCFEE0 /* ReceiptListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReceiptListView.swift; sourceTree = "<group>"; };
+		DCEEBE94E69193B91860C8C8 /* StorageService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageService.swift; sourceTree = "<group>"; };
+		E7A23B1B072473E772BB3CB5 /* ReceiptDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReceiptDetailView.swift; sourceTree = "<group>"; };
+		E92AC3B6626CB52EEEA460BB /* UploadService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadService.swift; sourceTree = "<group>"; };
+		F794B41D5F09DB5D97DA3FA8 /* StorageChoiceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageChoiceView.swift; sourceTree = "<group>"; };
+		FC183889A54C2A200F029228 /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		1C8600F3E7561F1874BE9F32 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				655C932A9D19D1DD4D7EA543 /* ViewpointReceiptsApp.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		539AC9927764C288E20878AD /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				386091F4D369B4C4F3C1FC06 /* ContentView.swift */,
+				D4441F1D9D47BBA2B55FEECC /* Capture */,
+				773926808FE28604071E8B36 /* Onboarding */,
+				92C84A5F1B42C56D541891EF /* Receipts */,
+				762841A914663614292D9884 /* Review */,
+				C0B0F69BB840F261813FE8CF /* Settings */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		66C5362BC5A759A72A5F52BA /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				73DEC5727E6A704A0E18979C /* ViewpointReceipts.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		6E3D3D91A37AC4822FAB7FBC /* ViewpointReceipts */ = {
+			isa = PBXGroup;
+			children = (
+				1C8600F3E7561F1874BE9F32 /* App */,
+				CDBDB40274420C5741F6D5F2 /* Models */,
+				A94ADAA8C3C7270C49125A08 /* Resources */,
+				DB2219034DA3FB81B12067D2 /* Services */,
+				539AC9927764C288E20878AD /* Views */,
+			);
+			path = ViewpointReceipts;
+			sourceTree = "<group>";
+		};
+		762841A914663614292D9884 /* Review */ = {
+			isa = PBXGroup;
+			children = (
+				5C783DA994CF47BE8076141B /* ReceiptReviewView.swift */,
+			);
+			path = Review;
+			sourceTree = "<group>";
+		};
+		773926808FE28604071E8B36 /* Onboarding */ = {
+			isa = PBXGroup;
+			children = (
+				8FE4694C83517FF176D81B69 /* APIKeySetupView.swift */,
+				F794B41D5F09DB5D97DA3FA8 /* StorageChoiceView.swift */,
+				5BFE3E844FAF1DF78CA78928 /* WaveSetupView.swift */,
+			);
+			path = Onboarding;
+			sourceTree = "<group>";
+		};
+		92C84A5F1B42C56D541891EF /* Receipts */ = {
+			isa = PBXGroup;
+			children = (
+				E7A23B1B072473E772BB3CB5 /* ReceiptDetailView.swift */,
+				DBF9A53EF19E01AC18CCFEE0 /* ReceiptListView.swift */,
+			);
+			path = Receipts;
+			sourceTree = "<group>";
+		};
+		A94ADAA8C3C7270C49125A08 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				25C30E88EF87172CD14D941A /* Assets.xcassets */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		C0B0F69BB840F261813FE8CF /* Settings */ = {
+			isa = PBXGroup;
+			children = (
+				65E103A425E626F1226542B7 /* SettingsView.swift */,
+			);
+			path = Settings;
+			sourceTree = "<group>";
+		};
+		CDBDB40274420C5741F6D5F2 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				8B2084A17CCE9249982FE31B /* AppSettings.swift */,
+				BC80A9AF01A34796FD0A78D4 /* ExtractionResult.swift */,
+				1B59C1C205F928CEE5264DD9 /* Receipt.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		D4441F1D9D47BBA2B55FEECC /* Capture */ = {
+			isa = PBXGroup;
+			children = (
+				64BD83A7C080F4DF841DD743 /* DocumentScannerView.swift */,
+			);
+			path = Capture;
+			sourceTree = "<group>";
+		};
+		DB2219034DA3FB81B12067D2 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				424320E6DBCD41BA7ED15C7D /* ClaudeAPIService.swift */,
+				2FE8AC03289A0F443EA2559B /* HealthCheckService.swift */,
+				0ED743A39138B7FEE8A570FE /* KeychainService.swift */,
+				FC183889A54C2A200F029228 /* NotificationService.swift */,
+				DCEEBE94E69193B91860C8C8 /* StorageService.swift */,
+				E92AC3B6626CB52EEEA460BB /* UploadService.swift */,
+				132317F3A3DA7A6B5EB0B7B2 /* WaveAPIService.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		F44AC793FF17C06F7250EF22 = {
+			isa = PBXGroup;
+			children = (
+				6E3D3D91A37AC4822FAB7FBC /* ViewpointReceipts */,
+				66C5362BC5A759A72A5F52BA /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		F17DF015CC26ECF47AD4D176 /* ViewpointReceipts */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 979A9170493C7A9674635D5C /* Build configuration list for PBXNativeTarget "ViewpointReceipts" */;
+			buildPhases = (
+				8F7177402A16893768FB9FEE /* Sources */,
+				4B78CD19A41739B08E9DDF88 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = ViewpointReceipts;
+			packageProductDependencies = (
+			);
+			productName = ViewpointReceipts;
+			productReference = 73DEC5727E6A704A0E18979C /* ViewpointReceipts.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		21811DD6D8E021E24D785374 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					F17DF015CC26ECF47AD4D176 = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 00B878B4C08FEE5868FF58BF /* Build configuration list for PBXProject "ViewpointReceipts" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = F44AC793FF17C06F7250EF22;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 66C5362BC5A759A72A5F52BA /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				F17DF015CC26ECF47AD4D176 /* ViewpointReceipts */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		4B78CD19A41739B08E9DDF88 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B9E49145B03E78502E893D13 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		8F7177402A16893768FB9FEE /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				97E3A055760A8301437A44FC /* APIKeySetupView.swift in Sources */,
+				0689A8EA8F8AC1FC43F50B5A /* AppSettings.swift in Sources */,
+				160267930570DDBC80FE3D27 /* ClaudeAPIService.swift in Sources */,
+				B34FDB7425FDB8DA650FECA8 /* ContentView.swift in Sources */,
+				8180864325E30498890789D8 /* DocumentScannerView.swift in Sources */,
+				DD5BCC4B85F337D151D19883 /* ExtractionResult.swift in Sources */,
+				1D5999942085CE520B766B81 /* HealthCheckService.swift in Sources */,
+				63DBC20D2DEB20FFEF8697E0 /* KeychainService.swift in Sources */,
+				8D0DC7D0F697FA70C2E9FDBE /* NotificationService.swift in Sources */,
+				9CFFA89B653BCC4471AC72D0 /* Receipt.swift in Sources */,
+				04035E02DC546BFA7D0DF11A /* ReceiptDetailView.swift in Sources */,
+				06C95645B878AF189262B400 /* ReceiptListView.swift in Sources */,
+				D6E57F871657471DD21B26C6 /* ReceiptReviewView.swift in Sources */,
+				6EE1DB576EE0EB6B5920121B /* SettingsView.swift in Sources */,
+				65FDD2A2892E71501ADB8BC9 /* StorageChoiceView.swift in Sources */,
+				D74BB1D636D6B9DB8C7F3AF8 /* StorageService.swift in Sources */,
+				A792128FE0CF4429096948E7 /* UploadService.swift in Sources */,
+				CB993AB4A41C76542CA4AB4B /* ViewpointReceiptsApp.swift in Sources */,
+				5E1BE59F3A07526995F91F32 /* WaveAPIService.swift in Sources */,
+				AC0EE4F7AAEDB10C1782CBA5 /* WaveSetupView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		1F617FCD789BDEBDF2CFF44B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = ViewpointReceipts/Resources/ViewpointReceipts.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = ViewpointReceipts/Resources/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.viewpoint.receipts;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		A52D855F19B63191F54ED319 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.9;
+			};
+			name = Debug;
+		};
+		F52D4F438C377C11667B1582 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = ViewpointReceipts/Resources/ViewpointReceipts.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = ViewpointReceipts/Resources/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.viewpoint.receipts;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		F916A13744A111C780A5E5DE /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.9;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		00B878B4C08FEE5868FF58BF /* Build configuration list for PBXProject "ViewpointReceipts" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A52D855F19B63191F54ED319 /* Debug */,
+				F916A13744A111C780A5E5DE /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		979A9170493C7A9674635D5C /* Build configuration list for PBXNativeTarget "ViewpointReceipts" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1F617FCD789BDEBDF2CFF44B /* Debug */,
+				F52D4F438C377C11667B1582 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 21811DD6D8E021E24D785374 /* Project object */;
+}
