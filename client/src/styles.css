@@ -768,6 +768,30 @@ img {
   color: var(--status-reviewed);
 }
 
+.banner-tip {
+  background: rgba(37, 99, 235, 0.1);
+  color: var(--accent);
+}
+
+.home-screen-tip {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.home-screen-tip-dismiss {
+  flex-shrink: 0;
+  font-size: 13px;
+  line-height: 1;
+  color: inherit;
+  opacity: 0.6;
+  padding: 2px;
+}
+
+.home-screen-tip-dismiss:hover {
+  opacity: 1;
+}
+
 /* ── Review form fields ── */
 
 .review-fields {

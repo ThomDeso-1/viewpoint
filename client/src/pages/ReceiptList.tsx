@@ -9,6 +9,7 @@ import {
   type QueueStatus,
   type HealthStatus,
 } from '../api/client';
+import { AddToHomeScreenTip } from '../components/AddToHomeScreenTip';
 import { CaptureButton } from '../components/CaptureButton';
 import { ReceiptRow } from '../components/ReceiptRow';
 import { UploadStatusBar } from '../components/UploadStatusBar';
@@ -84,6 +85,8 @@ export function ReceiptList() {
           </svg>
         </button>
       </header>
+
+      <AddToHomeScreenTip />
 
       {/* Health banners */}
       {health?.claudeConfigured && health.claudeHealthy === false && (
