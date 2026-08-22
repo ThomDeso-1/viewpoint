@@ -1,9 +1,8 @@
 import { useState, type FormEvent } from 'react';
 import { setup } from '../api/client';
-import { useNavigate } from 'react-router-dom';
 
 interface Props {
-  onComplete: () => void;
+  onComplete: () => Promise<void>;
 }
 
 export function Setup({ onComplete }: Props) {
@@ -11,7 +10,6 @@ export function Setup({ onComplete }: Props) {
   const [confirm, setConfirm] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const navigate = useNavigate();
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -29,8 +27,7 @@ export function Setup({ onComplete }: Props) {
     setSubmitting(true);
     try {
       await setup(password);
-      navigate('/onboarding', { replace: true });
-      onComplete();
+      await onComplete();
     } catch (err: any) {
       setError(err.message || 'Setup failed.');
     } finally {

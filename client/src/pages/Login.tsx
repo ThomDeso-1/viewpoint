@@ -1,16 +1,14 @@
 import { useState, type FormEvent } from 'react';
 import { login } from '../api/client';
-import { useNavigate } from 'react-router-dom';
 
 interface Props {
-  onComplete: () => void;
+  onComplete: () => Promise<void>;
 }
 
 export function Login({ onComplete }: Props) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const navigate = useNavigate();
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -19,8 +17,7 @@ export function Login({ onComplete }: Props) {
 
     try {
       await login(password);
-      navigate('/', { replace: true });
-      onComplete();
+      await onComplete();
     } catch (err: any) {
       setError(err.message || 'Incorrect password.');
     } finally {

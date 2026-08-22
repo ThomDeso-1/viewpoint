@@ -12,16 +12,16 @@ async function request<T>(path: string, opts: RequestInit = {}): Promise<T> {
     ...opts,
   });
 
-  if (res.status === 401) {
-    // Redirect to login unless we're already there
-    if (!window.location.pathname.startsWith('/login') && !window.location.pathname.startsWith('/setup')) {
-      window.location.href = '/login';
-    }
-    throw new Error('Unauthorized');
-  }
-
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
+
+    if (res.status === 401 && path !== '/auth/login') {
+      // Redirect to login unless we're already there
+      if (!window.location.pathname.startsWith('/login') && !window.location.pathname.startsWith('/setup')) {
+        window.location.href = '/login';
+      }
+    }
+
     throw new Error(body.error || `Request failed: ${res.status}`);
   }
 
