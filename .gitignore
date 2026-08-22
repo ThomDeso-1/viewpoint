@@ -1,1 +1,6 @@
-_to_delete/
+node_modules/
+dist/
+client/dist/
+data/
+.env
+*.db
