@@ -1,0 +1,32 @@
+# Example systemd unit for running the server directly on a host (no Docker).
+#
+# Setup:
+#   sudo useradd --system --home /opt/viewpoint-receipts --shell /usr/sbin/nologin viewpoint
+#   sudo cp -r . /opt/viewpoint-receipts && cd /opt/viewpoint-receipts
+#   sudo -u viewpoint npm install && sudo -u viewpoint bash -c "cd client && npm install"
+#   sudo -u viewpoint npm run build
+#   sudo chown -R viewpoint:viewpoint /opt/viewpoint-receipts
+#   sudo cp deploy/viewpoint-receipts.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now viewpoint-receipts
+
+[Unit]
+Description=Viewpoint Receipts
+After=network.target
+
+[Service]
+Type=simple
+User=viewpoint
+Group=viewpoint
+WorkingDirectory=/opt/viewpoint-receipts
+ExecStart=/usr/bin/npm start
+Restart=on-failure
+RestartSec=5
+Environment=NODE_ENV=production
+Environment=PORT=3000
+
+# Only needed if you keep data/.env outside the working directory:
+# Environment=DATA_DIR=/opt/viewpoint-receipts/data
+
+[Install]
+WantedBy=multi-user.target

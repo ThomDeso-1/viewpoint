@@ -1,0 +1,13 @@
+services:
+  viewpoint-receipts:
+    build: .
+    container_name: viewpoint-receipts
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data:/app/data
+      - ./.env:/app/.env
+    environment:
+      - PORT=3000
+      - DATA_DIR=/app/data

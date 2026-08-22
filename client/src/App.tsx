@@ -6,6 +6,7 @@ import { Setup } from './pages/Setup';
 import { Onboarding } from './pages/Onboarding';
 import { ReceiptList } from './pages/ReceiptList';
 import { ReceiptReview } from './pages/ReceiptReview';
+import { BatchReview } from './pages/BatchReview';
 import { Settings } from './pages/Settings';
 
 export function App() {
@@ -61,6 +62,10 @@ export function App() {
       <Route
         path="/review/:id"
         element={auth?.authenticated ? <ReceiptReview /> : <Navigate to="/login" replace />}
+      />
+      <Route
+        path="/review-batch"
+        element={auth?.authenticated ? <BatchReview /> : <Navigate to="/login" replace />}
       />
       <Route
         path="/settings"

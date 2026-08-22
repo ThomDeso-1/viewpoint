@@ -163,14 +163,14 @@ Three-step first-run wizard (simplified from iOS's four steps — no storage loc
 
 The wizard should write credentials to `.env` (or a server endpoint that updates the running config). Currently credentials must be set in `.env` before starting the server.
 
-## Phase 4: Polish + Deployment (TODO)
+## Phase 4: Polish + Deployment ✅
 
-- Health check banner on receipt list (Wave token expired, API key invalid)
-- Batch review queue (swipe through multiple captured receipts)
-- Image re-filing when receipt date changes months (move files between `YYYY-MM/` folders)
-- Better error toasts instead of `alert()`
-- Deployment guide: Docker container, reverse proxy (nginx/Caddy), HTTPS, systemd service
-- Backup strategy for `data/` directory
+- Health check banner on receipt list (Wave token expired, API key invalid) — `GET /api/settings/health` (5-min cached), banner in `ReceiptList.tsx`
+- Batch review queue (swipe through multiple captured receipts) — `/review-batch`, `BatchReview.tsx` + shared `ReceiptReviewForm.tsx`
+- Image re-filing when receipt date changes months (move files between `YYYY-MM/` folders) — `storage.moveReceiptFileSet`, wired into `PUT /api/receipts/:id`
+- Better error toasts instead of `alert()` — `Toast.tsx` provider, wired into capture, delete, and retry-all failures
+- Deployment guide: Docker container, reverse proxy (nginx/Caddy), HTTPS, systemd service — see [`DEPLOYMENT.md`](DEPLOYMENT.md)
+- Backup strategy for `data/` directory — see [`DEPLOYMENT.md`](DEPLOYMENT.md) and [`scripts/backup.sh`](scripts/backup.sh)
 
 ## File Structure
 
@@ -180,6 +180,15 @@ viewpoint-receipts/
 ├── .gitignore
 ├── package.json                  # Root: server deps + scripts
 ├── tsconfig.json                 # Server TypeScript config
+├── Dockerfile
+├── docker-compose.yml
+├── DEPLOYMENT.md                 # Docker / reverse proxy / systemd / backups
+├── deploy/
+│   ├── Caddyfile                 # Example reverse proxy config (auto HTTPS)
+│   ├── nginx.conf.example        # Example reverse proxy config (certbot)
+│   └── viewpoint-receipts.service # Example systemd unit
+├── scripts/
+│   └── backup.sh                 # DB + photo backup to a timestamped tarball
 ├── server/
 │   ├── index.ts                  # Express app entry
 │   ├── db/
@@ -192,10 +201,11 @@ viewpoint-receipts/
 │   │   ├── receipts.ts           # CRUD + extract + review + retry
 │   │   └── settings.ts           # Config + validation + health
 │   └── services/
-│       ├── storage.ts            # File management (monthly folders, sidecars)
+│       ├── storage.ts            # File management (monthly folders, sidecars, re-filing)
 │       ├── claude.ts             # Claude API vision extraction
 │       ├── wave.ts               # Wave GraphQL API client
-│       └── upload-queue.ts       # Background upload processor
+│       ├── upload-queue.ts       # Background upload processor
+│       └── env-config.ts         # Writes credential updates to .env at runtime
 ├── client/
 │   ├── index.html
 │   ├── package.json              # React deps
@@ -212,15 +222,19 @@ viewpoint-receipts/
 │       ├── api/
 │       │   └── client.ts         # Fetch wrapper for all endpoints
 │       ├── components/
-│       │   ├── CaptureButton.tsx  # Camera + photo library FAB
-│       │   ├── ReceiptRow.tsx     # List item with thumbnail
-│       │   ├── StatusBadge.tsx    # Colored status pill
-│       │   └── UploadStatusBar.tsx
+│       │   ├── CaptureButton.tsx     # Camera + photo library FAB
+│       │   ├── ReceiptRow.tsx        # List item with thumbnail
+│       │   ├── StatusBadge.tsx       # Colored status pill
+│       │   ├── UploadStatusBar.tsx
+│       │   ├── Toast.tsx             # Error/success toast provider
+│       │   └── ReceiptReviewForm.tsx # Extract/review/approve form, shared by single + batch review
 │       └── pages/
 │           ├── Login.tsx
 │           ├── Setup.tsx          # First-run password
-│           ├── ReceiptList.tsx    # Main list view
-│           ├── ReceiptReview.tsx  # Extract + review + approve
+│           ├── Onboarding.tsx     # Claude key + Wave connection wizard
+│           ├── ReceiptList.tsx    # Main list view + health banners
+│           ├── ReceiptReview.tsx  # Single-receipt review (wraps ReceiptReviewForm)
+│           ├── BatchReview.tsx    # Swipe/step through all unreviewed receipts
 │           └── Settings.tsx
 └── data/                         # Created at runtime (gitignored)
     ├── receipts.db               # SQLite database
@@ -264,6 +278,6 @@ npm start          # serves everything from port 3000
 | Password auth | ❌ (device lock) | ✅ | Cookie-based, 1yr expiry |
 | PWA home screen install | ❌ (native) | ✅ | Standalone, themed |
 | iCloud storage option | ✅ | ❌ | Not needed — server is the single location |
-| Local notifications | ✅ | ❌ | TODO: could add web push |
-| Batch review queue | ✅ | ❌ | TODO: Phase 4 |
-| Health check banner | ✅ | ❌ | TODO: Phase 4 |
+| Local notifications | ✅ | ❌ | Not implemented — could add web push |
+| Batch review queue | ✅ | ✅ | Next/Previous + swipe, `/review-batch` |
+| Health check banner | ✅ | ✅ | Claude key + Wave token, cached 5 min |

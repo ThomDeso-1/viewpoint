@@ -9,6 +9,7 @@ import {
   type Settings as SettingsData,
   type QueueStatus,
 } from '../api/client';
+import { useToast } from '../components/Toast';
 
 export function Settings() {
   const navigate = useNavigate();
@@ -16,6 +17,7 @@ export function Settings() {
   const [queue, setQueue] = useState<QueueStatus | null>(null);
   const [waveHealthy, setWaveHealthy] = useState<boolean | null>(null);
   const [retrying, setRetrying] = useState(false);
+  const { showToast } = useToast();
 
   useEffect(() => {
     Promise.all([
@@ -31,8 +33,8 @@ export function Settings() {
       await retryAllFailed();
       const q = await getQueueStatus();
       setQueue(q);
-    } catch {
-      // ignore
+    } catch (err: any) {
+      showToast(err.message || 'Could not retry failed uploads.');
     } finally {
       setRetrying(false);
     }

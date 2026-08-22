@@ -2,5 +2,6 @@ node_modules/
 dist/
 client/dist/
 data/
+backups/
 .env
 *.db

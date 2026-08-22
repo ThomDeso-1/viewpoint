@@ -3,21 +3,26 @@ import {
   listReceipts,
   getQueueStatus,
   deleteReceipt,
+  getHealthStatus,
   logout,
   type ReceiptGroup,
   type QueueStatus,
+  type HealthStatus,
 } from '../api/client';
 import { CaptureButton } from '../components/CaptureButton';
 import { ReceiptRow } from '../components/ReceiptRow';
 import { UploadStatusBar } from '../components/UploadStatusBar';
+import { useToast } from '../components/Toast';
 import { useNavigate } from 'react-router-dom';
 
 export function ReceiptList() {
   const [groups, setGroups] = useState<ReceiptGroup[]>([]);
   const [queue, setQueue] = useState<QueueStatus | null>(null);
+  const [health, setHealth] = useState<HealthStatus | null>(null);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+  const { showToast } = useToast();
 
   const refresh = useCallback(async () => {
     try {
@@ -38,10 +43,18 @@ export function ReceiptList() {
     refresh();
   }, [refresh]);
 
+  useEffect(() => {
+    getHealthStatus().then(setHealth).catch(() => {});
+  }, []);
+
   const handleDelete = async (id: string) => {
     if (!confirm('Delete this receipt?')) return;
-    await deleteReceipt(id);
-    refresh();
+    try {
+      await deleteReceipt(id);
+      refresh();
+    } catch (err: any) {
+      showToast(err.message || 'Could not delete this receipt.');
+    }
   };
 
   const handleLogout = async () => {
@@ -54,6 +67,10 @@ export function ReceiptList() {
   };
 
   const totalReceipts = groups.reduce((n, g) => n + g.receipts.length, 0);
+  const reviewableCount = groups.reduce(
+    (n, g) => n + g.receipts.filter((r) => r.status === 'captured' || r.status === 'extracted').length,
+    0,
+  );
 
   return (
     <div className="receipt-list-page">
@@ -68,8 +85,29 @@ export function ReceiptList() {
         </button>
       </header>
 
+      {/* Health banners */}
+      {health?.claudeConfigured && health.claudeHealthy === false && (
+        <div className="banner banner-low health-banner">
+          Claude API key is invalid — receipts won't extract automatically. Check Settings.
+        </div>
+      )}
+      {health?.waveConfigured && health.waveHealthy === false && (
+        <div className="banner banner-low health-banner">
+          Wave connection has expired — uploads are paused. Reconnect in Settings.
+        </div>
+      )}
+
       {/* Queue status bar */}
       {queue && <UploadStatusBar queue={queue} />}
+
+      {/* Review all */}
+      {reviewableCount > 1 && (
+        <div className="health-banner">
+          <button className="btn-secondary" style={{ width: '100%' }} onClick={() => navigate('/review-batch')}>
+            Review All ({reviewableCount})
+          </button>
+        </div>
+      )}
 
       {/* Search */}
       <div className="search-bar">

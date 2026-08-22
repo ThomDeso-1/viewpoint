@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { uploadImages } from '../api/client';
+import { useToast } from './Toast';
 
 interface Props {
   onCapture: () => void;
@@ -10,6 +11,7 @@ export function CaptureButton({ onCapture }: Props) {
   const galleryRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const { showToast } = useToast();
 
   const handleFiles = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -19,8 +21,8 @@ export function CaptureButton({ onCapture }: Props) {
     try {
       await uploadImages(Array.from(files));
       onCapture();
-    } catch (err) {
-      alert('Upload failed. Please try again.');
+    } catch (err: any) {
+      showToast(err.message || 'Upload failed. Please try again.');
     } finally {
       setUploading(false);
       // Reset file inputs so the same file can be re-selected

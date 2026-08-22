@@ -10,6 +10,10 @@ import {
   checkTokenHealth,
 } from '../services/wave.js';
 
+const HEALTH_CACHE_MS = 5 * 60 * 1000; // re-check credentials at most every 5 minutes
+let claudeHealthCache: { healthy: boolean; checkedAt: number } | null = null;
+let waveHealthCache: { healthy: boolean; checkedAt: number } | null = null;
+
 export function settingsRoutes(): Router {
   const router = Router();
 
@@ -166,6 +170,42 @@ export function settingsRoutes(): Router {
       WAVE_SALES_TAX_ID: salesTaxId || '',
     });
     res.json({ success: true });
+  });
+
+  // ── GET /api/settings/health — Cached credential health for the list banner ──
+  router.get('/health', async (_req: Request, res: Response): Promise<void> => {
+    const claudeKey = process.env.CLAUDE_API_KEY;
+    const waveToken = process.env.WAVE_ACCESS_TOKEN;
+    const now = Date.now();
+
+    let claudeHealthy: boolean | null = null;
+    if (claudeKey) {
+      if (!claudeHealthCache || now - claudeHealthCache.checkedAt > HEALTH_CACHE_MS) {
+        try {
+          await validateApiKey(claudeKey);
+          claudeHealthCache = { healthy: true, checkedAt: now };
+        } catch {
+          claudeHealthCache = { healthy: false, checkedAt: now };
+        }
+      }
+      claudeHealthy = claudeHealthCache.healthy;
+    }
+
+    let waveHealthy: boolean | null = null;
+    if (waveToken) {
+      if (!waveHealthCache || now - waveHealthCache.checkedAt > HEALTH_CACHE_MS) {
+        const healthy = await checkTokenHealth(waveToken);
+        waveHealthCache = { healthy, checkedAt: now };
+      }
+      waveHealthy = waveHealthCache.healthy;
+    }
+
+    res.json({
+      claudeConfigured: !!claudeKey,
+      claudeHealthy,
+      waveConfigured: !!waveToken,
+      waveHealthy,
+    });
   });
 
   // ── POST /api/settings/onboard — Mark onboarding complete ──

@@ -214,6 +214,17 @@ export function getWaveHealth(): Promise<{ healthy: boolean; reason?: string }> 
   return request('/settings/wave/health');
 }
 
+export interface HealthStatus {
+  claudeConfigured: boolean;
+  claudeHealthy: boolean | null;
+  waveConfigured: boolean;
+  waveHealthy: boolean | null;
+}
+
+export function getHealthStatus(): Promise<HealthStatus> {
+  return request('/settings/health');
+}
+
 export function markOnboarded(): Promise<{ success: boolean }> {
   return request('/settings/onboard', { method: 'POST' });
 }

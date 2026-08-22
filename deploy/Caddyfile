@@ -1,0 +1,16 @@
+## Example Caddyfile — automatic HTTPS via Let's Encrypt.
+## Requires: a domain pointed at this machine, and ports 80 + 443 reachable
+## from the internet (Caddy uses port 80 for the ACME HTTP challenge).
+##
+## Install: https://caddyserver.com/docs/install
+## Run:     sudo caddy run --config /etc/caddy/Caddyfile
+## Or as a service: sudo systemctl enable --now caddy
+
+receipts.example.com {
+	reverse_proxy localhost:3000
+
+	# Receipt photo uploads can be a few MB each.
+	request_body {
+		max_size 25MB
+	}
+}

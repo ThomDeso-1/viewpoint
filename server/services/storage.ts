@@ -110,7 +110,31 @@ export class StorageService {
     if (oldPath === newRelative) return oldPath;
 
     fs.renameSync(oldAbs, newAbs);
+
+    // Clean up now-empty old month folder
+    const oldFolder = path.dirname(oldAbs);
+    try {
+      const contents = fs.readdirSync(oldFolder);
+      if (contents.length === 0) fs.rmdirSync(oldFolder);
+    } catch {
+      // ignore
+    }
+
     return newRelative;
+  }
+
+  /** Move an image and its sidecar JSON together to a different month folder. */
+  moveReceiptFileSet(oldPath: string, newDate: Date): string {
+    const oldSidecar = this.sidecarPath(oldPath);
+    const hasSidecar = fs.existsSync(oldSidecar);
+    const newPath = this.moveReceiptImage(oldPath, newDate);
+
+    if (hasSidecar) {
+      const newSidecar = this.sidecarPath(newPath);
+      if (oldSidecar !== newSidecar) fs.renameSync(oldSidecar, newSidecar);
+    }
+
+    return newPath;
   }
 
   // ── Sidecar files ──

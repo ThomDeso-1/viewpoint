@@ -41,10 +41,16 @@ export function receiptRoutes(storage: StorageService): Router {
 
   const updateReceipt = db.prepare(`
     UPDATE receipts SET
-      receipt_date = @receipt_date,
+      receipt_date = COALESCE(@receipt_date, receipt_date),
       month_folder = @month_folder,
       primary_image = @primary_image,
       additional_images = @additional_images,
+      vendor = @vendor,
+      summary = @summary,
+      total_amount = @total_amount,
+      tax_amount = @tax_amount,
+      currency = COALESCE(@currency, currency),
+      status = COALESCE(@status, status),
       updated_at = @updated_at
     WHERE id = @id
   `);
@@ -249,20 +255,30 @@ export function receiptRoutes(storage: StorageService): Router {
 
     const now = new Date().toISOString();
 
-    db.prepare(`
-      UPDATE receipts SET
-        receipt_date = COALESCE(@receipt_date, receipt_date),
-        vendor = @vendor,
-        summary = @summary,
-        total_amount = @total_amount,
-        tax_amount = @tax_amount,
-        currency = COALESCE(@currency, currency),
-        status = COALESCE(@status, status),
-        updated_at = @updated_at
-      WHERE id = @id
-    `).run({
+    // Re-file images into a different month folder if the receipt date moved.
+    let monthFolder = row.month_folder;
+    let primaryImage = row.primary_image;
+    let additionalImages = row.additional_images;
+
+    if (receipt_date) {
+      const newDate = new Date(receipt_date);
+      const newMonth = storage.monthFolder(newDate);
+      if (newMonth !== row.month_folder) {
+        const additional: string[] = JSON.parse(row.additional_images || '[]');
+        primaryImage = storage.moveReceiptFileSet(row.primary_image, newDate);
+        additionalImages = JSON.stringify(
+          additional.map((p) => storage.moveReceiptFileSet(p, newDate)),
+        );
+        monthFolder = newMonth;
+      }
+    }
+
+    updateReceipt.run({
       id: row.id,
       receipt_date: receipt_date || null,
+      month_folder: monthFolder,
+      primary_image: primaryImage,
+      additional_images: additionalImages,
       vendor: vendor ?? null,
       summary: summary ?? null,
       total_amount: total_amount ?? null,
@@ -274,7 +290,7 @@ export function receiptRoutes(storage: StorageService): Router {
 
     // If approving (status → reviewed), update sidecar and trigger upload queue
     if (status === 'reviewed') {
-      storage.saveSidecar(row.primary_image, {
+      storage.saveSidecar(primaryImage, {
         status: 'reviewed',
         capturedAt: row.capture_date,
         reviewedAt: now,

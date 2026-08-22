@@ -1,0 +1,38 @@
+# Example nginx site config — terminate HTTPS with a cert from certbot,
+# proxy everything to the Node server on localhost:3000.
+#
+# Setup:
+#   sudo apt install nginx certbot python3-certbot-nginx
+#   sudo cp nginx.conf.example /etc/nginx/sites-available/viewpoint-receipts
+#   sudo ln -s /etc/nginx/sites-available/viewpoint-receipts /etc/nginx/sites-enabled/
+#   sudo certbot --nginx -d receipts.example.com   # obtains the cert and
+#                                                   # rewrites this file for TLS
+#   sudo nginx -t && sudo systemctl reload nginx
+
+server {
+    listen 80;
+    server_name receipts.example.com;
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    server_name receipts.example.com;
+
+    ssl_certificate     /etc/letsencrypt/live/receipts.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/receipts.example.com/privkey.pem;
+
+    # Receipt photo uploads (multer allows up to 20MB per file, 10 files).
+    client_max_body_size 25m;
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
