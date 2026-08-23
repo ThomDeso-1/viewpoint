@@ -3,6 +3,25 @@ import path from 'path';
 import crypto from 'crypto';
 
 /**
+ * File extension to save an uploaded image under, based on its real mime
+ * type — must stay in sync with the extension → media_type mapping in
+ * claude.ts, since extraction infers the Claude vision media type from
+ * this saved file's extension.
+ */
+function extensionForMimeType(mimetype: string): string {
+  switch (mimetype) {
+    case 'image/png':
+      return '.png';
+    case 'image/webp':
+      return '.webp';
+    case 'image/gif':
+      return '.gif';
+    default:
+      return '.jpg';
+  }
+}
+
+/**
  * Manages receipt image files on disk — saving into monthly folders,
  * loading, deleting, and computing hashes.
  *
@@ -44,11 +63,15 @@ export class StorageService {
   }
 
   /**
-   * Save uploaded image buffer(s) into the correct monthly folder.
+   * Save uploaded image file(s) into the correct monthly folder. Each
+   * file keeps the extension matching its real mime type — this matters
+   * because extraction later infers the Claude vision `media_type` from
+   * the saved file's extension, so a mismatch there would send an image
+   * mislabeled as the wrong format.
    * Returns relative paths (from receiptsRoot).
    */
   saveReceiptImages(
-    buffers: Buffer[],
+    files: { buffer: Buffer; mimetype: string }[],
     date: Date,
   ): { primaryPath: string; additionalPaths: string[] } {
     const month = this.monthFolder(date);
@@ -58,11 +81,12 @@ export class StorageService {
 
     const relativePaths: string[] = [];
 
-    for (let i = 0; i < buffers.length; i++) {
-      const pageSuffix = buffers.length > 1 ? `_p${i + 1}` : '';
-      const fileName = `${dateStr}_${batchId}${pageSuffix}.jpg`;
+    for (let i = 0; i < files.length; i++) {
+      const pageSuffix = files.length > 1 ? `_p${i + 1}` : '';
+      const ext = extensionForMimeType(files[i].mimetype);
+      const fileName = `${dateStr}_${batchId}${pageSuffix}${ext}`;
       const filePath = path.join(folderAbs, fileName);
-      fs.writeFileSync(filePath, buffers[i]);
+      fs.writeFileSync(filePath, files[i].buffer);
       relativePaths.push(`${month}/${fileName}`);
     }
 

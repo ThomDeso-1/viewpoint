@@ -9,6 +9,28 @@ import { ReceiptReview } from './pages/ReceiptReview';
 import { BatchReview } from './pages/BatchReview';
 import { Settings } from './pages/Settings';
 
+/**
+ * Where a route guard should send an incomplete/unauthenticated session,
+ * computed from `auth` rather than hardcoded to '/login'.
+ *
+ * This matters on the very first render after `loading` flips to false:
+ * <Routes> can mount and match against a location that predates the
+ * navigate() call checkAuth just made below (a lag in the router's own
+ * location state vs. this component's `auth`/`loading` state, observed
+ * empirically — not guaranteed to resolve within any fixed number of
+ * ticks). If every guard falls back to gateTarget(auth) instead of a
+ * hardcoded '/login', the fallback is correct regardless of which stale
+ * route <Routes> happens to match on that first render, so the race can't
+ * strand a first-run or needs-onboarding user on a login screen they have
+ * no way to use yet.
+ */
+function gateTarget(auth: AuthStatus | null): string {
+  if (!auth || auth.needsSetup) return '/setup';
+  if (!auth.authenticated) return '/login';
+  if (auth.needsOnboarding) return '/onboarding';
+  return '/';
+}
+
 export function App() {
   const [auth, setAuth] = useState<AuthStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -45,33 +67,27 @@ export function App() {
     );
   }
 
+  const authed = !!auth?.authenticated;
+
   return (
     <Routes>
       <Route path="/setup" element={<Setup onComplete={checkAuth} />} />
       <Route path="/login" element={<Login onComplete={checkAuth} />} />
       <Route
         path="/onboarding"
-        element={
-          auth?.authenticated ? <Onboarding onComplete={checkAuth} /> : <Navigate to="/login" replace />
-        }
+        element={authed ? <Onboarding onComplete={checkAuth} /> : <Navigate to={gateTarget(auth)} replace />}
       />
-      <Route
-        path="/"
-        element={auth?.authenticated ? <ReceiptList /> : <Navigate to="/login" replace />}
-      />
+      <Route path="/" element={authed ? <ReceiptList /> : <Navigate to={gateTarget(auth)} replace />} />
       <Route
         path="/review/:id"
-        element={auth?.authenticated ? <ReceiptReview /> : <Navigate to="/login" replace />}
+        element={authed ? <ReceiptReview /> : <Navigate to={gateTarget(auth)} replace />}
       />
       <Route
         path="/review-batch"
-        element={auth?.authenticated ? <BatchReview /> : <Navigate to="/login" replace />}
+        element={authed ? <BatchReview /> : <Navigate to={gateTarget(auth)} replace />}
       />
-      <Route
-        path="/settings"
-        element={auth?.authenticated ? <Settings /> : <Navigate to="/login" replace />}
-      />
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="/settings" element={authed ? <Settings /> : <Navigate to={gateTarget(auth)} replace />} />
+      <Route path="*" element={<Navigate to={gateTarget(auth)} replace />} />
     </Routes>
   );
 }

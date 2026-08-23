@@ -90,7 +90,9 @@ export async function extractReceipt(
         ? 'image/png'
         : ext === '.webp'
           ? 'image/webp'
-          : 'image/jpeg';
+          : ext === '.gif'
+            ? 'image/gif'
+            : 'image/jpeg';
 
     contentParts.push({
       type: 'image',

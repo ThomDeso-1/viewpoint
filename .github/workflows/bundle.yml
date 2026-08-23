@@ -1,0 +1,26 @@
+name: Rebuild app bundle
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  bundle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build bundle
+        run: ./scripts/make-bundle.sh
+
+      - name: Publish to 'latest' release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: Latest build
+          body: Auto-rebuilt from ${{ github.sha }}
+          make_latest: true
+          files: viewpoint-receipts-bundle.zip

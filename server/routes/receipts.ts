@@ -68,8 +68,7 @@ export function receiptRoutes(storage: StorageService): Router {
     const results: ReceiptRow[] = [];
 
     for (const file of files) {
-      const buffers = [file.buffer];
-      const saved = storage.saveReceiptImages(buffers, now);
+      const saved = storage.saveReceiptImages([{ buffer: file.buffer, mimetype: file.mimetype }], now);
       const id = uuid();
       const month = storage.monthFolder(now);
       const hash = storage.computeImageHash(saved.primaryPath);
@@ -156,8 +155,11 @@ export function receiptRoutes(storage: StorageService): Router {
     }
 
     const additional: string[] = JSON.parse(row.additional_images || '[]');
-    storage.deleteReceiptFiles(row.primary_image, additional);
+    // Sidecars first: deleteReceiptFiles checks whether the month folder is
+    // empty right after removing each image, so a lingering sidecar file
+    // would make it look non-empty and skip the folder cleanup.
     storage.deleteSidecarFiles(row.primary_image, additional);
+    storage.deleteReceiptFiles(row.primary_image, additional);
     deleteById.run(row.id);
 
     res.json({ deleted: true });

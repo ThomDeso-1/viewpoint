@@ -36,12 +36,6 @@ export function settingsRoutes(): Router {
     });
   });
 
-  // ── GET /api/settings/needs-setup — Does the app need first-run setup? ──
-  router.get('/needs-setup', (_req: Request, res: Response): void => {
-    const hasPassword = !!(process.env.APP_PASSWORD || getConfig('password_hash'));
-    res.json({ needsSetup: !hasPassword });
-  });
-
   // ── POST /api/settings/validate-claude-key — Test a Claude API key ──
   router.post('/validate-claude-key', async (req: Request, res: Response): Promise<void> => {
     const { apiKey } = req.body;
