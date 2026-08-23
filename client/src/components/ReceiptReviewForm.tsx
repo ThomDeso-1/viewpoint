@@ -153,14 +153,22 @@ export function ReceiptReviewForm({ id, headerTitle, headerRight, onBack, onAppr
 
   // ── Approve ──
   async function handleApprove() {
+    const parsedTotal = totalAmount.trim() === '' ? null : parseFloat(totalAmount);
+    const parsedTax = taxAmount.trim() === '' ? null : parseFloat(taxAmount);
+
+    if (Number.isNaN(parsedTotal) || Number.isNaN(parsedTax)) {
+      setErrorMsg('Total and tax must be valid numbers.');
+      return;
+    }
+
     setSubmitting(true);
     try {
       const updated = await updateReceipt(id, {
         receipt_date: receiptDate ? receiptDate + 'T00:00:00.000Z' : undefined,
         vendor: vendor || undefined,
         summary: summary || undefined,
-        total_amount: totalAmount ? parseFloat(totalAmount) : null,
-        tax_amount: taxAmount ? parseFloat(taxAmount) : null,
+        total_amount: parsedTotal,
+        tax_amount: parsedTax,
         currency: currency || 'CAD',
         status: 'reviewed',
       });

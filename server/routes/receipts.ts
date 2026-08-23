@@ -5,7 +5,7 @@ import path from 'path';
 import { getDb, type ReceiptRow } from '../db/db.js';
 import { StorageService } from '../services/storage.js';
 import { extractReceipt, ClaudeAPIError } from '../services/claude.js';
-import { retryReceipt, retryAll, processQueue } from '../services/upload-queue.js';
+import { retryReceipt, retryAll, triggerQueue } from '../services/upload-queue.js';
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -255,6 +255,11 @@ export function receiptRoutes(storage: StorageService): Router {
       status,
     } = req.body;
 
+    if (receipt_date && Number.isNaN(new Date(receipt_date).getTime())) {
+      res.status(400).json({ error: 'Invalid receipt_date.' });
+      return;
+    }
+
     const now = new Date().toISOString();
 
     // Re-file images into a different month folder if the receipt date moved.
@@ -307,7 +312,7 @@ export function receiptRoutes(storage: StorageService): Router {
       });
 
       // Kick off Wave upload queue
-      processQueue().catch(() => {});
+      triggerQueue();
     }
 
     const updated = selectById.get(row.id) as ReceiptRow;

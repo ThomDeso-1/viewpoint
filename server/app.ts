@@ -1,5 +1,4 @@
 import express, { Express } from 'express';
-import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -25,7 +24,9 @@ export function createApp(): Express {
 
   const app = express();
 
-  app.use(cors());
+  // No cors() middleware: the client is always same-origin — proxied
+  // through Vite's dev server (client/vite.config.ts) locally, and
+  // served from this same Express app in production.
   app.use(express.json());
   app.use(cookieParser());
 

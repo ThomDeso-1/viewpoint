@@ -2,7 +2,7 @@
  * Wave API Service — server-side port of WaveAPIService.swift
  *
  * GraphQL client for Wave's public API: fetch businesses, accounts,
- * sales taxes, vendors, and create expense transactions.
+ * sales taxes, and create expense transactions.
  */
 
 const ENDPOINT = 'https://gql.waveapps.com/graphql/public';
@@ -27,11 +27,6 @@ export interface WaveSalesTax {
   id: string;
   name: string;
   rate: number;
-}
-
-export interface WaveVendor {
-  id: string;
-  name: string;
 }
 
 export interface WaveTransactionResult {
@@ -182,12 +177,23 @@ export async function fetchAccounts(
   return all;
 }
 
+function isExpenseAccount(a: WaveAccount): boolean {
+  return a.typeName === 'Expenses' && !a.isArchived;
+}
+
+const ANCHOR_SUBTYPES = new Set(['Cash & Bank', 'Credit Card', 'Loan and Line of Credit']);
+const ANCHOR_TYPES = new Set(['Assets', 'Liabilities & Credit Cards']);
+
+function isAnchorAccount(a: WaveAccount): boolean {
+  return ANCHOR_TYPES.has(a.typeName) && ANCHOR_SUBTYPES.has(a.subtypeName) && !a.isArchived;
+}
+
 export async function fetchExpenseAccounts(
   businessId: string,
   token: string,
 ): Promise<WaveAccount[]> {
   const all = await fetchAccounts(businessId, token);
-  return all.filter((a) => a.typeName === 'Expenses' && !a.isArchived);
+  return all.filter(isExpenseAccount);
 }
 
 export async function fetchAnchorAccounts(
@@ -195,11 +201,20 @@ export async function fetchAnchorAccounts(
   token: string,
 ): Promise<WaveAccount[]> {
   const all = await fetchAccounts(businessId, token);
-  const anchorSubtypes = new Set(['Cash & Bank', 'Credit Card', 'Loan and Line of Credit']);
-  const anchorTypes = new Set(['Assets', 'Liabilities & Credit Cards']);
-  return all.filter(
-    (a) => anchorTypes.has(a.typeName) && anchorSubtypes.has(a.subtypeName) && !a.isArchived,
-  );
+  return all.filter(isAnchorAccount);
+}
+
+/**
+ * Expense and anchor accounts share the same underlying account list —
+ * fetched (and paginated) once here rather than twice, unlike calling
+ * fetchExpenseAccounts + fetchAnchorAccounts separately.
+ */
+export async function fetchExpenseAndAnchorAccounts(
+  businessId: string,
+  token: string,
+): Promise<{ expense: WaveAccount[]; anchor: WaveAccount[] }> {
+  const all = await fetchAccounts(businessId, token);
+  return { expense: all.filter(isExpenseAccount), anchor: all.filter(isAnchorAccount) };
 }
 
 // ── Sales Taxes ──
@@ -224,39 +239,18 @@ export async function fetchSalesTaxes(
   }));
 }
 
-// ── Vendors ──
-
-export async function fetchVendors(
-  businessId: string,
-  token: string,
-): Promise<WaveVendor[]> {
-  const query = `
-    query($businessId: ID!) {
-      business(id: $businessId) {
-        vendors { edges { node { id name } } }
-      }
-    }
-  `;
-  const data = await makeRequest(query, { businessId }, token);
-  const edges = data.business?.vendors?.edges ?? [];
-  return edges.map((e: any) => ({ id: e.node.id, name: e.node.name }));
-}
-
-export async function findVendor(
-  vendorName: string,
-  businessId: string,
-  token: string,
-): Promise<WaveVendor | null> {
-  const vendors = await fetchVendors(businessId, token);
-  return (
-    vendors.find((v) => v.name.toLowerCase() === vendorName.toLowerCase()) ?? null
-  );
-}
 
 // ── Create Transaction ──
 
 export async function createExpenseTransaction(opts: {
   businessId: string;
+  /**
+   * The receipt this transaction is for. Used verbatim (prefixed) as
+   * Wave's `externalId`, so a retried request for the same receipt is
+   * recognized by Wave as the same transaction instead of creating a
+   * duplicate expense — must stay stable across retries, never randomized.
+   */
+  receiptId: string;
   date: string; // "YYYY-MM-DD"
   description: string;
   amount: number;
@@ -287,7 +281,7 @@ export async function createExpenseTransaction(opts: {
 
   const input = {
     businessId: opts.businessId,
-    externalId: `viewpoint-${crypto.randomUUID().slice(0, 12)}`,
+    externalId: `viewpoint-${opts.receiptId}`,
     date: opts.date,
     description: opts.description,
     anchor: {

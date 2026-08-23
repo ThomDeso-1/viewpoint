@@ -175,6 +175,18 @@ describe('receipts', () => {
       expect(res.status).toBe(404);
     });
 
+    it('rejects a malformed receipt_date instead of re-filing into a NaN-NaN folder', async () => {
+      const before = await request(ctx.app).get(`/api/receipts/${receiptId}`);
+
+      const res = await request(ctx.app)
+        .put(`/api/receipts/${receiptId}`)
+        .send({ receipt_date: 'not-a-date' });
+
+      expect(res.status).toBe(400);
+      const after = await request(ctx.app).get(`/api/receipts/${receiptId}`);
+      expect(after.body.month_folder).toBe(before.body.month_folder);
+    });
+
     it('approving (status=reviewed) is reflected on the receipt', async () => {
       const res = await request(ctx.app).put(`/api/receipts/${receiptId}`).send({ status: 'reviewed' });
       expect(res.status).toBe(200);

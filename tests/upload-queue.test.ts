@@ -143,7 +143,12 @@ describe('processQueue', () => {
 
   it('on success: stores the Wave transaction id and status=uploaded', async () => {
     ctx = await setupQueue();
-    const receipt = insertReceipt(ctx.db, { retry_count: 2 });
+    // updated_at is backdated past the retry_count=2 backoff window (10s),
+    // as it would be in practice if the prior failure happened a while ago.
+    const receipt = insertReceipt(ctx.db, {
+      retry_count: 2,
+      updated_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+    });
     ctx.createExpenseTransaction.mockResolvedValueOnce({
       didSucceed: true,
       transactionId: 'wave-txn-abc',
@@ -181,15 +186,61 @@ describe('processQueue', () => {
     const receipt = insertReceipt(ctx.db, { retry_count: 0 });
     ctx.createExpenseTransaction.mockRejectedValueOnce(new WaveAPIError('network_error', 'connection reset'));
 
-    vi.useFakeTimers();
-    const promise = ctx.queue.processQueue();
-    await vi.advanceTimersByTimeAsync(5_000); // base backoff delay
-    await promise;
+    await ctx.queue.processQueue();
 
     const row = getRow(ctx.db, receipt.id);
     expect(row.status).toBe('reviewed');
     expect(row.retry_count).toBe(1);
     expect(row.last_error).toBe('connection reset');
+  });
+
+  it('does not block other receipts in the same run behind one that just failed', async () => {
+    ctx = await setupQueue();
+    // Earlier date so it's attempted first and fails.
+    const flaky = insertReceipt(ctx.db, {
+      vendor: 'Flaky',
+      receipt_date: '2026-01-01T00:00:00.000Z',
+      retry_count: 0,
+    });
+    const healthy = insertReceipt(ctx.db, {
+      vendor: 'Healthy',
+      receipt_date: '2026-02-01T00:00:00.000Z',
+    });
+    ctx.createExpenseTransaction
+      .mockRejectedValueOnce(new WaveAPIError('network_error', 'connection reset'))
+      .mockResolvedValueOnce({ didSucceed: true, transactionId: 'txn-healthy', errors: [] });
+
+    // No fake timers involved: both receipts should be attempted within
+    // the same processQueue() call with no waiting in between.
+    await ctx.queue.processQueue();
+
+    expect(ctx.createExpenseTransaction).toHaveBeenCalledTimes(2);
+    expect(getRow(ctx.db, flaky.id).status).toBe('reviewed');
+    expect(getRow(ctx.db, healthy.id).status).toBe('uploaded');
+  });
+
+  it('skips a receipt still inside its backoff window, and retries it once the window elapses', async () => {
+    ctx = await setupQueue();
+    const recentlyFailed = insertReceipt(ctx.db, {
+      retry_count: 1, // backoff = 5s
+      updated_at: new Date().toISOString(),
+    });
+
+    await ctx.queue.processQueue();
+
+    expect(ctx.createExpenseTransaction).not.toHaveBeenCalled();
+    expect(getRow(ctx.db, recentlyFailed.id).status).toBe('reviewed');
+
+    // Backoff window has elapsed — next run should attempt it.
+    ctx.db
+      .prepare(`UPDATE receipts SET updated_at = ? WHERE id = ?`)
+      .run(new Date(Date.now() - 6_000).toISOString(), recentlyFailed.id);
+    ctx.createExpenseTransaction.mockResolvedValueOnce({ didSucceed: true, transactionId: 't', errors: [] });
+
+    await ctx.queue.processQueue();
+
+    expect(ctx.createExpenseTransaction).toHaveBeenCalledTimes(1);
+    expect(getRow(ctx.db, recentlyFailed.id).status).toBe('uploaded');
   });
 
   it('on a non-retryable transport error (e.g. invalid token), fails immediately without waiting', async () => {
@@ -206,8 +257,12 @@ describe('processQueue', () => {
 
   it('marks failed once a retryable error exhausts the retry budget', async () => {
     ctx = await setupQueue();
-    // Already at the last allowed retry (MAX_RETRIES = 5).
-    const receipt = insertReceipt(ctx.db, { retry_count: 4 });
+    // Already at the last allowed retry (MAX_RETRIES = 5), backdated past
+    // its backoff window (40s) so this run actually attempts it.
+    const receipt = insertReceipt(ctx.db, {
+      retry_count: 4,
+      updated_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+    });
     ctx.createExpenseTransaction.mockRejectedValueOnce(new WaveAPIError('server_error', 'still down'));
 
     await ctx.queue.processQueue();

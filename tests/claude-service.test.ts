@@ -113,4 +113,56 @@ describe('claude service', () => {
       await expect(extractReceipt([file], 'key')).rejects.toBeInstanceOf(ClaudeAPIError);
     });
   });
+
+  describe('extractReceipt: response shape validation', () => {
+    function writeFile(name: string, contents = 'bytes'): string {
+      const p = path.join(tmpDir, name);
+      fs.writeFileSync(p, contents);
+      return p;
+    }
+
+    it('rejects a response missing required fields instead of returning a half-populated result', async () => {
+      const file = writeFile('a.jpg');
+      fetchMock.mockResolvedValueOnce(claudeTextResponse({ vendor: 'Costco' })); // no receipt_date, totals, taxes…
+      await expect(extractReceipt([file], 'key')).rejects.toBeInstanceOf(ClaudeAPIError);
+    });
+
+    it('rejects a response whose "taxes" entries are missing a numeric amount', async () => {
+      const file = writeFile('a.jpg');
+      fetchMock.mockResolvedValueOnce(
+        claudeTextResponse({
+          receipt_date: '2024-01-01',
+          vendor: 'V',
+          items: [],
+          summary_description: 's',
+          subtotal: 1,
+          taxes: [{ type: 'HST', rate: 0.13 }], // amount missing
+          total: 1,
+          currency: 'CAD',
+          confidence: 'high',
+        }),
+      );
+      await expect(extractReceipt([file], 'key')).rejects.toMatchObject({ code: 'extraction_failed' });
+    });
+
+    it('accepts a well-formed response', async () => {
+      const file = writeFile('a.jpg');
+      fetchMock.mockResolvedValueOnce(
+        claudeTextResponse({
+          receipt_date: '2024-01-01',
+          vendor: 'V',
+          items: [{ description: 'Widget', amount: 1 }],
+          summary_description: 's',
+          subtotal: 1,
+          taxes: [{ type: 'HST', rate: 0.13, amount: 0.13 }],
+          total: 1.13,
+          currency: 'CAD',
+          confidence: 'high',
+        }),
+      );
+      const { result } = await extractReceipt([file], 'key');
+      expect(result.vendor).toBe('V');
+      expect(result.total).toBe(1.13);
+    });
+  });
 });

@@ -4,8 +4,7 @@ import { validateApiKey } from '../services/claude.js';
 import { updateEnvConfig } from '../services/env-config.js';
 import {
   validateToken,
-  fetchExpenseAccounts,
-  fetchAnchorAccounts,
+  fetchExpenseAndAnchorAccounts,
   fetchSalesTaxes,
   checkTokenHealth,
 } from '../services/wave.js';
@@ -78,10 +77,7 @@ export function settingsRoutes(): Router {
     }
 
     try {
-      const [expense, anchor] = await Promise.all([
-        fetchExpenseAccounts(businessId, token),
-        fetchAnchorAccounts(businessId, token),
-      ]);
+      const { expense, anchor } = await fetchExpenseAndAnchorAccounts(businessId, token);
       res.json({ expense, anchor });
     } catch (err: any) {
       res.status(500).json({ error: err.message });

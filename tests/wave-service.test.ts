@@ -5,6 +5,7 @@ import {
   validateToken,
   fetchExpenseAccounts,
   fetchAnchorAccounts,
+  fetchExpenseAndAnchorAccounts,
   fetchSalesTaxes,
   createExpenseTransaction,
   checkTokenHealth,
@@ -170,6 +171,21 @@ describe('wave service', () => {
       const result = await fetchExpenseAccounts('biz', 'token');
       expect(result.map((a) => a.id).sort()).toEqual(['1', '2']);
     });
+
+    it('fetchExpenseAndAnchorAccounts classifies both from a single fetch, not two', async () => {
+      fetchMock.mockResolvedValueOnce(
+        accountsResponse([
+          { id: '1', name: 'Office Supplies', type: { name: 'Expenses' }, subtype: { name: 'Operating Expenses' }, isArchived: false },
+          { id: '2', name: 'Chequing', type: { name: 'Assets' }, subtype: { name: 'Cash & Bank' }, isArchived: false },
+        ]),
+      );
+
+      const result = await fetchExpenseAndAnchorAccounts('biz', 'token');
+
+      expect(result.expense.map((a) => a.id)).toEqual(['1']);
+      expect(result.anchor.map((a) => a.id)).toEqual(['2']);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('fetchSalesTaxes', () => {
@@ -185,6 +201,7 @@ describe('wave service', () => {
   describe('createExpenseTransaction', () => {
     const baseOpts = {
       businessId: 'biz',
+      receiptId: 'receipt-1',
       date: '2026-01-01',
       description: 'Office Depot — supplies',
       amount: 42.5,
@@ -222,6 +239,20 @@ describe('wave service', () => {
     it('throws (rather than returning a result) when Wave itself is unreachable', async () => {
       fetchMock.mockImplementationOnce(networkFailure());
       await expect(createExpenseTransaction(baseOpts)).rejects.toBeInstanceOf(WaveAPIError);
+    });
+
+    it('derives externalId from receiptId, stable across retries, so a resend cannot double-post', async () => {
+      fetchMock.mockResolvedValue(
+        graphqlResponse({ moneyTransactionCreate: { didSucceed: true, inputErrors: [], transaction: { id: 't' } } }),
+      );
+
+      await createExpenseTransaction(baseOpts);
+      await createExpenseTransaction(baseOpts);
+
+      const firstBody = JSON.parse((fetchMock.mock.calls[0][1] as any).body);
+      const secondBody = JSON.parse((fetchMock.mock.calls[1][1] as any).body);
+      expect(firstBody.variables.input.externalId).toBe('viewpoint-receipt-1');
+      expect(secondBody.variables.input.externalId).toBe(firstBody.variables.input.externalId);
     });
 
     it('includes a sales tax line item only when a salesTaxId is provided', async () => {

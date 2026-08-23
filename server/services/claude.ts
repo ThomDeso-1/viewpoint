@@ -121,14 +121,64 @@ export async function extractReceipt(
   // Strip markdown code fences if present
   const jsonString = stripCodeFences(responseText);
 
+  let parsed: unknown;
   try {
-    const result = JSON.parse(jsonString) as ExtractionResult;
-    return { result, rawJSON: jsonString };
+    parsed = JSON.parse(jsonString);
   } catch (err) {
     throw new ClaudeAPIError(
       'extraction_failed',
       `Failed to parse extraction JSON: ${(err as Error).message}`,
     );
+  }
+
+  try {
+    validateExtractionResult(parsed);
+  } catch (err) {
+    throw new ClaudeAPIError(
+      'extraction_failed',
+      `Claude returned an unexpected extraction format: ${(err as Error).message}`,
+    );
+  }
+
+  return { result: parsed, rawJSON: jsonString };
+}
+
+/**
+ * Guards the rest of the app (route handlers, DB writes) from a
+ * malformed or reshaped extraction response — without this, a missing
+ * `taxes` array would throw deep inside the route's `.reduce()` call,
+ * and a missing `receipt_date` would silently write "undefinedT00:00…"
+ * into the receipt_date column.
+ */
+function validateExtractionResult(value: unknown): asserts value is ExtractionResult {
+  if (!value || typeof value !== 'object') {
+    throw new Error('response is not a JSON object');
+  }
+  const v = value as Record<string, unknown>;
+
+  if (typeof v.receipt_date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(v.receipt_date)) {
+    throw new Error('"receipt_date" must be a "YYYY-MM-DD" string');
+  }
+  if (typeof v.vendor !== 'string') {
+    throw new Error('"vendor" must be a string');
+  }
+  if (typeof v.summary_description !== 'string') {
+    throw new Error('"summary_description" must be a string');
+  }
+  if (typeof v.subtotal !== 'number') {
+    throw new Error('"subtotal" must be a number');
+  }
+  if (typeof v.total !== 'number') {
+    throw new Error('"total" must be a number');
+  }
+  if (typeof v.currency !== 'string') {
+    throw new Error('"currency" must be a string');
+  }
+  if (!Array.isArray(v.items)) {
+    throw new Error('"items" must be an array');
+  }
+  if (!Array.isArray(v.taxes) || v.taxes.some((t) => typeof (t as any)?.amount !== 'number')) {
+    throw new Error('"taxes" must be an array of entries with a numeric "amount"');
   }
 }
 

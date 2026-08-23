@@ -58,8 +58,20 @@ export async function processQueue(): Promise<void> {
 
     const stmts = getStatements();
     const receipts = stmts.selectReviewed.all() as ReceiptRow[];
+    const now = Date.now();
 
     for (const receipt of receipts) {
+      // A receipt that already failed once backs off before its next
+      // attempt (exponential, base 5s, capped at 300s). Skip it for this
+      // run rather than blocking the whole batch on a per-item sleep —
+      // other reviewed receipts shouldn't wait on one flaky retry, and
+      // this receipt will be picked up again on a later poll.
+      if (receipt.retry_count > 0) {
+        const backoff = Math.min(BASE_DELAY_MS * Math.pow(2, receipt.retry_count - 1), MAX_DELAY_MS);
+        const readyAt = new Date(receipt.updated_at).getTime() + backoff;
+        if (now < readyAt) continue;
+      }
+
       const amount = receipt.total_amount ?? 0;
 
       if (amount <= 0) {
@@ -80,6 +92,7 @@ export async function processQueue(): Promise<void> {
       try {
         const result = await createExpenseTransaction({
           businessId,
+          receiptId: receipt.id,
           date: dateStr,
           description,
           amount,
@@ -123,20 +136,24 @@ export async function processQueue(): Promise<void> {
           retry_count: newRetry,
           updated_at: new Date().toISOString(),
         });
-
-        if (isRetryable && newRetry < MAX_RETRIES) {
-          // Exponential backoff
-          const delay = Math.min(
-            BASE_DELAY_MS * Math.pow(2, newRetry - 1),
-            MAX_DELAY_MS,
-          );
-          await sleep(delay);
-        }
       }
     }
   } finally {
     running = false;
   }
+}
+
+/**
+ * Fire off a queue pass without waiting for it. Per-receipt failures
+ * (Wave rejections, transport errors) are already recorded on the
+ * receipt itself inside processQueue() — this only catches something
+ * going wrong before/around that, e.g. a DB error, which would otherwise
+ * vanish silently.
+ */
+export function triggerQueue(): void {
+  processQueue().catch((err) => {
+    console.error('[upload-queue] processQueue failed:', err);
+  });
 }
 
 // ── Retry helpers ──
@@ -147,8 +164,7 @@ export function retryReceipt(id: string): void {
     `UPDATE receipts SET status = 'reviewed', retry_count = 0, last_error = NULL, updated_at = ? WHERE id = ?`,
   ).run(new Date().toISOString(), id);
 
-  // Fire off the queue (don't await)
-  processQueue().catch(() => {});
+  triggerQueue();
 }
 
 export function retryAll(): void {
@@ -158,19 +174,17 @@ export function retryAll(): void {
      WHERE status IN ('failed', 'needsAttention')`,
   ).run(new Date().toISOString());
 
-  processQueue().catch(() => {});
+  triggerQueue();
 }
 
 // ── Background polling ──
 
 export function startPolling(): void {
   if (pollTimer) return;
-  pollTimer = setInterval(() => {
-    processQueue().catch(() => {});
-  }, POLL_INTERVAL_MS);
+  pollTimer = setInterval(triggerQueue, POLL_INTERVAL_MS);
 
   // Also run immediately on start
-  processQueue().catch(() => {});
+  triggerQueue();
 }
 
 export function stopPolling(): void {
@@ -187,8 +201,4 @@ function buildDescription(receipt: ReceiptRow): string {
   if (receipt.vendor) parts.push(receipt.vendor);
   if (receipt.summary) parts.push(receipt.summary);
   return parts.length > 0 ? parts.join(' — ') : 'Expense';
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
