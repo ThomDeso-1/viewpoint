@@ -9,7 +9,7 @@ Setup takes about 15 minutes, once.
 
 ## What you'll need
 
-- A Mac or Windows computer that can stay on and connected to Wi-Fi
+- A Mac that can stay on and connected to Wi-Fi
   (this is where the app actually runs — your iPhone just talks to it)
 - A Claude API key ([console.anthropic.com](https://console.anthropic.com) →
   Settings → API Keys → Create Key). You'll need a payment method on that
@@ -18,16 +18,12 @@ Setup takes about 15 minutes, once.
   Settings → API Access → Create a token). You can skip this during setup
   and add it later — receipts will just sit there until you connect Wave.
 
-## Step 1 — Install Docker Desktop
+## Step 1 — Install the runtime
 
 This is the only software you need to install. It's what runs the app.
 
-- Mac: [docker.com/products/docker-desktop](https://www.docker.com/products/docker-desktop/) → download for Mac → open it and follow the installer.
-- Windows: same link → download for Windows → open it and follow the installer.
-
-Once installed, open Docker Desktop and leave it running. In Docker Desktop's
-settings, turn on **"Start Docker Desktop when you log in"** — this makes
-sure the app comes back automatically after you restart your computer.
+Install Node.js — [nodejs.org](https://nodejs.org/) → download the **LTS**
+version → run the installer. That's it, nothing else to configure.
 
 ## Step 2 — Unzip the app
 
@@ -37,19 +33,19 @@ gives you a folder called `viewpoint-receipts`.
 
 ## Step 3 — Start it
 
-**On a Mac**: open the `viewpoint-receipts` folder and double-click
-**`start.command`**. A black window will open and show some text — that's
-normal, leave it running. The first time, it'll take a minute or two to set
-itself up.
-
-**On Windows**: open the `viewpoint-receipts` folder and double-click
-**`start.bat`**.
+Open the `viewpoint-receipts` folder and double-click
+**`start-native.command`**. A black window will open and show some text —
+that's normal, leave it running. The first time, it'll take a minute or two
+to set itself up (it downloads a few packages and builds the app).
 
 When it says "Started!", the app is running.
 
-> If Windows or macOS warns that the file is from an unidentified developer,
-> that's expected for a script you were sent directly (not from an app
-> store) — right-click it and choose "Open" to run it anyway.
+> There's also a Docker-based version (`start.command`) if you'd rather run
+> it in a container — see Troubleshooting below.
+
+> If macOS warns that the file is from an unidentified developer, that's
+> expected for a script you were sent directly (not from an app store) —
+> right-click it and choose "Open" to run it anyway.
 
 ## Step 4 — Open the app and set a password
 
@@ -79,9 +75,9 @@ Settings page in the app.
 
 Your iPhone needs to be on the **same Wi-Fi network** as the computer.
 
-1. On the computer, find its network address:
-   - **Mac**: System Settings → Wi-Fi → click the (i) next to your network → note the IP address (looks like `192.168.1.42`).
-   - **Windows**: open Command Prompt, type `ipconfig`, look for "IPv4 Address" (also looks like `192.168.1.42`).
+1. On the computer, find its network address: System Settings → Wi-Fi →
+   click the (i) next to your network → note the IP address (looks like
+   `192.168.1.42`).
 2. On your iPhone, open **Safari** and go to `http://<that address>:3000` (e.g. `http://192.168.1.42:3000`).
 3. Log in with the password from Step 4.
 4. Tap the Share button (square with an arrow) → **Add to Home Screen**.
@@ -111,20 +107,24 @@ each one individually.
 
 ## Stopping / restarting
 
-You generally don't need to do anything — once started, the app keeps
-running in the background, and Docker Desktop restarts it automatically
-if your computer reboots (as long as Docker Desktop itself is set to start
-at login, from Step 1).
+The app keeps running in the background as long as the computer stays on.
+It won't come back on its own if the computer restarts — if that happens,
+just double-click `start-native.command` again.
 
-- To stop it: double-click `stop.command` (Mac) or `stop.bat` (Windows).
-- To start it again: double-click `start.command` / `start.bat` again —
-  it's safe to run any time, and won't lose your password or settings.
+- To stop it: double-click `stop-native.command`.
+- To start it again: double-click `start-native.command` again — it's safe
+  to run any time, and won't lose your password or settings.
 
 ## Troubleshooting
 
-- **"Docker isn't installed yet"** when starting → Docker Desktop isn't
-  running. Open it from Applications (Mac) or the Start Menu (Windows) and
-  wait for it to say "Docker Desktop is running," then try again.
+- **"Node.js isn't installed yet"** when starting → install it from
+  [nodejs.org](https://nodejs.org/) (the LTS version), then try again.
+- **It fails partway through, or won't start** → it's safe to just
+  double-click `start-native.command` again. If it still won't start, check
+  `server.log` inside the `viewpoint-receipts` folder for details, or send
+  it to Thomas. As a fallback, the Docker-based version (`start.command` /
+  `stop.command`) still works if you install
+  [OrbStack](https://orbstack.dev/) or Docker Desktop.
 - **Can't reach it from your iPhone** → double check the iPhone is on the
   *same* Wi-Fi network as the computer, and that you're using the
   computer's IP address (not `localhost`) in Safari.

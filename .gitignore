@@ -6,3 +6,5 @@ backups/
 .env
 *.db
 *-bundle.zip
+.server.pid
+server.log
