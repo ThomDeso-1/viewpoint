@@ -18,20 +18,17 @@ Setup takes about 15 minutes, once.
   Settings → API Access → Create a token). You can skip this during setup
   and add it later — receipts will just sit there until you connect Wave.
 
-## Step 1 — Install the runtime
+There's nothing to install ahead of time — the app sets up everything it
+needs (including a private copy of Node.js, if your Mac doesn't already
+have a current one) the first time you start it.
 
-This is the only software you need to install. It's what runs the app.
-
-Install Node.js — [nodejs.org](https://nodejs.org/) → download the **LTS**
-version → run the installer. That's it, nothing else to configure.
-
-## Step 2 — Unzip the app
+## Step 1 — Unzip the app
 
 You should have a file called `viewpoint-receipts-bundle.zip`. Unzip it
 somewhere you'll remember — your Desktop or Documents folder is fine. This
 gives you a folder called `viewpoint-receipts`.
 
-## Step 3 — Start it
+## Step 2 — Start it
 
 Open the `viewpoint-receipts` folder and double-click
 **`start-native.command`**. A black window will open and show some text —
@@ -47,7 +44,7 @@ When it says "Started!", the app is running.
 > expected for a script you were sent directly (not from an app store) —
 > right-click it and choose "Open" to run it anyway.
 
-## Step 4 — Open the app and set a password
+## Step 3 — Open the app and set a password
 
 On the same computer, open a web browser and go to:
 
@@ -59,7 +56,7 @@ The first thing you'll see is a screen to set a password. This is the
 password you'll use to log in from your iPhone too — pick something you'll
 remember.
 
-## Step 5 — Connect Claude and Wave
+## Step 4 — Connect Claude and Wave
 
 Right after setting your password, the app will ask for:
 
@@ -71,7 +68,7 @@ Right after setting your password, the app will ask for:
 You can hit **"Skip for now"** on either step and add it later from the
 Settings page in the app.
 
-## Step 6 — Add it to your iPhone's home screen
+## Step 5 — Add it to your iPhone's home screen
 
 Your iPhone needs to be on the **same Wi-Fi network** as the computer.
 
@@ -79,7 +76,7 @@ Your iPhone needs to be on the **same Wi-Fi network** as the computer.
    click the (i) next to your network → note the IP address (looks like
    `192.168.1.42`).
 2. On your iPhone, open **Safari** and go to `http://<that address>:3000` (e.g. `http://192.168.1.42:3000`).
-3. Log in with the password from Step 4.
+3. Log in with the password from Step 3.
 4. Tap the Share button (square with an arrow) → **Add to Home Screen**.
 
 Now there's an app icon on your home screen. Tap it any time to open the
@@ -107,24 +104,26 @@ each one individually.
 
 ## Stopping / restarting
 
-The app keeps running in the background as long as the computer stays on.
-It won't come back on its own if the computer restarts — if that happens,
-just double-click `start-native.command` again.
+You generally don't need to do anything — once you've run
+`start-native.command` once, the app starts itself automatically every time
+you log in to the Mac, and restarts itself on its own if it ever crashes.
 
-- To stop it: double-click `stop-native.command`.
-- To start it again: double-click `start-native.command` again — it's safe
-  to run any time, and won't lose your password or settings.
+- To stop it: double-click `stop-native.command`. It'll stay off until you
+  start it again.
+- To start it again: double-click `start-native.command` — it's safe to run
+  any time, and won't lose your password or settings.
 
 ## Troubleshooting
 
-- **"Node.js isn't installed yet"** when starting → install it from
-  [nodejs.org](https://nodejs.org/) (the LTS version), then try again.
 - **It fails partway through, or won't start** → it's safe to just
   double-click `start-native.command` again. If it still won't start, check
   `server.log` inside the `viewpoint-receipts` folder for details, or send
   it to Thomas. As a fallback, the Docker-based version (`start.command` /
   `stop.command`) still works if you install
   [OrbStack](https://orbstack.dev/) or Docker Desktop.
+- **"Something else on this computer is already using port 3000"** → if
+  you previously tried the Docker version, quit Docker Desktop (menu bar
+  whale icon → "Quit Docker Desktop") and try again.
 - **Can't reach it from your iPhone** → double check the iPhone is on the
   *same* Wi-Fi network as the computer, and that you're using the
   computer's IP address (not `localhost`) in Safari.

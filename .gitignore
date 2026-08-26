@@ -6,5 +6,6 @@ backups/
 .env
 *.db
 *-bundle.zip
-.server.pid
 server.log
+.node-runtime/
+.node-version-used
