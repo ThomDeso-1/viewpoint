@@ -78,6 +78,7 @@ viewpoint-receipts/
 │   │   └── queue.ts                the automation orchestrator (was practice-queue.ts)
 │   ├── integrations/               one folder per external service, bare fetch
 │   │   ├── claude.ts               receipt + exam-request extraction; prompts; model IDs
+│   │   ├── oauth/   state-store.ts (pending `state` map)  callback.ts (shared result page + router factory)
 │   │   ├── wave/    wave.ts (691 lines, audit P2-26)  auth.ts (token ↔ OAuth)
 │   │   ├── google/  auth.ts  gmail.ts  calendar.ts
 │   │   └── ohip/    index.ts (factory)  hcv-client.ts (interface + response codes)
@@ -85,7 +86,7 @@ viewpoint-receipts/
 │   └── routes/                     HTTP layer — thin, delegate to the domains above
 │       ├── auth.ts  settings.ts
 │       ├── receipts.ts  practice.ts
-│       └── google.ts  wave-oauth.ts   ⚠ ~120 lines duplicated (audit P2-25)
+│       └── google.ts  wave-oauth.ts   provider specifics only; flow shared via integrations/oauth/
 │
 ├── client/  React 19 + Vite 6 + react-router 7, PWA
 │   ├── vite.config.ts              dev proxy → :3000; PWA/Workbox caching (audit P1-6)
@@ -126,6 +127,7 @@ viewpoint-receipts/
 | **Claude prompts / models** | `server/integrations/claude.ts` |
 | **Wave (expenses + invoices)** | `server/integrations/wave/{wave,auth}.ts`, `server/routes/wave-oauth.ts` |
 | **Google (Gmail + Calendar)** | `server/integrations/google/{auth,gmail,calendar}.ts`, `server/platform/oauth-store.ts`, `server/routes/google.ts`, `client/src/practice/GoogleSettings.tsx` |
+| **OAuth flow plumbing (both providers)** | `server/integrations/oauth/{state-store,callback}.ts` — `state` map + the callback router factory / result page |
 | **OHIP eligibility** | `server/integrations/ohip/*`, `server/practice/eligibility.ts`, `client/src/practice/OhipSettings.tsx` |
 | **Reminders (+ future SMS)** | `server/practice/reminders.ts` (`ReminderChannel` interface) |
 | **Background queues / retry** | `server/receipts/upload-queue.ts`, `server/practice/queue.ts`, `server/platform/backoff.ts` |
@@ -145,14 +147,17 @@ verified by `typecheck:all` + `test:all`). These refactors were
 deliberately left out and should each be their own small commit — see
 [`docs/AUDIT.md`](docs/AUDIT.md) §4:
 
-- **P2-25** — dedupe `server/routes/google.ts` + `wave-oauth.ts` into a
-  shared `server/integrations/oauth/` (state store + result page +
-  callback factory).
+- ~~**P2-25**~~ — ✅ done. `server/integrations/oauth/` holds the shared
+  `state-store.ts` + `callback.ts` (result page + `makeCallbackRouter`
+  factory); each route file keeps only its `buildAuthorizeUrl` /
+  `exchange` wiring.
 - **P2-26** — split `server/integrations/wave/wave.ts` (691 lines) into
   `transport / expenses / invoices / customers / reference`.
 - **P2-27** — extract `server/platform/poller.ts` (`makePoller`); the two
   queues keep only their `pass()`.
-- **P3-28 / P3-29** — `applyFailure` helper; one `server/platform/escape.ts`.
+- **P3-28** — `applyFailure` helper.
+- ~~**P3-29**~~ — ✅ done. One `server/platform/escape.ts`
+  (`escapeHtml` / `escapeXml`).
 - **Client** — split `client/src/shared/api.ts` into
   `api/{auth,receipts,practice,settings}.ts` + a barrel.
 - Sweep the stale `Spec (CONVERSION-PLAN.md …)` citations in test-file

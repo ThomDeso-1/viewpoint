@@ -373,10 +373,14 @@ yearly.
   — identical `issueState` / `consumeState` / `pruneStates` /
   `resetPendingStates`, and a byte-for-byte identical `renderResult`
   HTML template (only "Google" ↔ "Wave" differ).
-- **Fix:** `server/integrations/oauth/state-store.ts` (the pending-state
-  map) + `server/integrations/oauth/callback.ts` (shared result page +
-  a `makeCallbackRouter({ provider, exchange })` factory). Each provider
-  keeps only its `buildAuthorizeUrl` / `exchangeCode`.
+- **✅ Fixed 2026-08-28.** `server/integrations/oauth/state-store.ts` (the
+  pending-`state` map, one for both providers) +
+  `server/integrations/oauth/callback.ts` (shared result page +
+  `makeCallbackRouter({ name, exchange, describeError })`). `google.ts`
+  and `wave-oauth.ts` keep only their `buildAuthorizeUrl` / `exchange`
+  wiring — ~120 duplicated lines gone. Tests:
+  `tests/integrations/oauth.test.ts` (plus the unchanged end-to-end
+  coverage in `google.test.ts` / `wave-oauth.test.ts`).
 
 ### P2-26 — `wave.ts` is 691 lines mixing five concerns
 
@@ -406,6 +410,12 @@ Extract `applyFailure(row, { retryable, maxRetries })`.
 
 `escapeXml` in `hcv-soap.ts`, HTML-escape in `google.ts` and
 `wave-oauth.ts`. One `server/platform/escape.ts`.
+
+- **✅ Fixed 2026-08-28.** `server/platform/escape.ts` exports `escapeHtml`
+  (numeric `&#39;`, portable) and `escapeXml` (`&apos;`, valid in XML).
+  All three call sites updated; `google.ts` / `wave-oauth.ts` no longer
+  render the page directly (see P2-25). Tests:
+  `tests/platform/escape.test.ts`.
 
 ### P3-30 — Regex "XML parsing" in the HCV client
 

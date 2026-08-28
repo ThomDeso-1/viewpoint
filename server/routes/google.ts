@@ -1,5 +1,4 @@
 import { Router, Request, Response } from 'express';
-import crypto from 'crypto';
 import {
   buildAuthorizeUrl,
   exchangeCode,
@@ -10,49 +9,17 @@ import {
 } from '../integrations/google/auth.js';
 import { connectionStatus } from '../platform/oauth-store.js';
 import { updateEnvConfig } from '../platform/env-config.js';
-import { escapeHtml } from '../platform/escape.js';
+import { issueState } from '../integrations/oauth/state-store.js';
+import { makeCallbackRouter } from '../integrations/oauth/callback.js';
 
 /**
  * Google connect/disconnect.
  *
- * Split into two routers because the OAuth callback cannot be
- * session-authenticated: the session cookie is `sameSite: strict`, so the
- * browser does not send it on a top-level navigation from
- * accounts.google.com. The callback is protected by the single-use
- * `state` secret instead — which is what state is for — and everything
- * else sits behind the normal auth gate.
+ * The OAuth callback is split into its own router (`googleCallbackRoutes`)
+ * because it cannot be session-authenticated — see
+ * `integrations/oauth/callback.ts` for why. The state store and the
+ * result page are shared with the Wave flow.
  */
-
-const STATE_TTL_MS = 10 * 60 * 1000;
-
-/** Pending authorize attempts, by state token. Single-use and expiring. */
-const pendingStates = new Map<string, number>();
-
-function issueState(): string {
-  pruneStates();
-  const state = crypto.randomBytes(32).toString('base64url');
-  pendingStates.set(state, Date.now() + STATE_TTL_MS);
-  return state;
-}
-
-function consumeState(state: string | undefined): boolean {
-  pruneStates();
-  if (!state || !pendingStates.has(state)) return false;
-  pendingStates.delete(state); // single use
-  return true;
-}
-
-function pruneStates(): void {
-  const now = Date.now();
-  for (const [state, expiry] of pendingStates) {
-    if (expiry <= now) pendingStates.delete(state);
-  }
-}
-
-/** Test seam — module-level state outlives an app instance. */
-export function resetPendingStates(): void {
-  pendingStates.clear();
-}
 
 /** Routes requiring a logged-in session. */
 export function googleRoutes(): Router {
@@ -110,80 +77,12 @@ export function googleRoutes(): Router {
   return router;
 }
 
-/**
- * The OAuth callback, mounted ahead of the auth gate. See the note above
- * for why this cannot require a session.
- */
+/** The OAuth callback, mounted ahead of the auth gate. */
 export function googleCallbackRoutes(): Router {
-  const router = Router();
-
-  router.get('/callback', async (req: Request, res: Response): Promise<void> => {
-    const { code, state, error } = req.query;
-
-    if (error) {
-      res.status(400).send(renderResult(false, `Google returned an error: ${String(error)}`));
-      return;
-    }
-
-    // Rejecting an unknown state is what stops an attacker from feeding
-    // us an authorization code from their own account.
-    if (!consumeState(typeof state === 'string' ? state : undefined)) {
-      res
-        .status(400)
-        .send(renderResult(false, 'This sign-in link has expired or was already used. Try again from Settings.'));
-      return;
-    }
-
-    if (!code || typeof code !== 'string') {
-      res.status(400).send(renderResult(false, 'Google did not return an authorization code.'));
-      return;
-    }
-
-    try {
-      await exchangeCode(code);
-      res.send(renderResult(true, 'Google is connected. You can close this tab.'));
-    } catch (err) {
-      const message =
-        err instanceof GoogleAuthError ? err.message : `Unexpected error: ${(err as Error).message}`;
-      res.status(502).send(renderResult(false, message));
-    }
+  return makeCallbackRouter({
+    name: 'Google',
+    exchange: exchangeCode,
+    describeError: (err) =>
+      err instanceof GoogleAuthError ? err.message : `Unexpected error: ${(err as Error).message}`,
   });
-
-  return router;
-}
-
-/**
- * A self-contained result page. This tab is opened by Google's redirect
- * and is not the app's SPA, so it cannot rely on any client bundle.
- */
-function renderResult(ok: boolean, message: string): string {
-  const escaped = escapeHtml(message);
-
-  return `<!doctype html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>${ok ? 'Connected' : 'Connection failed'}</title>
-    <style>
-      body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-             background: #1a2332; color: #f4f6fb; display: grid; place-items: center;
-             min-height: 100vh; margin: 0; padding: 1.5rem; }
-      .card { max-width: 26rem; text-align: center; background: #22304a;
-              border-radius: 0.75rem; padding: 2rem; }
-      .icon { font-size: 2.5rem; }
-      h1 { font-size: 1.25rem; margin: 0.75rem 0 0.5rem; }
-      p { margin: 0; color: #b8c4dc; line-height: 1.5; }
-      a { color: #7aa7ff; }
-    </style>
-  </head>
-  <body>
-    <div class="card">
-      <div class="icon">${ok ? '✅' : '⚠️'}</div>
-      <h1>${ok ? 'Google connected' : 'Connection failed'}</h1>
-      <p>${escaped}</p>
-      ${ok ? '' : '<p style="margin-top:1rem"><a href="/settings">Back to Settings</a></p>'}
-    </div>
-  </body>
-</html>`;
 }
