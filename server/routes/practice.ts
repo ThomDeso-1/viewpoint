@@ -72,7 +72,9 @@ function toExamRequestDto(row: ExamRequestRow) {
     received_at: row.received_at,
     from_address: row.from_address,
     subject: row.subject,
-    body_snippet: row.body_snippet,
+    // The retained slice of the email body is PHI and is not inlined here.
+    // It is fetched on demand through the audited /source route below.
+    has_source: !!row.body_snippet,
     extraction: examRequests.toExtractionDto(examRequests.readExtraction(row)),
     last_error: row.last_error,
     retry_count: row.retry_count,
@@ -148,6 +150,25 @@ export function practiceRoutes(): Router {
       return;
     }
     res.json(toExamRequestDto(row));
+  });
+
+  // ── GET /exam-requests/:id/source — the retained slice of the raw email ──
+  // Separate from the DTO because it is PHI: reading it is audited, the
+  // same way decrypting a health card number is.
+  router.get('/exam-requests/:id/source', (req: Request, res: Response): void => {
+    const row = examRequests.getExamRequest(req.params.id);
+    if (!row) {
+      res.status(404).json({ error: 'Exam request not found.' });
+      return;
+    }
+
+    auditRequest(req, {
+      action: 'exam_request.source_read',
+      entityType: 'exam_request',
+      entityId: row.id,
+    });
+
+    res.json({ body: examRequests.readBodySnippet(row) });
   });
 
   router.post('/exam-requests/:id/approve', async (req: Request, res: Response): Promise<void> => {

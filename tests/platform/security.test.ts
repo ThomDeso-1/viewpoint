@@ -343,3 +343,35 @@ describe('receipt image access', () => {
     expect(res.body.toString()).toBe(IMAGE_BYTES);
   });
 });
+
+describe('proxy trust (P0-3)', () => {
+  let ctx: TestContext;
+  afterEach(() => ctx?.teardown());
+
+  const tokenCookie = (res: request.Response) =>
+    (res.headers['set-cookie'] as unknown as string[]).find((c) => c.startsWith('token='))!;
+
+  it('ignores a forged X-Forwarded-Proto when no proxy is declared', async () => {
+    ctx = await setupTestApp();
+    await setupPassword(ctx.app);
+
+    const res = await request(ctx.app)
+      .post('/api/auth/login')
+      .set('X-Forwarded-Proto', 'https')
+      .send({ password: PASSWORD });
+
+    expect(tokenCookie(res)).not.toMatch(/Secure/i);
+  });
+
+  it('honours X-Forwarded-Proto when TRUST_PROXY=1', async () => {
+    ctx = await setupTestApp({ TRUST_PROXY: '1' });
+    await setupPassword(ctx.app);
+
+    const res = await request(ctx.app)
+      .post('/api/auth/login')
+      .set('X-Forwarded-Proto', 'https')
+      .send({ password: PASSWORD });
+
+    expect(tokenCookie(res)).toMatch(/Secure/i);
+  });
+});

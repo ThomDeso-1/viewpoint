@@ -31,7 +31,15 @@ export function createApp(): Express {
   // (deploy/Caddyfile, nginx), which is what decides whether the session
   // cookie is marked Secure. Limited to one hop: the proxy is on the same
   // host, and trusting further would let a client forge the header.
-  app.set('trust proxy', 1);
+  //
+  // Off unless TRUST_PROXY=1. With no proxy in front (the LAN
+  // start-native case) a client that reaches the port directly could
+  // otherwise forge X-Forwarded-For — which audit_log records — and
+  // X-Forwarded-Proto. Set TRUST_PROXY=1 in the same place you set up
+  // HTTPS (see docs/DEPLOYMENT.md).
+  if (process.env.TRUST_PROXY === '1') {
+    app.set('trust proxy', 1);
+  }
 
   // No cors() middleware: the client is always same-origin — proxied
   // through Vite's dev server (client/vite.config.ts) locally, and

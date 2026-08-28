@@ -76,6 +76,28 @@ describe('Inbox', () => {
     expect(container.textContent).not.toMatch(/\b\d{10}\b/);
   });
 
+  it('fetches the original email only on demand (P0-1)', async () => {
+    api.getExamRequests.mockResolvedValue([makeExamRequest({ has_source: true })]);
+    api.getExamRequestSource.mockResolvedValue({ body: 'Please book Ada an exam.' });
+    renderInbox();
+
+    await screen.findByText('Ada Lovelace');
+    expect(api.getExamRequestSource).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole('button', { name: /show original email/i }));
+
+    await waitFor(() => expect(api.getExamRequestSource).toHaveBeenCalledWith('req-1'));
+    expect(await screen.findByText(/Please book Ada an exam/)).toBeInTheDocument();
+  });
+
+  it('hides the email toggle when nothing was retained', async () => {
+    api.getExamRequests.mockResolvedValue([makeExamRequest({ has_source: false })]);
+    renderInbox();
+
+    await screen.findByText('Ada Lovelace');
+    expect(screen.queryByRole('button', { name: /original email/i })).not.toBeInTheDocument();
+  });
+
   it('offers Approve only once a request is drafted', async () => {
     api.getExamRequests.mockResolvedValue([makeExamRequest({ status: 'received' })]);
     renderInbox();

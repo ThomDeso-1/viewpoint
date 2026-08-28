@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import {
   getExamRequests,
   getExamRequestCounts,
+  getExamRequestSource,
   pollExamRequests,
   approveExamRequest,
   rejectExamRequest,
@@ -214,7 +215,24 @@ function ExamRequestCard({
   onInvoiceSaved: () => void;
 }) {
   const [showEmail, setShowEmail] = useState(false);
+  const [emailBody, setEmailBody] = useState<string | null>(null);
+  const [emailError, setEmailError] = useState<string | null>(null);
   const [showReminder, setShowReminder] = useState(false);
+
+  // The email body is PHI and access is audited, so it is fetched only
+  // when the operator opens it — not delivered with the card.
+  async function toggleEmail() {
+    const next = !showEmail;
+    setShowEmail(next);
+    if (next && emailBody === null && emailError === null) {
+      try {
+        const { body } = await getExamRequestSource(request.id);
+        setEmailBody(body ?? '');
+      } catch (err) {
+        setEmailError((err as Error).message);
+      }
+    }
+  }
   const [editingInvoice, setEditingInvoice] = useState(false);
 
   const extraction = request.extraction;
@@ -333,10 +351,20 @@ function ExamRequestCard({
         </pre>
       )}
 
-      <button className="link-button" onClick={() => setShowEmail((v) => !v)}>
-        {showEmail ? 'Hide original email' : 'Show original email'}
-      </button>
-      {showEmail && <pre className="preview-block">{request.body_snippet}</pre>}
+      {request.has_source && (
+        <button className="link-button" onClick={toggleEmail}>
+          {showEmail ? 'Hide original email' : 'Show original email'}
+        </button>
+      )}
+      {showEmail && (
+        <pre className="preview-block">
+          {emailError
+            ? `Could not load the email: ${emailError}`
+            : emailBody === null
+              ? 'Loading…'
+              : emailBody}
+        </pre>
+      )}
 
       <div className="request-actions">
         {canApprove && (

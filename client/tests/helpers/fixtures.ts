@@ -83,7 +83,7 @@ export function makeExamRequest(overrides: Partial<ExamRequest> = {}): ExamReque
     received_at: '2026-08-20T09:00:00.000Z',
     from_address: 'ada@example.com',
     subject: 'Eye exam request',
-    body_snippet: 'Could I book an exam for September 1st?',
+    has_source: true,
     extraction: {
       patient_name: 'Ada Lovelace',
       email: 'ada@example.com',

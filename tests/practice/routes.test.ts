@@ -458,4 +458,44 @@ describe('practice API', () => {
       expect(res.body.error).toMatch(/not set/i);
     });
   });
+
+  describe('email source is PHI (P0-1)', () => {
+    it('keeps the raw email out of the exam-request DTO', async () => {
+      const { row } = await seedDrafted();
+
+      const res = await request(ctx.app).get(`/api/practice/exam-requests/${row.id}`).set(auth());
+      expect(res.body.has_source).toBe(true);
+      expect(res.body).not.toHaveProperty('body_snippet');
+      expect(JSON.stringify(res.body)).not.toContain('Please book an exam');
+    });
+
+    it('stores the retained email slice encrypted, not as plaintext', async () => {
+      await seedDrafted();
+      const stored = examRequests.listAll()[0];
+      expect(stored.body_snippet).toMatch(/^v1:/);
+      expect(stored.body_snippet).not.toContain('Please book an exam');
+    });
+
+    it('serves the body through the /source route and audits the access', async () => {
+      const { row } = await seedDrafted();
+
+      const res = await request(ctx.app)
+        .get(`/api/practice/exam-requests/${row.id}/source`)
+        .set(auth());
+      expect(res.status).toBe(200);
+      expect(res.body.body).toBe('Please book an exam.');
+
+      const audit = await request(ctx.app).get('/api/practice/audit').set(auth());
+      const entry = audit.body.find((e: any) => e.action === 'exam_request.source_read');
+      expect(entry).toBeTruthy();
+      expect(entry.entity_id).toBe(row.id);
+    });
+
+    it('404s the /source route for an unknown request', async () => {
+      const res = await request(ctx.app)
+        .get('/api/practice/exam-requests/nope/source')
+        .set(auth());
+      expect(res.status).toBe(404);
+    });
+  });
 });

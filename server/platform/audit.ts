@@ -19,6 +19,7 @@ export type AuditAction =
   | 'patient.create'
   | 'patient.update'
   | 'patient.delete'
+  | 'exam_request.source_read'
   | 'health_card.decrypt'
   | 'eligibility.check'
   | 'invoice.create'

@@ -84,7 +84,12 @@ export function createFromGmailMessage(message: GmailMessage): {
       subject: message.subject,
       // Only a snippet is retained: the full message stays in Gmail, and
       // this table is already holding enough personal information.
-      body_snippet: (message.body || message.snippet).slice(0, 2000),
+      //
+      // Encrypted, like extracted_json: a booking email routinely spells
+      // out the health card number, DOB and name in its body, so a
+      // plaintext copy here would defeat the encryption in `patients`.
+      // Read it back through readBodySnippet().
+      body_snippet: encrypt((message.body || message.snippet).slice(0, 2000)),
       created_at: now,
       updated_at: now,
     });
@@ -121,6 +126,24 @@ export function readExtraction(row: ExamRequestRow): ExamRequestExtraction | nul
   } catch {
     // An unreadable blob is a data problem, not a crash — the queue
     // treats the row as "not yet extracted" and tries again.
+    return null;
+  }
+}
+
+/**
+ * Decrypts the retained slice of the original email.
+ *
+ * This is PHI (name, DOB, often a health card number), so it is never put
+ * in the exam-request DTO — it is reached only through the audited
+ * `GET /exam-requests/:id/source` route.
+ */
+export function readBodySnippet(row: ExamRequestRow): string | null {
+  if (!row.body_snippet) return null;
+  try {
+    return row.body_snippet.startsWith('v1:')
+      ? decrypt(row.body_snippet)
+      : row.body_snippet; // tolerate a row written before encryption landed
+  } catch {
     return null;
   }
 }

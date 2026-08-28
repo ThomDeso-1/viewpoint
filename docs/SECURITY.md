@@ -46,11 +46,13 @@ machine or a private server they control.
   `audit_log` table on logins, PHI reads and writes, health card
   decryption, eligibility checks, and anything sent to a patient or
   posted to Wave on their behalf.
-- **Extracted email content is encrypted too.** Claude's reading of an
-  exam-request email (name, date of birth, contact details, often a health
-  card number) is stored encrypted in `exam_requests.extracted_json`, not
-  as plaintext — it is the same personal health information the patients
-  table protects.
+- **Exam-request email content is encrypted too.** Both Claude's reading
+  of the email (`exam_requests.extracted_json`) and the retained slice of
+  the raw email body (`exam_requests.body_snippet`) are AES-256-GCM
+  encrypted — they hold the same personal health information the patients
+  table protects. The raw slice is never included in an API response; it
+  is served only through `GET /api/practice/exam-requests/:id/source`,
+  which writes an audit entry for each access.
 - **CORS is same-origin only.** The client is always served from the same
   origin as the API (proxied in dev via `client/vite.config.ts`, bundled
   together in production), so there is no cross-origin policy to
@@ -80,8 +82,13 @@ Because the database now holds PHI, these are no longer optional:
 
 1. **Run it over HTTPS.** Use the `deploy/Caddyfile` example, or
    Tailscale. Health card numbers must not cross even a home LAN in the
-   clear. Note the `token` cookie is not yet marked `Secure` — set that
-   once HTTPS is in place.
+   clear. The server **refuses to start** over plain HTTP once
+   `OHIP_HCV_MODE` leaves `mock` or any patient record exists
+   (`server/platform/phi-guard.ts`) — set `APP_PUBLIC_URL=https://…`, or
+   `TRUST_PROXY=1` if a proxy terminates TLS, or `ALLOW_INSECURE_PHI=1`
+   to override for LAN testing only. The session cookie marks itself
+   `Secure` automatically once a request arrives over HTTPS (directly or
+   via `X-Forwarded-Proto` when `TRUST_PROXY=1`).
 2. **Back up `DATA_ENCRYPTION_KEY` with the database.** A backup of
    `data/` without the key is unrecoverable for every encrypted field.
    Conversely, storing them together means a stolen backup is readable —
@@ -90,13 +97,16 @@ Because the database now holds PHI, these are no longer optional:
 
 ## Still to revisit
 
-1. **Mark the session cookie `Secure`** once the app is served over
-   HTTPS (deferred only because it would break plain-HTTP LAN use).
-2. **Multi-user support.** The schema and auth layer still assume exactly
+See [`AUDIT.md`](AUDIT.md) for the full list. In brief:
+
+1. **Multi-user support.** The schema and auth layer still assume exactly
    one password for the whole app; there is no user table and no per-user
    data isolation. The `audit_log` records *what* happened but cannot
    attribute it to a person.
-3. **Key rotation.** `DATA_ENCRYPTION_KEY` is generated once and never
+2. **Key rotation.** `DATA_ENCRYPTION_KEY` is generated once and never
    rotated; there is no re-encryption path.
-4. **Audit log retention and integrity.** The log is append-only by
+3. **Audit log retention and integrity.** The log is append-only by
    convention, not enforcement — anyone with database access can edit it.
+   (`AUDIT.md` P1-4.)
+4. **Service-worker PHI cache** and **no debounce on ministry-facing
+   endpoints** — `AUDIT.md` P1-5, P1-6.

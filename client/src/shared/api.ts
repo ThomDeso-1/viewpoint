@@ -350,7 +350,9 @@ export interface ExamRequest {
   received_at: string;
   from_address: string | null;
   subject: string | null;
-  body_snippet: string | null;
+  /** True if a slice of the original email was retained. Fetch it with
+   *  getExamRequestSource() — it is PHI and access is audited. */
+  has_source: boolean;
   extraction: ExamRequestExtraction | null;
   last_error: string | null;
   retry_count: number;
@@ -373,6 +375,11 @@ export function getExamRequests(all = false): Promise<ExamRequest[]> {
 
 export function getExamRequest(id: string): Promise<ExamRequest> {
   return request(`/practice/exam-requests/${id}`);
+}
+
+/** The retained slice of the original email. Reading it is audited server-side. */
+export function getExamRequestSource(id: string): Promise<{ body: string | null }> {
+  return request(`/practice/exam-requests/${id}/source`);
 }
 
 export function getExamRequestCounts(): Promise<ExamRequestCounts> {

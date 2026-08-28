@@ -8,10 +8,12 @@ This document is a point-in-time assessment. Findings are grouped by theme
 and ranked **P0 → P3** within each. Each finding names the file(s), the
 concrete failure it enables, and a suggested fix.
 
-**Progress since the audit:** the structure findings (§5) are resolved —
-the docs and code reorg landed 2026-08-28; file paths below reflect the
-new layout. `test:all` / `typecheck:all` scripts now exist (part of
-P2-19). Everything else is still open; P0-1/2/3 are in progress.
+**Progress since the audit (2026-08-28):**
+- §5 structure findings — **resolved** (docs + code reorg; paths below
+  reflect the new layout).
+- **P0-1, P0-2, P0-3 — resolved.** See the ✅ notes on each.
+- `test:all` / `typecheck:all` scripts now exist (part of P2-19).
+- Everything else is still open.
 
 > **Context that shapes every finding:** the app now stores **personal
 > health information** (names, DOB, contact details, Ontario health card
@@ -38,11 +40,15 @@ P2-19). Everything else is still open; P0-1/2/3 are in progress.
   that request, and in the browser (and its service-worker cache, see
   P0-6). `SECURITY.md` states "extracted email content is encrypted too";
   the *source* content it was extracted from is not.
-- **Fix:** encrypt `body_snippet` at rest exactly as `extracted_json` is
-  (`encrypt()` on write, tolerant decrypt on read). Drop it from the
-  default DTO; expose it only through a dedicated, audited endpoint
-  (`GET /exam-requests/:id/source`) that writes a `patient.read`-style
-  audit entry, mirroring `readHealthCard()`. Add a regression test.
+- **✅ Fixed 2026-08-28.** `body_snippet` is now `encrypt()`-ed on write
+  (tolerant decrypt on read, like `extracted_json`); dropped from the
+  exam-request DTO (replaced by `has_source: boolean`); reachable only via
+  `GET /api/practice/exam-requests/:id/source`, which writes an
+  `exam_request.source_read` audit entry. `Inbox.tsx` fetches it on
+  demand. Tests: `tests/practice/routes.test.ts` "email source is PHI",
+  `client/tests/practice/Inbox.test.tsx`. **Not migrated:** rows written
+  before this stay plaintext until re-received (same as `extracted_json`
+  did) — a one-off re-encrypt pass could be added if it matters.
 
 ### P0-2 — Nothing prevents health card numbers crossing the network in cleartext
 
@@ -54,12 +60,14 @@ P2-19). Everything else is still open; P0-1/2/3 are in progress.
   card numbers over that connection with no transport encryption, and the
   session cookie is not `Secure`. The docs *ask* the operator to turn on
   HTTPS; nothing *enforces* it.
-- **Fix:** add a startup guard in `server/index.ts` / `createApp`: if
-  `OHIP_HCV_MODE` is not `mock` **or** the `patients` table is non-empty,
-  refuse to start unless either (a) `GOOGLE_REDIRECT_URI` / an explicit
-  `PUBLIC_HTTPS_URL` is https, or (b) `ALLOW_INSECURE_PHI=1` is set
-  (logged loudly on every boot). Surface the state in `GET /api/settings`
-  so the UI can show a blocking banner.
+- **✅ Fixed 2026-08-28.** `server/platform/phi-guard.ts` →
+  `assertSafeForPhi()`, called from `server/index.ts` after
+  `createApp()`. Refuses to boot when `OHIP_HCV_MODE !== 'mock'` **or**
+  the `patients` table is non-empty, unless HTTPS is signalled
+  (`APP_PUBLIC_URL` / a redirect URI is https, or `TRUST_PROXY=1`) or
+  `ALLOW_INSECURE_PHI=1` (loud warning every boot). Skipped in demo mode.
+  Tests: `tests/platform/phi-guard.test.ts`. **Still worth doing:**
+  surface the state in `GET /api/settings` for a UI banner.
 
 ### P0-3 — `trust proxy: 1` is unconditional
 
@@ -70,8 +78,9 @@ P2-19). Everything else is still open; P0-1/2/3 are in progress.
   records for every login, PHI read, eligibility check, and message sent
   (PHIPA integrity), and `X-Forwarded-Proto` to flip the cookie `Secure`
   bit. Trusting a hop that isn't there is a spoofing primitive.
-- **Fix:** set `trust proxy` only when `process.env.TRUST_PROXY === '1'`
-  (or `BEHIND_PROXY`), documented alongside the HTTPS setup. Default off.
+- **✅ Fixed 2026-08-28.** `server/app.ts` sets `trust proxy` only when
+  `TRUST_PROXY === '1'`. Documented in `.env.example` and `AGENTS.md`.
+  Tests: `tests/platform/security.test.ts` "proxy trust (P0-3)".
 
 ### P1-4 — Eligibility history is cascade-deleted with the patient; audit log has no integrity guarantee
 
@@ -388,11 +397,10 @@ each its own small commit.
 - **P2:** no end-to-end test of `approveExamRequest` against the demo
   mock (happy path + Wave-failure path from P1-11). `tests/demo-mode.test.ts`
   exists but is narrower.
-- **P2:** no regression test asserting a health card number / raw email
-  body never appears in an API response (would lock in P0-1's fix and
-  guard `toPatientDto` / `toExtractionDto`).
-- **P3:** `client/tests` has good page coverage; add one for `Inbox`'s
-  "show email" toggle once `body_snippet` is gated.
+- ~~**P2:** regression test that the raw email body never appears in a
+  DTO~~ — ✅ added (`tests/practice/routes.test.ts`). A broader
+  "no health card number in any response" sweep would still be worth it.
+- ~~**P3:** `Inbox` "show email" toggle test~~ — ✅ added.
 - **Keep:** `tests/security.test.ts` covers auth, sessions, throttle, and
   the `/images` gate well.
 
@@ -400,11 +408,9 @@ each its own small commit.
 
 ## 7. Suggested order of operations
 
-1. **P0-1** (encrypt `body_snippet`, gate it) — smallest change, largest
-   exposure reduction, and it's PHI already on disk today.
-2. **P0-2 / P0-3** (HTTPS start-guard, conditional `trust proxy`) — before
-   any real patient data.
-3. **P1-18** (CI test gate) — cheap, stops regressions shipping.
+1. ~~**P0-1** (encrypt `body_snippet`, gate it)~~ — ✅ done.
+2. ~~**P0-2 / P0-3** (HTTPS start-guard, conditional `trust proxy`)~~ — ✅ done.
+3. **P1-18** (CI test gate) — cheap, stops regressions shipping. ← next
 4. **P1-10 / P1-11** (error handler, stuck-`approved` retry) — correctness.
 5. **P1-4 / P1-5 / P1-6** (retention, ministry debounce, SW cache) — the
    remaining PHI-handling items.
