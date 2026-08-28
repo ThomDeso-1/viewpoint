@@ -363,7 +363,8 @@ in `docs/AUDIT.md` §3 so the decision stays visible.
 | [`docs/history/`](docs/history/) | `conversion-plan.md`, `upgrade-plan.md` — historical, partly stale, still useful for rationale |
 
 The guides moved into `docs/`, and `server/` + `client/` were regrouped by
-domain, on 2026-08-28. Paths above reflect that layout. Remaining
-refactors (OAuth-route dedup, `wave.ts` split, `makePoller`, the error
-handler, the `api.ts` split) are listed in
+domain, on 2026-08-28. Paths above reflect that layout. The reorg-enabled
+refactors (OAuth-route dedup, `wave.ts` split, `makePoller`, `applyFailure`,
+one `escape.ts`, the error handler) have all landed; the
+`client/src/shared/api.ts` split is the one still open — see
 [`INDEX.md`](INDEX.md) §"Deferred follow-ups".

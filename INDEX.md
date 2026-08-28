@@ -63,6 +63,7 @@ viewpoint-receipts/
 │   │   ├── endpoints.ts            THE demo-mode switch — real vs mock base URLs
 │   │   ├── backoff.ts              stored-not-slept retry pacing, shared by both queues
 │   │   ├── poller.ts               makePoller: re-entry guard + interval + trigger, shared by both queues
+│   │   ├── failure.ts              applyFailure: the "retryable? bump; exhausted? give up" transition
 │   │   ├── escape.ts               escapeHtml / escapeXml (OAuth result page, HCV SOAP)
 │   │   ├── http.ts                 apiNotFound (JSON 404) + errorHandler (terminal 500)
 │   │   ├── rate-limit.ts           fixed-window limiter for paid-API / ministry routes
@@ -160,9 +161,13 @@ deliberately left out and should each be their own small commit — see
 - ~~**P2-27**~~ — ✅ done. `server/platform/poller.ts` (`makePoller`);
   both queues keep only their `processQueue` pass + a one-line
   `makePoller({ name, intervalMs, pass })`.
-- **P3-28** — `applyFailure` helper.
+- ~~**P3-28**~~ — ✅ done. `server/platform/failure.ts` (`applyFailure`);
+  the three `recordFailure` / inline sites pass a policy.
 - ~~**P3-29**~~ — ✅ done. One `server/platform/escape.ts`
   (`escapeHtml` / `escapeXml`).
+
+**§4 dedup is complete.** Still open, and not part of §4:
+
 - **Client** — split `client/src/shared/api.ts` into
   `api/{auth,receipts,practice,settings}.ts` + a barrel.
 - Sweep the stale `Spec (CONVERSION-PLAN.md …)` citations in test-file

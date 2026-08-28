@@ -3,6 +3,8 @@ import { getDb } from '../db/db.js';
 import type { ReminderRow, ReminderChannelName, AppointmentRow, PatientRow } from './types.js';
 import { sendMessage } from '../integrations/google/gmail.js';
 import { audit } from '../platform/audit.js';
+import { applyFailure } from '../platform/failure.js';
+import { DEFAULT_MAX_RETRIES } from '../platform/backoff.js';
 
 /**
  * Appointment reminders.
@@ -204,12 +206,20 @@ export function markSent(id: string, providerMessageId: string): void {
   audit({ action: 'reminder.send', entityType: 'reminder', entityId: id });
 }
 
-export function recordFailure(id: string, error: string, retryable: boolean, maxRetries = 5): void {
+export function recordFailure(
+  id: string,
+  error: string,
+  retryable: boolean,
+  maxRetries = DEFAULT_MAX_RETRIES,
+): void {
   const row = getReminder(id);
   if (!row) return;
 
-  const retryCount = retryable ? row.retry_count + 1 : row.retry_count;
-  const status = !retryable || retryCount >= maxRetries ? 'failed' : 'pending';
+  const { status, retryCount } = applyFailure(row, retryable, {
+    retrying: 'pending',
+    exhausted: 'failed',
+    maxRetries,
+  });
 
   getDb()
     .prepare(`UPDATE reminders SET status = ?, last_error = ?, retry_count = ?, updated_at = ? WHERE id = ?`)

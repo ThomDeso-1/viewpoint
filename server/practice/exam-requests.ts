@@ -3,6 +3,8 @@ import { getDb } from '../db/db.js';
 import type { ExamRequestRow, ExamRequestStatus, ExamRequestExtraction } from './types.js';
 import type { GmailMessage } from '../integrations/google/gmail.js';
 import { encrypt, decrypt } from '../platform/crypto.js';
+import { applyFailure } from '../platform/failure.js';
+import { DEFAULT_MAX_RETRIES } from '../platform/backoff.js';
 
 /**
  * Exam requests — one row per incoming email that looks like a booking.
@@ -190,16 +192,24 @@ export function linkAppointment(id: string, appointmentId: string): void {
  * distinction the receipt queue draws between a transport blip and a
  * rejection that will never succeed.
  */
-export function recordFailure(id: string, error: string, retryable: boolean, maxRetries = 5): void {
+export function recordFailure(
+  id: string,
+  error: string,
+  retryable: boolean,
+  maxRetries = DEFAULT_MAX_RETRIES,
+): void {
   const row = getExamRequest(id);
   if (!row) return;
 
-  const retryCount = retryable ? row.retry_count + 1 : row.retry_count;
-  const status: ExamRequestStatus = !retryable
-    ? 'needsAttention'
-    : retryCount >= maxRetries
-      ? 'failed'
-      : row.status;
+  // A non-retryable failure parks the request for the operator
+  // (`needsAttention`) rather than marking it dead — see the receipt
+  // queue for the `failed` variant.
+  const { status, retryCount } = applyFailure<ExamRequestStatus>(row, retryable, {
+    retrying: row.status,
+    exhausted: 'failed',
+    terminal: 'needsAttention',
+    maxRetries,
+  });
 
   getDb()
     .prepare(

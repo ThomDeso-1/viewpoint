@@ -2,6 +2,7 @@ import { getDb, type ReceiptRow } from '../db/db.js';
 import { createExpenseTransaction, WaveAPIError } from '../integrations/wave/index.js';
 import { getWaveToken, isWaveConfigured } from '../integrations/wave/auth.js';
 import { isReadyForRetry } from '../platform/backoff.js';
+import { applyFailure } from '../platform/failure.js';
 import { makePoller } from '../platform/poller.js';
 
 /**
@@ -129,17 +130,22 @@ export async function processQueue(): Promise<void> {
         });
       }
     } catch (err) {
-      const newRetry = receipt.retry_count + 1;
       const isRetryable = err instanceof WaveAPIError && err.isRetryable;
-      const newStatus =
-        !isRetryable || newRetry >= MAX_RETRIES ? 'failed' : 'reviewed';
+      // Unlike the practice loops, a non-retryable error here still counts
+      // (countAlways) and lands on `failed`, not `needsAttention`.
+      const { status, retryCount } = applyFailure(receipt, isRetryable, {
+        retrying: 'reviewed',
+        exhausted: 'failed',
+        maxRetries: MAX_RETRIES,
+        countAlways: true,
+      });
 
       stmts.updateStatus.run({
         id: receipt.id,
-        status: newStatus,
+        status,
         wave_txn_id: null,
         last_error: (err as Error).message,
-        retry_count: newRetry,
+        retry_count: retryCount,
         updated_at: new Date().toISOString(),
       });
     }

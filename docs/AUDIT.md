@@ -12,6 +12,9 @@ concrete failure it enables, and a suggested fix.
 - §5 structure findings — **resolved** (docs + code reorg; paths below
   reflect the new layout).
 - **P0-1, P0-2, P0-3 — resolved.** See the ✅ notes on each.
+- **P1-4/5/6, P1-10/11, P1-17/18, P2-19/20/21 — resolved.**
+- **§4 (P2-25/26/27, P3-28/29) — resolved.** OAuth-flow dedup, `wave.ts`
+  split, `makePoller`, `applyFailure`, one `escape.ts`.
 - `test:all` / `typecheck:all` scripts now exist (part of P2-19).
 - Everything else is still open.
 
@@ -411,6 +414,14 @@ yearly.
 re-implement "retryable? bump count; count ≥ max? → failed/needsAttention".
 Extract `applyFailure(row, { retryable, maxRetries })`.
 
+- **✅ Fixed 2026-08-28.** `server/platform/failure.ts` —
+  `applyFailure(row, retryable, policy)` returns `{ status, retryCount }`.
+  Policy captures the three real differences: `retrying` status,
+  `terminal` status for a non-retryable error (`failed` vs
+  `needsAttention`), and `countAlways` (the receipt queue counts a
+  non-retryable attempt; the practice loops don't). Tests:
+  `tests/platform/failure.test.ts`.
+
 ### P3-29 — Escaping helpers duplicated
 
 `escapeXml` in `hcv-soap.ts`, HTML-escape in `google.ts` and
@@ -442,9 +453,9 @@ green before and after. The current map is [`../INDEX.md`](../INDEX.md).
 The reorg was kept to **moves + import rewrites only**. The structural
 refactors it enables — deduping the two OAuth route files, splitting the
 691-line `wave.ts`, extracting a shared `makePoller`, the terminal error
-handler (P1-10), splitting `client/src/shared/api.ts` — are listed as
-[deferred follow-ups](../INDEX.md#deferred-follow-ups) and in §4 below,
-each its own small commit.
+handler (P1-10) — landed afterwards as their own commits (§4, P1-10).
+Splitting `client/src/shared/api.ts` is the one still outstanding; see
+[deferred follow-ups](../INDEX.md#deferred-follow-ups).
 
 ---
 
@@ -478,10 +489,12 @@ each its own small commit.
 5. ~~**P1-4 / P1-5 / P1-6**~~ — ✅ done.
 6. ~~**P1-17, P2-21** — Dockerfile Node 22, model ID~~ — ✅ done. (P2-19 done.)
 7. **The reorg** (§5) — ✅ done.
-8. **§4 dedup** (OAuth flow, `wave.ts` split, poller helper) — now
-   unblocked by the reorg; see
-   [deferred follow-ups](../INDEX.md#deferred-follow-ups). ← next
+8. ~~**§4 dedup**~~ — ✅ done. P2-25 (shared OAuth flow), P2-26 (`wave.ts`
+   split), P2-27 (`makePoller`), P3-28 (`applyFailure`), P3-29
+   (`escape.ts`) each landed as its own commit.
 
 **Still open:** P2-8 (throttle `change-password`), P2-12 (fuzzy-match
 duplicates), P2-13 (timezone), P2-14 (route ordering), P3-9/15/16/22/23/
-23b/24, and §4 / §6 items.
+23b/24, the P3-30 regex-XML-parse, and §6 items. The
+`client/src/shared/api.ts` split (§5 / deferred follow-ups) is the last
+reorg-enabled refactor left.
