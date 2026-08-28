@@ -1,5 +1,5 @@
 /**
- * Retry pacing, shared by the receipt upload queue and the practice
+ * Retry pacing, shared by the receipt upload queue and the exams
  * queue.
  *
  * Both queues store their backoff rather than sleeping it: a row that

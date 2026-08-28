@@ -1,6 +1,6 @@
 /**
  * Background-poller scaffolding, shared by the receipt upload queue and
- * the practice queue (audit P2-27).
+ * the exams queue (audit P2-27).
  *
  * Both queues had their own copy of: a re-entry guard, a `setInterval`
  * handle, a fire-and-forget trigger that logs but never rejects, and
@@ -16,7 +16,7 @@
  */
 
 export interface PollerOptions {
-  /** Log prefix, e.g. `upload-queue` / `practice-queue`. */
+  /** Log prefix, e.g. `upload-queue` / `exams-queue`. */
   name: string;
   intervalMs: number;
   /** One pass over the queue. Rejections are caught and logged. */

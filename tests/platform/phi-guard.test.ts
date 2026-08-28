@@ -23,7 +23,7 @@ describe('PHI start-guard', () => {
 
   it('refuses to start once a patient record exists', async () => {
     ctx = await setupTestApp();
-    const patients = await import('../../server/practice/patients.js');
+    const patients = await import('../../server/exams/patients.js');
     patients.createPatient({ full_name: 'Ada' });
 
     await expect(guard().then((fn) => fn())).rejects.toThrow(/plain HTTP/i);
@@ -36,14 +36,14 @@ describe('PHI start-guard', () => {
 
   it('allows an explicit ALLOW_INSECURE_PHI override', async () => {
     ctx = await setupTestApp({ ALLOW_INSECURE_PHI: '1' });
-    const patients = await import('../../server/practice/patients.js');
+    const patients = await import('../../server/exams/patients.js');
     patients.createPatient({ full_name: 'Ada' });
     expect(await guard()).not.toThrow();
   });
 
   it('allows an HTTPS public URL', async () => {
-    ctx = await setupTestApp({ APP_PUBLIC_URL: 'https://clinic.example' });
-    const patients = await import('../../server/practice/patients.js');
+    ctx = await setupTestApp({ APP_PUBLIC_URL: 'https://viewpoint.example' });
+    const patients = await import('../../server/exams/patients.js');
     patients.createPatient({ full_name: 'Ada' });
     expect(await guard()).not.toThrow();
   });
@@ -55,7 +55,7 @@ describe('PHI start-guard', () => {
 
   it('never blocks demo mode', async () => {
     ctx = await setupTestApp({ DEMO_MODE: '1', OHIP_HCV_MODE: 'conformance' });
-    const patients = await import('../../server/practice/patients.js');
+    const patients = await import('../../server/exams/patients.js');
     patients.createPatient({ full_name: 'Ada' });
     expect(await guard()).not.toThrow();
   });

@@ -1,21 +1,21 @@
 import { Router, Request, Response } from 'express';
-import * as examRequests from '../practice/exam-requests.js';
-import * as patientsService from '../practice/patients.js';
-import * as appointmentsService from '../practice/appointments.js';
-import * as remindersService from '../practice/reminders.js';
-import * as queue from '../practice/queue.js';
+import * as examRequests from '../exams/exam-requests.js';
+import * as patientsService from '../exams/patients.js';
+import * as appointmentsService from '../exams/appointments.js';
+import * as remindersService from '../exams/reminders.js';
+import * as queue from '../exams/queue.js';
 import {
   checkPatientEligibility,
   latestCheckForAppointment,
   latestCheckForPatient,
   checksForPatient,
   toEligibilityDto,
-} from '../practice/eligibility.js';
+} from '../exams/eligibility.js';
 import { hcvMode } from '../integrations/ohip/index.js';
 import { getDb } from '../db/db.js';
 import { auditRequest, recentAuditEntries, verifyAuditChain } from '../platform/audit.js';
 import { rateLimited } from '../platform/rate-limit.js';
-import type { ExamRequestRow, WaveInvoiceRow, InvoiceLineItemDraft } from '../practice/types.js';
+import type { ExamRequestRow, WaveInvoiceRow, InvoiceLineItemDraft } from '../exams/types.js';
 
 /**
  * The exam-request workflow API.
@@ -113,7 +113,7 @@ function toExamRequestDto(row: ExamRequestRow) {
   };
 }
 
-export function practiceRoutes(): Router {
+export function examsRoutes(): Router {
   const router = Router();
 
   // ── Exam requests ──
@@ -352,7 +352,7 @@ export function practiceRoutes(): Router {
     res.json({ success: true });
   });
 
-  // ── PUT /api/practice/exam-requests/:id/invoice — edit the draft ──
+  // ── PUT /api/exams/exam-requests/:id/invoice — edit the draft ──
   router.put('/exam-requests/:id/invoice', (req: Request, res: Response): void => {
     const row = examRequests.getExamRequest(req.params.id);
     if (!row) {
@@ -390,7 +390,7 @@ export function practiceRoutes(): Router {
     res.json({ success: true, request: toExamRequestDto(examRequests.getExamRequest(row.id)!) });
   });
 
-  // ── POST /api/practice/appointments — enter one by hand ──
+  // ── POST /api/exams/appointments — enter one by hand ──
   router.post('/appointments', (req: Request, res: Response): void => {
     const { startsAt, endsAt, title, location, patientId } = req.body;
 
@@ -431,13 +431,13 @@ export function practiceRoutes(): Router {
     res.json({ success: true });
   });
 
-  // ── GET /api/practice/audit — the access trail ──
+  // ── GET /api/exams/audit — the access trail ──
   router.get('/audit', (req: Request, res: Response): void => {
     const limit = Math.min(Number(req.query.limit) || 200, 500);
     res.json(recentAuditEntries(limit));
   });
 
-  // ── GET /api/practice/audit/verify — is the hash chain intact? ──
+  // ── GET /api/exams/audit/verify — is the hash chain intact? ──
   router.get('/audit/verify', (_req: Request, res: Response): void => {
     res.json(verifyAuditChain());
   });

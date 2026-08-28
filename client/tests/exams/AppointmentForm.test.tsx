@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { AppointmentForm } from '../../src/practice/AppointmentForm';
+import { AppointmentForm } from '../../src/exams/AppointmentForm';
 import { ToastProvider } from '../../src/shared/Toast';
 import { makePatient, makeAppointment } from '../helpers/fixtures';
 
@@ -52,7 +52,7 @@ describe('AppointmentForm', () => {
     await waitFor(() => expect(api.createAppointment).toHaveBeenCalled());
 
     const payload = api.createAppointment.mock.calls[0][0];
-    // datetime-local carries no zone, so it is read as clinic-local time.
+    // datetime-local carries no zone, so it is read as business-local time.
     expect(payload.startsAt).toBe(new Date('2026-09-01T10:00').toISOString());
     expect(payload.endsAt).toBe(new Date('2026-09-01T11:00').toISOString());
     expect(payload.title).toBe('Walk-in');

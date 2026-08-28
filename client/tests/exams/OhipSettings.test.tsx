@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { OhipSettings } from '../../src/practice/OhipSettings';
+import { OhipSettings } from '../../src/exams/OhipSettings';
 import { ToastProvider } from '../../src/shared/Toast';
 import type { OhipSettings as Data } from '../../src/shared/api';
 

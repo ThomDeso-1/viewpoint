@@ -1,5 +1,5 @@
 /**
- * Row types for the exam-request workflow (migration 003-practice.sql).
+ * Row types for the exam-request workflow (migration 003-exams.sql).
  *
  * Kept separate from db.ts, which stays focused on the connection, the
  * migration runner, and the original receipts domain.

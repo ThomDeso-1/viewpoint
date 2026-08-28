@@ -1,5 +1,5 @@
 import type { HcvClient } from './hcv-client.js';
-import type { HcvMode } from '../../practice/types.js';
+import type { HcvMode } from '../../exams/types.js';
 import { MockHcvClient } from './hcv-mock.js';
 import { SoapHcvClient, loadConfigFromEnv } from './hcv-soap.js';
 

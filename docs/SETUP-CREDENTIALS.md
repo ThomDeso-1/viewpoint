@@ -20,7 +20,7 @@ get it.
 | 6 | Google OAuth client | For email & calendar | Settings → Google |
 | 7 | Gmail search | For automatic intake | Settings → Exam Requests |
 | 8 | Invoice product/account | For invoicing | Settings → Exam Requests |
-| 9 | Practice name, timezone, fee | Recommended | Settings → Exam Requests |
+| 9 | Business name, timezone, fee | Recommended | Settings → Exam Requests |
 | 10 | Wave OAuth client | Optional alternative to #3 | Settings → Wave |
 
 Steps 1–5 are the first-run wizard. Steps 6–9 are done once in Settings
@@ -179,14 +179,14 @@ and reminder but report that the invoice couldn't be created.
 
 ---
 
-## 9. Practice details
+## 9. Business details
 
 Settings → Exam Requests. Not strictly required, but reminder emails read
 poorly without them.
 
 | Setting | Default | What it affects |
 |---|---|---|
-| Practice name | — | Signature line of reminder emails |
+| Business name | — | Signature line of reminder emails |
 | Timezone | `America/Toronto` | How appointment times are written |
 | Reminder lead time | 24 hours | How far ahead reminders go out |
 | Default exam fee | — | First line of a drafted invoice |

@@ -95,7 +95,7 @@ export async function pollGmail(): Promise<number> {
     // cannot skip messages.
     setConfig(LAST_POLL_KEY, new Date().toISOString());
   } catch (err) {
-    console.error('[practice-queue] Gmail poll failed:', (err as Error).message);
+    console.error('[exams-queue] Gmail poll failed:', (err as Error).message);
   }
 
   return created;
@@ -229,8 +229,8 @@ async function resolveAppointment(
 
   // The email states a wall-clock time ("Tuesday at 10"), while calendar
   // events carry absolute instants. Parsing without a zone designator
-  // interprets it in the server's local timezone, which is the clinic's —
-  // the app runs on a machine in the practice. If that ever stops being
+  // interprets it in the server's local timezone, which is the business's —
+  // the app runs on a machine in the office. If that ever stops being
   // true, this is the line that needs an explicit zone conversion.
   const requestedAt = new Date(
     `${extraction.requested_date}T${extraction.requested_time ?? '00:00'}:00`,
@@ -455,7 +455,7 @@ async function commitInvoice(row: ExamRequestRow): Promise<{ created: boolean; e
         invoiceDate,
         memo: appointment ? `Eye exam — ${invoiceDate}` : 'Eye exam',
         items: lines.map((line) => ({
-          // Per-line overrides win; otherwise fall back to the practice
+          // Per-line overrides win; otherwise fall back to the business
           // default chosen in Settings.
           ...(line.productId
             ? { productId: line.productId }
@@ -615,7 +615,7 @@ function isApproved(appointmentId: string): boolean {
 
 // ── Polling ──
 
-const poller = makePoller({ name: 'practice-queue', intervalMs: POLL_INTERVAL_MS, pass: processQueue });
+const poller = makePoller({ name: 'exams-queue', intervalMs: POLL_INTERVAL_MS, pass: processQueue });
 
 export const triggerQueue = poller.trigger;
 export const startPolling = poller.start;

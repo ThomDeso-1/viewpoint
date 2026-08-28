@@ -9,7 +9,7 @@ import {
   type Patient,
 } from '../shared/api';
 import { useToast } from '../shared/Toast';
-import { AppointmentForm } from '../practice/AppointmentForm';
+import { AppointmentForm } from '../exams/AppointmentForm';
 
 /**
  * Upcoming appointments, mirrored from Google Calendar, each showing

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
-import { Schedule } from '../../src/practice/Schedule';
+import { Schedule } from '../../src/exams/Schedule';
 import { ToastProvider } from '../../src/shared/Toast';
 import { makeAppointment, makeEligibility, makeEligibilityOutcome, makePatient } from '../helpers/fixtures';
 

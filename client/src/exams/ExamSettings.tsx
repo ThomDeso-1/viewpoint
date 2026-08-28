@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import {
-  getPracticeSettings,
-  savePracticeSettings,
+  getExamSettings,
+  saveExamSettings,
   getWaveInvoiceTargets,
-  type PracticeSettings as Data,
+  type ExamSettings as Data,
   type WaveInvoiceTargets,
 } from '../shared/api';
 import { useToast } from '../shared/Toast';
@@ -12,7 +12,7 @@ import { useToast } from '../shared/Toast';
  * The exam-request workflow settings: which emails to read, how confident
  * an extraction must be, invoicing defaults, and reminder wording inputs.
  */
-export function PracticeSettings() {
+export function ExamSettings() {
   const [form, setForm] = useState<Data | null>(null);
   const [targets, setTargets] = useState<WaveInvoiceTargets | null>(null);
   const [targetsError, setTargetsError] = useState<string | null>(null);
@@ -21,7 +21,7 @@ export function PracticeSettings() {
 
   const load = async () => {
     try {
-      setForm(await getPracticeSettings());
+      setForm(await getExamSettings());
     } catch {
       setForm(null);
     }
@@ -44,7 +44,7 @@ export function PracticeSettings() {
     if (!form) return;
     setSaving(true);
     try {
-      await savePracticeSettings(form);
+      await saveExamSettings(form);
       showToast('Saved.', 'success');
       await load();
     } catch (err) {
@@ -184,12 +184,12 @@ export function PracticeSettings() {
       <h3 className="settings-subheading">Reminders</h3>
 
       <label className="wizard-field-label">
-        Practice name
+        Business name
         <input
           className="auth-input"
-          value={form.clinicName}
-          onChange={(e) => setForm({ ...form, clinicName: e.target.value })}
-          placeholder="Viewpoint Optometry"
+          value={form.businessName}
+          onChange={(e) => setForm({ ...form, businessName: e.target.value })}
+          placeholder="Viewpoint Vision Care"
         />
         <small className="muted">Appears in the reminder email sent to patients.</small>
       </label>
@@ -198,8 +198,8 @@ export function PracticeSettings() {
         Timezone
         <input
           className="auth-input"
-          value={form.clinicTimezone}
-          onChange={(e) => setForm({ ...form, clinicTimezone: e.target.value })}
+          value={form.businessTimezone}
+          onChange={(e) => setForm({ ...form, businessTimezone: e.target.value })}
           placeholder="America/Toronto"
         />
         <small className="muted">Used to write appointment times in reminder emails.</small>

@@ -51,7 +51,7 @@ machine or a private server they control.
   the raw email body (`exam_requests.body_snippet`) are AES-256-GCM
   encrypted — they hold the same personal health information the patients
   table protects. The raw slice is never included in an API response; it
-  is served only through `GET /api/practice/exam-requests/:id/source`,
+  is served only through `GET /api/exams/exam-requests/:id/source`,
   which writes an audit entry for each access.
 - **CORS is same-origin only.** The client is always served from the same
   origin as the API (proxied in dev via `client/vite.config.ts`, bundled
@@ -74,7 +74,7 @@ entirely on this computer" is no longer the whole story:
    is raised, and Wave emails the invoice to the patient.
 
 Reading email and sending reminders both use Google OAuth against the
-practice's own mailbox; the app stores only the encrypted tokens.
+business's own mailbox; the app stores only the encrypted tokens.
 
 ## Operational requirements
 
@@ -108,7 +108,7 @@ See [`AUDIT.md`](AUDIT.md) for the full list. In brief:
 3. **Audit log retention.** Nothing is auto-pruned — eligibility checks
    and `audit_log` entries are kept for the life of the install. The log
    is now tamper-**evident**: each row chains a hash of the previous one
-   (migration 005), and `GET /api/practice/audit/verify` (surfaced on the
+   (migration 005), and `GET /api/exams/audit/verify` (surfaced on the
    Access Log screen) reports a break. Anyone with write access to the
    database file can still rewrite the whole chain — this turns a silent
    edit into a visible gap, not into an impossibility.

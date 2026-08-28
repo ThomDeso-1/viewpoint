@@ -17,7 +17,7 @@ export interface DemoPerson {
   versionCode: string;
   /** Hours from now that this person's appointment sits. */
   hoursFromNow: number;
-  /** Snap to clinic hours (09:00 onwards) rather than whatever time it is now. */
+  /** Snap to business hours (09:00 onwards) rather than whatever time it is now. */
   businessHours?: boolean;
   reason: string;
 }
@@ -74,7 +74,7 @@ export function localParts(date: Date): { day: string; time: string } {
 
 /**
  * Rounds to the next half hour so demo times look like real bookings,
- * and optionally moves the slot into clinic hours.
+ * and optionally moves the slot into business hours.
  */
 export function appointmentTime(hoursFromNow: number, businessHours = false): Date {
   const date = new Date(Date.now() + hoursFromNow * 60 * 60 * 1000);
@@ -143,7 +143,7 @@ export const RECEIPTS = [
   { vendor: 'Bell Canada', summary: 'Business internet — monthly', subtotal: 89.0, tax: 11.57, total: 100.57 },
 ];
 
-export const WAVE_BUSINESS = { id: 'demo-business-1', name: 'Viewpoint Optometry (Demo)', isPersonal: false };
+export const WAVE_BUSINESS = { id: 'demo-business-1', name: 'Viewpoint Vision Care (Demo)', isPersonal: false };
 
 export const WAVE_ACCOUNTS = [
   { id: 'acct-expense-office', name: 'Office Supplies', type: 'Expenses', subtype: 'Operating Expense' },

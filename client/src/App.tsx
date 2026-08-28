@@ -8,11 +8,11 @@ import { ReceiptList } from './receipts/ReceiptList';
 import { ReceiptReview } from './receipts/ReceiptReview';
 import { BatchReview } from './receipts/BatchReview';
 import { Settings } from './receipts/Settings';
-import { Inbox } from './practice/Inbox';
-import { Schedule } from './practice/Schedule';
-import { PatientDetail } from './practice/PatientDetail';
-import { Patients } from './practice/Patients';
-import { AuditLog } from './practice/AuditLog';
+import { Inbox } from './exams/Inbox';
+import { Schedule } from './exams/Schedule';
+import { PatientDetail } from './exams/PatientDetail';
+import { Patients } from './exams/Patients';
+import { AuditLog } from './exams/AuditLog';
 
 /**
  * Where a route guard should send an incomplete/unauthenticated session,

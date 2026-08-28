@@ -3,7 +3,7 @@ import crypto from 'crypto';
 import { SignedXml } from 'xml-crypto';
 import type { HcvClient, EligibilityRequest, EligibilityResult } from './hcv-client.js';
 import { describeResponseCode, validateHealthCardFormat, HcvError } from './hcv-client.js';
-import type { HcvMode } from '../../practice/types.js';
+import type { HcvMode } from '../../exams/types.js';
 import { escapeXml } from '../../platform/escape.js';
 
 /**

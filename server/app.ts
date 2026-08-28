@@ -14,7 +14,7 @@ import { authRoutes } from './routes/auth.js';
 import { receiptRoutes } from './routes/receipts.js';
 import { settingsRoutes } from './routes/settings.js';
 import { googleRoutes, googleCallbackRoutes } from './routes/google.js';
-import { practiceRoutes } from './routes/practice.js';
+import { examsRoutes } from './routes/exams.js';
 import { waveOAuthRoutes, waveCallbackRoutes } from './routes/wave-oauth.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -71,7 +71,7 @@ export function createApp(): Express {
   app.use('/api/receipts', receiptRoutes(storage));
   app.use('/api/settings', settingsRoutes());
   app.use('/api/google', googleRoutes());
-  app.use('/api/practice', practiceRoutes());
+  app.use('/api/exams', examsRoutes());
   app.use('/api/wave', waveOAuthRoutes());
 
   // Unknown /api endpoint → JSON 404, not the SPA shell.

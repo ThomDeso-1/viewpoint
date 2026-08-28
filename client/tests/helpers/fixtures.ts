@@ -25,7 +25,7 @@ export function makeReceipt(overrides: Partial<ReceiptRow> = {}): ReceiptRow {
   };
 }
 
-// ── Practice fixtures ──
+// ── Exams fixtures ──
 
 import type { ExamRequest, Patient, Appointment, EligibilityCheck, EligibilityOutcome } from '../../src/shared/api';
 

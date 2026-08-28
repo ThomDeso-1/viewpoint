@@ -1,7 +1,7 @@
 # Codebase Audit — Viewpoint Receipts
 
 **Date:** 2026-08-28
-**Scope:** whole repository at `main` (receipts pipeline + the uncommitted practice-automation module)
+**Scope:** whole repository at `main` (receipts pipeline + the exam-bookings module)
 **Baseline at audit time:** server 363 tests green, client 191 tests green, both projects typecheck clean.
 
 This document is a point-in-time assessment. Findings are grouped by theme
@@ -31,10 +31,10 @@ concrete failure it enables, and a suggested fix.
 
 ### P0-1 — Raw exam-request email body is stored and served in plaintext
 
-- **Where:** `server/practice/exam-requests.ts` (`createFromGmailMessage`
+- **Where:** `server/exams/exam-requests.ts` (`createFromGmailMessage`
   writes `body_snippet` — up to 2000 chars of the raw email — as
-  plaintext); `server/routes/practice.ts` (`toExamRequestDto` returns
-  `body_snippet` to the client); `client/src/practice/Inbox.tsx:339` renders
+  plaintext); `server/routes/exams.ts` (`toExamRequestDto` returns
+  `body_snippet` to the client); `client/src/exams/Inbox.tsx:339` renders
   it.
 - **Why it matters:** exam-request emails routinely contain the health
   card number, DOB, and full name in the body text. `extracted_json` is
@@ -46,10 +46,10 @@ concrete failure it enables, and a suggested fix.
 - **✅ Fixed 2026-08-28.** `body_snippet` is now `encrypt()`-ed on write
   (tolerant decrypt on read, like `extracted_json`); dropped from the
   exam-request DTO (replaced by `has_source: boolean`); reachable only via
-  `GET /api/practice/exam-requests/:id/source`, which writes an
+  `GET /api/exams/exam-requests/:id/source`, which writes an
   `exam_request.source_read` audit entry. `Inbox.tsx` fetches it on
-  demand. Tests: `tests/practice/routes.test.ts` "email source is PHI",
-  `client/tests/practice/Inbox.test.tsx`. **Not migrated:** rows written
+  demand. Tests: `tests/exams/routes.test.ts` "email source is PHI",
+  `client/tests/exams/Inbox.test.tsx`. **Not migrated:** rows written
   before this stay plaintext until re-received (same as `extracted_json`
   did) — a one-off re-encrypt pass could be added if it matters.
 
@@ -87,9 +87,9 @@ concrete failure it enables, and a suggested fix.
 
 ### P1-4 — Eligibility history is cascade-deleted with the patient; audit log has no integrity guarantee
 
-- **Where:** `server/db/migrations/003-practice.sql`
+- **Where:** `server/db/migrations/003-exams.sql`
   (`eligibility_checks.patient_id … ON DELETE CASCADE`);
-  `server/practice/patients.ts` (`deletePatient` = hard `DELETE`);
+  `server/exams/patients.ts` (`deletePatient` = hard `DELETE`);
   `server/platform/audit.ts` (append-by-convention only).
 - **Why it matters:** deleting a patient permanently erases the record of
   every OHIP check run against them — the exact thing PHIPA expects to be
@@ -104,19 +104,19 @@ concrete failure it enables, and a suggested fix.
     resolvable.
   - (c) `audit_log` gains `prev_hash` / `entry_hash` — each row chains
     `SHA-256(prev_hash || fields)`, so an edit or deletion breaks the
-    chain. `verifyAuditChain()` walks it; `GET /api/practice/audit/verify`
+    chain. `verifyAuditChain()` walks it; `GET /api/exams/audit/verify`
     exposes it and the Access Log screen shows a banner when it fails.
     Detection, not prevention.
   - (d) retention: see `docs/SECURITY.md` — nothing is auto-pruned;
     eligibility checks and audit entries are kept for the life of the
     install.
   - Tests: `tests/platform/audit-chain.test.ts`,
-    `tests/practice/patients.test.ts` ("soft delete", "hard delete nulls
+    `tests/exams/patients.test.ts` ("soft delete", "hard delete nulls
     the link").
 
 ### P1-5 — No rate-limit / debounce on endpoints that hit the ministry or Claude
 
-- **Where:** `server/routes/practice.ts`
+- **Where:** `server/routes/exams.ts`
   (`POST /patients/:id/check-eligibility`,
   `POST /appointments/:id/check-eligibility`,
   `POST /exam-requests/poll`); `server/routes/settings.ts`
@@ -145,8 +145,8 @@ concrete failure it enables, and a suggested fix.
 - **Where:** `client/vite.config.ts` — `runtimeCaching`: `/api/*`
   NetworkFirst (50 entries / 5 min), `/images/*` CacheFirst (200 / 30
   days).
-- **Why it matters:** `GET /api/practice/patients`,
-  `/api/practice/exam-requests`, `/api/practice/audit` responses (names,
+- **Why it matters:** `GET /api/exams/patients`,
+  `/api/exams/exam-requests`, `/api/exams/audit` responses (names,
   emails, DOB, masked cards, the plaintext `body_snippet` from P0-1) and
   receipt images are written to Cache Storage on the device. On a shared
   or lost iPhone that is PHI at rest, outside the app's auth and audit.
@@ -216,7 +216,7 @@ throttle; `/images` moved behind auth; mock HCV results stamped `mode:
 
 ### P1-11 — A transient failure at approval strands the request in `approved`
 
-- **Where:** `server/practice/queue.ts`
+- **Where:** `server/exams/queue.ts`
   (`approveExamRequest` → on invoice error calls
   `recordFailure(id, err, true, MAX_RETRIES)`, which leaves `status =
   'approved'`), and `processQueue` never re-drives `approved` rows.
@@ -230,14 +230,14 @@ throttle; `/images` moved behind auth; mock HCV results stamped `mode:
   if the invoice is `approved`/`sent`, so a retry never double-books.
   `retryExamRequest()` keeps an `approved` row `approved` (rather than
   rewinding to `extracted`), and the Inbox shows a retry button for
-  `approved` + error. Tests: `tests/practice/queue.test.ts` "recovers a
+  `approved` + error. Tests: `tests/exams/queue.test.ts` "recovers a
   request stranded in approved".
 
 ### P2-12 — Fuzzy patient/appointment matches silently create duplicates
 
-- **Where:** `server/practice/patients.ts` (`findMatchingPatient` — exact
+- **Where:** `server/exams/patients.ts` (`findMatchingPatient` — exact
   email or exact case-insensitive name, else a brand-new patient);
-  `server/practice/queue.ts` (`draftOne`).
+  `server/exams/queue.ts` (`draftOne`).
 - "Robert" vs "Bob", an accented surname, a new email address → a second
   patient record that then accrues its own appointments, invoices, and
   eligibility history. Nothing surfaces the near-match to the operator.
@@ -245,18 +245,18 @@ throttle; `/images` moved behind auth; mock HCV results stamped `mode:
   route the request to `needsAttention` with "possible match: <name>"
   instead of creating.
 
-### P2-13 — `resolveAppointment` trusts the server clock as the clinic timezone; `reminders.ts` uses `CLINIC_TIMEZONE`
+### P2-13 — `resolveAppointment` trusts the server clock as the business timezone; `reminders.ts` uses `BUSINESS_TIMEZONE`
 
-- **Where:** `server/practice/queue.ts` (`resolveAppointment`
+- **Where:** `server/exams/queue.ts` (`resolveAppointment`
   parses `"${date}T${time}:00"` in server-local time) vs.
-  `server/practice/reminders.ts` (`formatAppointmentTime` uses
-  `CLINIC_TIMEZONE`).
-- Two code paths, two different notions of "the clinic's timezone". On a
-  server whose clock isn't the clinic's, calendar matching silently
+  `server/exams/reminders.ts` (`formatAppointmentTime` uses
+  `BUSINESS_TIMEZONE`).
+- Two code paths, two different notions of "the business's timezone". On a
+  server whose clock isn't the business's, calendar matching silently
   drifts by the offset while reminders stay correct.
 - **Fix:** resolve `requested_date`/`requested_time` against
-  `CLINIC_TIMEZONE` too (`Intl.DateTimeFormat` parts, or a tz lib), and
-  make `CLINIC_TIMEZONE` a required setting.
+  `BUSINESS_TIMEZONE` too (`Intl.DateTimeFormat` parts, or a tz lib), and
+  make `BUSINESS_TIMEZONE` a required setting.
 
 ### P2-14 — Literal routes registered after parameterized ones
 
@@ -265,7 +265,7 @@ throttle; `/images` moved behind auth; mock HCV results stamped `mode:
   can't match two segments. `retry-all` similarly. (Already noted in
   `docs/history/upgrade-plan.md`.)
 - **Fix:** move all literal paths above the `/:id` block. Same sweep for
-  `practice.ts` (already partly done — `exam-requests/counts` is above
+  `exams.ts` (already partly done — `exam-requests/counts` is above
   `:id`).
 
 ### P3-15 — `GET /api/receipts` loads every row and filters in JS
@@ -399,7 +399,7 @@ yearly.
 ### P2-27 — Queue scaffolding duplicated between the two pollers
 
 - **Where:** `server/receipts/upload-queue.ts` and
-  `practice-queue.ts` — `running` guard, `pollTimer`, `triggerQueue`,
+  `exams-queue.ts` — `running` guard, `pollTimer`, `triggerQueue`,
   `startPolling`, `stopPolling` are copy-pasted (backoff is already
   shared via `backoff.ts`, good).
 - **✅ Fixed 2026-08-28.** `server/platform/poller.ts` →
@@ -419,7 +419,7 @@ Extract `applyFailure(row, { retryable, maxRetries })`.
   Policy captures the three real differences: `retrying` status,
   `terminal` status for a non-retryable error (`failed` vs
   `needsAttention`), and `countAlways` (the receipt queue counts a
-  non-retryable attempt; the practice loops don't). Tests:
+  non-retryable attempt; the exams loops don't). Tests:
   `tests/platform/failure.test.ts`.
 
 ### P3-29 — Escaping helpers duplicated
@@ -446,7 +446,7 @@ already a dependency) before conformance testing.
 ## 5. Structure & navigability — ✅ done 2026-08-28
 
 The docs reorg (→ `docs/`) and the code reorg (`server/` and `client/`
-regrouped by domain: `platform/` `receipts/` `practice/` `integrations/`,
+regrouped by domain: `platform/` `receipts/` `exams/` `integrations/`,
 tests mirrored) landed as their own commit. `typecheck:all` + `test:all`
 green before and after. The current map is [`../INDEX.md`](../INDEX.md).
 
@@ -466,7 +466,7 @@ Splitting `client/src/shared/api.ts` is the one still outstanding; see
   mock (happy path + Wave-failure path from P1-11). `tests/demo-mode.test.ts`
   exists but is narrower.
 - ~~**P2:** regression test that the raw email body never appears in a
-  DTO~~ — ✅ added (`tests/practice/routes.test.ts`). A broader
+  DTO~~ — ✅ added (`tests/exams/routes.test.ts`). A broader
   "no health card number in any response" sweep would still be worth it.
 - ~~**P3:** `Inbox` "show email" toggle test~~ — ✅ added.
 - **Keep:** `tests/security.test.ts` covers auth, sessions, throttle, and

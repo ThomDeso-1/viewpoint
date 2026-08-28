@@ -10,9 +10,9 @@ import {
   type QueueStatus,
 } from '../shared/api';
 import { useToast } from '../shared/Toast';
-import { GoogleSettings } from '../practice/GoogleSettings';
-import { PracticeSettings } from '../practice/PracticeSettings';
-import { OhipSettings } from '../practice/OhipSettings';
+import { GoogleSettings } from '../exams/GoogleSettings';
+import { ExamSettings } from '../exams/ExamSettings';
+import { OhipSettings } from '../exams/OhipSettings';
 
 export function Settings() {
   const navigate = useNavigate();
@@ -156,7 +156,7 @@ export function Settings() {
         </section>
 
         <GoogleSettings />
-        <PracticeSettings />
+        <ExamSettings />
         <OhipSettings />
 
         {/* Privacy */}

@@ -11,13 +11,13 @@ import { setupTestApp, type TestContext } from '../helpers/testApp.js';
  */
 describe('patient records', () => {
   let ctx: TestContext;
-  let patients: typeof import('../../server/practice/patients.js');
+  let patients: typeof import('../../server/exams/patients.js');
 
   const CARD = '1234567890';
 
   beforeEach(async () => {
     ctx = await setupTestApp();
-    patients = await import('../../server/practice/patients.js');
+    patients = await import('../../server/exams/patients.js');
   });
   afterEach(() => ctx.teardown());
 
@@ -117,7 +117,7 @@ describe('patient records', () => {
   });
 
   it('delete is a soft delete — the row and its history survive (P1-4)', async () => {
-    const eligibility = await import('../../server/practice/eligibility.js');
+    const eligibility = await import('../../server/exams/eligibility.js');
     const p = patients.createPatient({ full_name: 'Ada', health_card_number: '1111111111' });
     await eligibility.checkPatientEligibility({ patientId: p.id });
 
@@ -134,7 +134,7 @@ describe('patient records', () => {
   });
 
   it('a hard delete now nulls the eligibility link instead of cascading it away', async () => {
-    const eligibility = await import('../../server/practice/eligibility.js');
+    const eligibility = await import('../../server/exams/eligibility.js');
     const { getDb } = await import('../../server/db/db.js');
     const p = patients.createPatient({ full_name: 'Ada', health_card_number: '1111111111' });
     await eligibility.checkPatientEligibility({ patientId: p.id });

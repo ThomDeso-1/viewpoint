@@ -15,7 +15,7 @@ import { makePoller } from '../platform/poller.js';
  * app foreground/background refresh windows.
  *
  * The poll loop (re-entry guard, interval, fire-and-forget trigger) is
- * `makePoller` (`platform/poller.ts`), shared with the practice queue.
+ * `makePoller` (`platform/poller.ts`), shared with the exams queue.
  */
 
 const MAX_RETRIES = 5;
@@ -131,7 +131,7 @@ export async function processQueue(): Promise<void> {
       }
     } catch (err) {
       const isRetryable = err instanceof WaveAPIError && err.isRetryable;
-      // Unlike the practice loops, a non-retryable error here still counts
+      // Unlike the exams loops, a non-retryable error here still counts
       // (countAlways) and lands on `failed`, not `needsAttention`.
       const { status, retryCount } = applyFailure(receipt, isRetryable, {
         retrying: 'reviewed',

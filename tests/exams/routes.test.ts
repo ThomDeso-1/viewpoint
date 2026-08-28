@@ -4,7 +4,7 @@ import { setupTestApp, type TestContext } from '../helpers/testApp.js';
 import { installFetchMock, jsonResponse } from '../helpers/fetchMock.js';
 
 /**
- * The practice API surface added alongside the queue: editable invoice
+ * The exams API surface added alongside the queue: editable invoice
  * drafts, manually-entered appointments, patient linking, the audit log,
  * and the configuration endpoints behind the Settings screens.
  */
@@ -25,12 +25,12 @@ const FULL_EXTRACTION = {
   confidence: 0.95,
 };
 
-describe('practice API', () => {
+describe('exams API', () => {
   let ctx: TestContext;
   let token: string;
-  let queue: typeof import('../../server/practice/queue.js');
-  let examRequests: typeof import('../../server/practice/exam-requests.js');
-  let patients: typeof import('../../server/practice/patients.js');
+  let queue: typeof import('../../server/exams/queue.js');
+  let examRequests: typeof import('../../server/exams/exam-requests.js');
+  let patients: typeof import('../../server/exams/patients.js');
 
   beforeEach(async () => {
     ctx = await setupTestApp({
@@ -43,9 +43,9 @@ describe('practice API', () => {
     const cookies = login.headers['set-cookie'] as unknown as string[];
     token = cookies.find((c) => c.startsWith('token='))!.split(';')[0].slice('token='.length);
 
-    queue = await import('../../server/practice/queue.js');
-    examRequests = await import('../../server/practice/exam-requests.js');
-    patients = await import('../../server/practice/patients.js');
+    queue = await import('../../server/exams/queue.js');
+    examRequests = await import('../../server/exams/exam-requests.js');
+    patients = await import('../../server/exams/patients.js');
 
     const store = await import('../../server/platform/oauth-store.js');
     store.saveTokens('google', {
@@ -109,7 +109,7 @@ describe('practice API', () => {
       process.env.EXAM_FEE_AMOUNT = '120';
       const { row } = await seedDrafted();
 
-      const res = await request(ctx.app).get(`/api/practice/exam-requests/${row.id}`).set(auth());
+      const res = await request(ctx.app).get(`/api/exams/exam-requests/${row.id}`).set(auth());
       expect(res.body.invoice.line_items).toHaveLength(1);
       expect(res.body.invoice.line_items[0].unitPrice).toBe(120);
       expect(res.body.invoice.editable).toBe(true);
@@ -119,7 +119,7 @@ describe('practice API', () => {
       const { row } = await seedDrafted();
 
       const res = await request(ctx.app)
-        .put(`/api/practice/exam-requests/${row.id}/invoice`)
+        .put(`/api/exams/exam-requests/${row.id}/invoice`)
         .set(auth())
         .send({
           line_items: [
@@ -137,7 +137,7 @@ describe('practice API', () => {
       const { row } = await seedDrafted();
 
       const res = await request(ctx.app)
-        .put(`/api/practice/exam-requests/${row.id}/invoice`)
+        .put(`/api/exams/exam-requests/${row.id}/invoice`)
         .set(auth())
         .send({ line_items: [] });
 
@@ -153,7 +153,7 @@ describe('practice API', () => {
       const { row } = await seedDrafted();
 
       const res = await request(ctx.app)
-        .put(`/api/practice/exam-requests/${row.id}/invoice`)
+        .put(`/api/exams/exam-requests/${row.id}/invoice`)
         .set(auth())
         .send({ line_items: [line] });
 
@@ -169,7 +169,7 @@ describe('practice API', () => {
       const { mock, row } = await seedDrafted();
 
       await request(ctx.app)
-        .put(`/api/practice/exam-requests/${row.id}/invoice`)
+        .put(`/api/exams/exam-requests/${row.id}/invoice`)
         .set(auth())
         .send({
           line_items: [
@@ -205,7 +205,7 @@ describe('practice API', () => {
         .mockResolvedValueOnce(jsonResponse(200, { data: { invoiceSend: { didSucceed: true } } }));
 
       const res = await request(ctx.app)
-        .post(`/api/practice/exam-requests/${row.id}/approve`)
+        .post(`/api/exams/exam-requests/${row.id}/approve`)
         .set(auth());
       expect(res.status).toBe(200);
 
@@ -224,7 +224,7 @@ describe('practice API', () => {
       queue.updateInvoiceRow(invoice.id, { status: 'sent', wave_invoice_id: 'inv-1' });
 
       const res = await request(ctx.app)
-        .put(`/api/practice/exam-requests/${row.id}/invoice`)
+        .put(`/api/exams/exam-requests/${row.id}/invoice`)
         .set(auth())
         .send({ line_items: [{ description: 'x', quantity: 1, unitPrice: 1 }] });
 
@@ -236,7 +236,7 @@ describe('practice API', () => {
   describe('manual appointments', () => {
     it('creates one and marks it manual, not a calendar event', async () => {
       const res = await request(ctx.app)
-        .post('/api/practice/appointments')
+        .post('/api/exams/appointments')
         .set(auth())
         .send({ startsAt: '2026-09-01T10:00:00.000Z', title: 'Walk-in' });
 
@@ -249,7 +249,7 @@ describe('practice API', () => {
       const patient = patients.createPatient({ full_name: 'Ada' });
 
       const res = await request(ctx.app)
-        .post('/api/practice/appointments')
+        .post('/api/exams/appointments')
         .set(auth())
         .send({ startsAt: '2026-09-01T10:00:00.000Z', patientId: patient.id });
 
@@ -262,14 +262,14 @@ describe('practice API', () => {
       [{ startsAt: 'not-a-date' }, /valid start date/i],
       [{ startsAt: '2026-09-01T10:00:00.000Z', endsAt: '2026-09-01T09:00:00.000Z' }, /cannot be before/i],
     ])('rejects invalid input (%#)', async (body, expected) => {
-      const res = await request(ctx.app).post('/api/practice/appointments').set(auth()).send(body);
+      const res = await request(ctx.app).post('/api/exams/appointments').set(auth()).send(body);
       expect(res.status).toBe(400);
       expect(res.body.error).toMatch(expected);
     });
 
     it('rejects an unknown patient', async () => {
       const res = await request(ctx.app)
-        .post('/api/practice/appointments')
+        .post('/api/exams/appointments')
         .set(auth())
         .send({ startsAt: '2026-09-01T10:00:00.000Z', patientId: 'nope' });
 
@@ -278,18 +278,18 @@ describe('practice API', () => {
 
     it('appears on the schedule and can be deleted', async () => {
       const created = await request(ctx.app)
-        .post('/api/practice/appointments')
+        .post('/api/exams/appointments')
         .set(auth())
         .send({ startsAt: new Date(Date.now() + 86_400_000).toISOString(), title: 'Walk-in' });
 
-      const list = await request(ctx.app).get('/api/practice/appointments').set(auth());
+      const list = await request(ctx.app).get('/api/exams/appointments').set(auth());
       expect(list.body.map((a: any) => a.id)).toContain(created.body.id);
 
       expect(
-        (await request(ctx.app).delete(`/api/practice/appointments/${created.body.id}`).set(auth())).status,
+        (await request(ctx.app).delete(`/api/exams/appointments/${created.body.id}`).set(auth())).status,
       ).toBe(200);
       expect(
-        (await request(ctx.app).delete(`/api/practice/appointments/${created.body.id}`).set(auth())).status,
+        (await request(ctx.app).delete(`/api/exams/appointments/${created.body.id}`).set(auth())).status,
       ).toBe(404);
     });
   });
@@ -298,29 +298,29 @@ describe('practice API', () => {
     it('links, and the appointment then reports the patient', async () => {
       const patient = patients.createPatient({ full_name: 'Ada' });
       const created = await request(ctx.app)
-        .post('/api/practice/appointments')
+        .post('/api/exams/appointments')
         .set(auth())
         .send({ startsAt: new Date(Date.now() + 86_400_000).toISOString() });
 
       const res = await request(ctx.app)
-        .post(`/api/practice/appointments/${created.body.id}/link-patient`)
+        .post(`/api/exams/appointments/${created.body.id}/link-patient`)
         .set(auth())
         .send({ patientId: patient.id });
       expect(res.status).toBe(200);
 
-      const list = await request(ctx.app).get('/api/practice/appointments').set(auth());
+      const list = await request(ctx.app).get('/api/exams/appointments').set(auth());
       const found = list.body.find((a: any) => a.id === created.body.id);
       expect(found.patient.full_name).toBe('Ada');
     });
 
     it('rejects a patient that does not exist', async () => {
       const created = await request(ctx.app)
-        .post('/api/practice/appointments')
+        .post('/api/exams/appointments')
         .set(auth())
         .send({ startsAt: new Date(Date.now() + 86_400_000).toISOString() });
 
       const res = await request(ctx.app)
-        .post(`/api/practice/appointments/${created.body.id}/link-patient`)
+        .post(`/api/exams/appointments/${created.body.id}/link-patient`)
         .set(auth())
         .send({ patientId: 'nope' });
       expect(res.status).toBe(400);
@@ -330,9 +330,9 @@ describe('practice API', () => {
   describe('audit log', () => {
     it('returns entries newest first and never leaks a health card', async () => {
       const patient = patients.createPatient({ full_name: 'Ada', health_card_number: '1111111111' });
-      await request(ctx.app).get(`/api/practice/patients/${patient.id}`).set(auth());
+      await request(ctx.app).get(`/api/exams/patients/${patient.id}`).set(auth());
 
-      const res = await request(ctx.app).get('/api/practice/audit').set(auth());
+      const res = await request(ctx.app).get('/api/exams/audit').set(auth());
       expect(res.status).toBe(200);
 
       const actions = res.body.map((e: any) => e.action);
@@ -345,28 +345,28 @@ describe('practice API', () => {
     });
 
     it('requires a session', async () => {
-      expect((await request(ctx.app).get('/api/practice/audit')).status).toBe(401);
+      expect((await request(ctx.app).get('/api/exams/audit')).status).toBe(401);
     });
   });
 
   describe('configuration', () => {
     it('reports invoicing as not ready until a target is chosen', async () => {
-      const before = await request(ctx.app).get('/api/settings/practice').set(auth());
+      const before = await request(ctx.app).get('/api/settings/exams').set(auth());
       expect(before.body.invoicingReady).toBe(false);
 
       await request(ctx.app)
-        .post('/api/settings/practice')
+        .post('/api/settings/exams')
         .set(auth())
         .send({ waveIncomeAccountId: 'income-1' });
 
-      const after = await request(ctx.app).get('/api/settings/practice').set(auth());
+      const after = await request(ctx.app).get('/api/settings/exams').set(auth());
       expect(after.body.invoicingReady).toBe(true);
       expect(after.body.waveIncomeAccountId).toBe('income-1');
     });
 
     it('refuses both a product and an income account', async () => {
       const res = await request(ctx.app)
-        .post('/api/settings/practice')
+        .post('/api/settings/exams')
         .set(auth())
         .send({ waveIncomeAccountId: 'income-1', waveServiceProductId: 'prod-1' });
 
@@ -379,14 +379,14 @@ describe('practice API', () => {
       [{ reminderLeadHours: 0 }, /more than zero/i],
       [{ examFeeAmount: -1 }, /cannot be negative/i],
     ])('validates settings (%#)', async (body, expected) => {
-      const res = await request(ctx.app).post('/api/settings/practice').set(auth()).send(body);
+      const res = await request(ctx.app).post('/api/settings/exams').set(auth()).send(body);
       expect(res.status).toBe(400);
       expect(res.body.error).toMatch(expected);
     });
 
     it('saves the Gmail query the queue reads', async () => {
       await request(ctx.app)
-        .post('/api/settings/practice')
+        .post('/api/settings/exams')
         .set(auth())
         .send({ gmailQuery: 'label:bookings' });
 
@@ -463,7 +463,7 @@ describe('practice API', () => {
     it('keeps the raw email out of the exam-request DTO', async () => {
       const { row } = await seedDrafted();
 
-      const res = await request(ctx.app).get(`/api/practice/exam-requests/${row.id}`).set(auth());
+      const res = await request(ctx.app).get(`/api/exams/exam-requests/${row.id}`).set(auth());
       expect(res.body.has_source).toBe(true);
       expect(res.body).not.toHaveProperty('body_snippet');
       expect(JSON.stringify(res.body)).not.toContain('Please book an exam');
@@ -480,12 +480,12 @@ describe('practice API', () => {
       const { row } = await seedDrafted();
 
       const res = await request(ctx.app)
-        .get(`/api/practice/exam-requests/${row.id}/source`)
+        .get(`/api/exams/exam-requests/${row.id}/source`)
         .set(auth());
       expect(res.status).toBe(200);
       expect(res.body.body).toBe('Please book an exam.');
 
-      const audit = await request(ctx.app).get('/api/practice/audit').set(auth());
+      const audit = await request(ctx.app).get('/api/exams/audit').set(auth());
       const entry = audit.body.find((e: any) => e.action === 'exam_request.source_read');
       expect(entry).toBeTruthy();
       expect(entry.entity_id).toBe(row.id);
@@ -493,7 +493,7 @@ describe('practice API', () => {
 
     it('404s the /source route for an unknown request', async () => {
       const res = await request(ctx.app)
-        .get('/api/practice/exam-requests/nope/source')
+        .get('/api/exams/exam-requests/nope/source')
         .set(auth());
       expect(res.status).toBe(404);
     });

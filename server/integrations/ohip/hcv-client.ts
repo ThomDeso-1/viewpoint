@@ -7,7 +7,7 @@
  * and the UI all speak only in terms of EligibilityResult.
  */
 
-import type { HcvMode } from '../../practice/types.js';
+import type { HcvMode } from '../../exams/types.js';
 
 export interface EligibilityRequest {
   /** 10-digit Ontario health number, digits only. */

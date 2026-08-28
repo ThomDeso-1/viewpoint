@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import type { ExamRequestExtraction } from '../practice/types.js';
+import type { ExamRequestExtraction } from '../exams/types.js';
 import { endpoint } from '../platform/endpoints.js';
 
 /**
@@ -421,7 +421,7 @@ function validateExamRequestExtraction(value: unknown): asserts value is ExamReq
   }
 }
 
-const EXAM_REQUEST_PROMPT = `You are helping an Ontario optometry practice triage incoming email.
+const EXAM_REQUEST_PROMPT = `You are helping an Ontario optician business (it fits and dispenses eyewear, and books eye exams with partner optometrists) triage incoming email.
 
 Read the email below and extract the details of the eye exam request it contains.
 
@@ -442,8 +442,9 @@ Return ONLY a JSON object with exactly these keys:
 Rules:
 - Use null for anything the email does not state. Never invent or infer a
   value that is not there — a missing field is expected and fine.
-- The sender is not necessarily the patient. A parent, spouse, or clinic
-  may be writing on someone else's behalf; extract the *patient's* details.
+- The sender is not necessarily the patient. A parent, spouse, or a
+  referring optometrist's office may be writing on someone else's behalf;
+  extract the *patient's* details.
 - Resolve relative dates ("next Tuesday", "the 14th") against the Received
   date if one is given. If you cannot resolve one confidently, use null.
 - "confidence" is your overall confidence from 0.0 to 1.0 that this email

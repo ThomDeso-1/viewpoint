@@ -58,11 +58,11 @@ const FULL_EXTRACTION = {
   confidence: 0.95,
 };
 
-describe('practice queue', () => {
+describe('exams queue', () => {
   let ctx: TestContext;
-  let queue: typeof import('../../server/practice/queue.js');
-  let examRequests: typeof import('../../server/practice/exam-requests.js');
-  let patients: typeof import('../../server/practice/patients.js');
+  let queue: typeof import('../../server/exams/queue.js');
+  let examRequests: typeof import('../../server/exams/exam-requests.js');
+  let patients: typeof import('../../server/exams/patients.js');
   let store: typeof import('../../server/platform/oauth-store.js');
 
   beforeEach(async () => {
@@ -70,9 +70,9 @@ describe('practice queue', () => {
       CLAUDE_API_KEY: 'test-claude-key',
       GMAIL_EXAM_REQUEST_QUERY: 'label:exam-requests',
     });
-    queue = await import('../../server/practice/queue.js');
-    examRequests = await import('../../server/practice/exam-requests.js');
-    patients = await import('../../server/practice/patients.js');
+    queue = await import('../../server/exams/queue.js');
+    examRequests = await import('../../server/exams/exam-requests.js');
+    patients = await import('../../server/exams/patients.js');
     store = await import('../../server/platform/oauth-store.js');
 
     store.saveTokens('google', {
@@ -239,7 +239,7 @@ describe('practice queue', () => {
       expect(row.patient_id).toBeTruthy();
       expect(row.appointment_id).toBeTruthy();
 
-      const dto = await request(ctx.app).get(`/api/practice/exam-requests/${row.id}`);
+      const dto = await request(ctx.app).get(`/api/exams/exam-requests/${row.id}`);
       expect(dto.body.patient.full_name).toBe('Ada Lovelace');
       expect(dto.body.eligibility.is_eligible).toBe(true);
       expect(dto.body.eligibility.mode).toBe('mock');
@@ -398,7 +398,7 @@ describe('practice queue', () => {
       expect(result.invoice.error).toBeNull();
       expect(examRequests.getExamRequest(row.id)!.status).toBe('completed');
 
-      const dto = await request(ctx.app).get(`/api/practice/exam-requests/${row.id}`);
+      const dto = await request(ctx.app).get(`/api/exams/exam-requests/${row.id}`);
       expect(dto.body.invoice.status).toBe('sent');
       expect(dto.body.invoice.wave_invoice_id).toBe('inv-1');
     });
@@ -435,7 +435,7 @@ describe('practice queue', () => {
 
     it('rejecting cancels the drafted reminder so it never sends', async () => {
       const { row } = await seedDrafted();
-      const reminders = await import('../../server/practice/reminders.js');
+      const reminders = await import('../../server/exams/reminders.js');
 
       queue.rejectExamRequest(row.id);
 
@@ -474,7 +474,7 @@ describe('practice queue', () => {
       await queue.retryApproved();
 
       expect(examRequests.getExamRequest(row.id)!.status).toBe('completed');
-      const dto = await request(ctx.app).get(`/api/practice/exam-requests/${row.id}`);
+      const dto = await request(ctx.app).get(`/api/exams/exam-requests/${row.id}`);
       expect(dto.body.invoice.status).toBe('sent');
       expect(dto.body.invoice.wave_invoice_id).toBe('inv-1');
     });
@@ -490,7 +490,7 @@ describe('practice queue', () => {
     async function seedDueReminder() {
       const soon = new Date(Date.now() + 60 * 60 * 1000); // an hour from now
       // Both parts must come from the *local* clock: the app reads a
-      // requested date and time as clinic-local wall time. Taking the date
+      // requested date and time as business-local wall time. Taking the date
       // from toISOString() (UTC) would land on the wrong day whenever the
       // two disagree, which is most evenings west of Greenwich.
       const pad = (n: number) => String(n).padStart(2, '0');
@@ -538,7 +538,7 @@ describe('practice queue', () => {
       mock.mockResolvedValueOnce(jsonResponse(200, { id: 'sent-1' }));
       expect(await queue.sendDueReminders()).toBe(1);
 
-      const reminders = await import('../../server/practice/reminders.js');
+      const reminders = await import('../../server/exams/reminders.js');
       const reminder = reminders.findForAppointment(row.appointment_id!)!;
       expect(reminder.status).toBe('sent');
       expect(reminder.provider_message_id).toBe('sent-1');
@@ -568,7 +568,7 @@ describe('practice queue', () => {
       mock.mockResolvedValueOnce(jsonResponse(503, {}));
       expect(await queue.sendDueReminders()).toBe(0);
 
-      const reminders = await import('../../server/practice/reminders.js');
+      const reminders = await import('../../server/exams/reminders.js');
       const reminder = reminders.findForAppointment(row.appointment_id!)!;
       expect(reminder.status).toBe('pending');
       expect(reminder.retry_count).toBe(1);
@@ -583,7 +583,7 @@ describe('practice queue', () => {
       mock.mockResolvedValueOnce(jsonResponse(401, {}));
       expect(await queue.sendDueReminders()).toBe(0);
 
-      const reminders = await import('../../server/practice/reminders.js');
+      const reminders = await import('../../server/exams/reminders.js');
       expect(reminders.findForAppointment(row.appointment_id!)!.status).toBe('failed');
     });
 

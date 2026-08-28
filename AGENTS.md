@@ -8,14 +8,16 @@ For *known problems*, see [`docs/AUDIT.md`](docs/AUDIT.md).
 
 ## 1. What this app is
 
-A **self-hosted, single-user** web app for one Canadian optometry
-practice. Two workflows share one Express server, one SQLite database, and
-one React PWA:
+A **self-hosted, single-user** web app for **Viewpoint Vision Care**, a
+Canadian optician business that fits and dispenses eyewear and books eye
+exams with partner optometrists (the optometry side is a partnership, not
+the core business). Two workflows share one Express server, one SQLite
+database, and one React PWA:
 
 1. **Receipts** (original) — photograph an expense receipt → Claude vision
    extracts vendor/date/total → operator reviews → a background queue
    posts it to **Wave** as an expense.
-2. **Practice automation** (added later) — an exam-request email arrives →
+2. **Exam bookings** (added later) — an exam-request email arrives →
    Claude extracts patient details → patient matched → Google Calendar
    event linked → **OHIP** eligibility checked → a **Wave** invoice and a
    **Gmail** reminder are drafted → the operator taps **Approve** once →
@@ -25,7 +27,7 @@ Both pipelines use the **same status-machine shape** on purpose:
 
 ```
 receipts:  captured → extracted → reviewed  → uploaded
-practice:  received  → extracted → drafted  → approved → completed
+exams:     received  → extracted → drafted  → approved → completed
                               ↘ needsAttention      ↘ failed
 ```
 
@@ -70,7 +72,7 @@ iPhone / browser  ──HTTPS──▶  Express (server/)  ──▶  SQLite (da
 ```
 
 - **No ORM.** `better-sqlite3`, hand-written SQL, prepared statements.
-  Row types in `server/db/db.ts` (receipts) and `server/practice/types.ts`
+  Row types in `server/db/db.ts` (receipts) and `server/exams/types.ts`
   (everything else).
 - **No API-client SDKs.** Claude, Wave, Google, and OHIP are all called
   with bare `fetch` — a deliberate choice to keep the dependency list
@@ -84,7 +86,7 @@ iPhone / browser  ──HTTPS──▶  Express (server/)  ──▶  SQLite (da
 - **Two background pollers**, started only in `server/index.ts` (never in
   `createApp()`, so tests don't spawn timers):
   `server/receipts/upload-queue.ts` (Wave expenses) and
-  `server/practice/queue.ts` (the whole exam-request pipeline). Both wrap
+  `server/exams/queue.ts` (the whole exam-request pipeline). Both wrap
   their `processQueue` pass in `makePoller` (`server/platform/poller.ts`)
   — the re-entry guard / interval / trigger are shared.
 - **Backoff is stored, not slept** (`server/platform/backoff.ts`): a
@@ -181,7 +183,7 @@ npm run build              # builds client/dist (server runs from source via tsx
 1. New file `server/db/migrations/NNN-name.sql` (next number, 3 digits).
    Never edit an applied migration.
 2. Each migration must be safe inside one transaction.
-3. Update / add the row interface in `server/practice/types.ts` (or
+3. Update / add the row interface in `server/exams/types.ts` (or
    `db.ts`).
 4. Existing installs may sit at any prior version — write additive SQL
    (`ADD COLUMN`, new tables); avoid destructive changes.
@@ -217,12 +219,12 @@ Follow the shape of `server/integrations/google/gmail.ts`:
 ### A new reminder channel (e.g. SMS)
 
 The seam already exists: implement `ReminderChannel` in
-`server/practice/reminders.ts`, call `registerChannel(new SmsChannel())`,
+`server/exams/reminders.ts`, call `registerChannel(new SmsChannel())`,
 add `'sms'` handling where `channel` is chosen. No queue changes.
 
 ### A new automated step in the exam-request pipeline
 
-Add it inside `draftOne()` in `server/practice/queue.ts` **above**
+Add it inside `draftOne()` in `server/exams/queue.ts` **above**
 `setStatus(row.id, 'drafted')` — i.e. in the pre-approval, nothing-sent
 zone. If the step can fail transiently, throw a `*APIError` with
 `isRetryable` so `draftPending`'s catch does the right thing. If it sends
@@ -235,7 +237,7 @@ behind the gate.
 2. `GET`/`POST /api/settings/...` — read from `process.env`, write via
    `updateEnvConfig`. Secrets are **write-only**: return `hasX: boolean`,
    never the value; don't overwrite on a save that omits them.
-3. Client form — `client/src/practice/*Settings.tsx`, or
+3. Client form — `client/src/exams/*Settings.tsx`, or
    `client/src/receipts/Settings.tsx` for the top-level hub.
 4. Validate ranges server-side.
 
@@ -336,7 +338,7 @@ in `docs/AUDIT.md` §3 so the decision stays visible.
 | Symptom | Start at |
 |---|---|
 | A receipt won't upload | `server/receipts/upload-queue.ts`, the receipt's `last_error` / `status` / `retry_count` |
-| An exam request is stuck | `server/practice/queue.ts` + `exam-requests.ts`; check `status`, `last_error`, `retry_count`; `isReadyForRetry` gating |
+| An exam request is stuck | `server/exams/queue.ts` + `exam-requests.ts`; check `status`, `last_error`, `retry_count`; `isReadyForRetry` gating |
 | Eligibility always says "mock" | `OHIP_HCV_MODE` unset/`mock`; `server/integrations/ohip/index.ts` |
 | Gmail/Calendar calls 401 | token refresh in `server/integrations/google/auth.ts` → `oauth-store.ts`; reconnect in Settings |
 | "Nothing is being polled" | `GMAIL_EXAM_REQUEST_QUERY` empty, or Google not connected |
@@ -355,7 +357,7 @@ in `docs/AUDIT.md` §3 so the decision stays visible.
 | `AGENTS.md` (this file) | How to work on it, rules, upgrade processes |
 | [`INDEX.md`](INDEX.md) | Living file/directory map + subsystem index |
 | [`docs/AUDIT.md`](docs/AUDIT.md) | Known issues, prioritized |
-| [`docs/GETTING-STARTED.md`](docs/GETTING-STARTED.md) | Non-technical setup (receipts) — needs a practice-workflow rewrite |
+| [`docs/GETTING-STARTED.md`](docs/GETTING-STARTED.md) | Non-technical setup (receipts) — needs an exam-workflow rewrite |
 | [`docs/SETUP-CREDENTIALS.md`](docs/SETUP-CREDENTIALS.md) | Every credential, where to get it |
 | [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | Where to run it, HTTPS, backups |
 | [`docs/SECURITY.md`](docs/SECURITY.md) | Auth model, data at rest, where PHI leaves the machine |

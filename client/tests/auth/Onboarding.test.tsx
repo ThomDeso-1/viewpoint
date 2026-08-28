@@ -22,7 +22,7 @@ function renderWizard(onComplete = vi.fn()) {
 
 /**
  * Spec (CONVERSION-PLAN.md "Phase 3: Onboarding Wizard", extended for the
- * practice workflow): four steps — password (already done before this
+ * exam workflow): four steps — password (already done before this
  * component mounts), Claude API key, Wave (token -> business -> accounts),
  * then OHIP validation mode. Every credential step can be skipped.
  *

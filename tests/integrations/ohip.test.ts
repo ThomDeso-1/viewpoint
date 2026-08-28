@@ -224,13 +224,13 @@ describe('SOAP envelope construction', () => {
 
 describe('eligibility service', () => {
   let ctx: TestContext;
-  let eligibility: typeof import('../../server/practice/eligibility.js');
-  let patients: typeof import('../../server/practice/patients.js');
+  let eligibility: typeof import('../../server/exams/eligibility.js');
+  let patients: typeof import('../../server/exams/patients.js');
 
   beforeEach(async () => {
     ctx = await setupTestApp();
-    eligibility = await import('../../server/practice/eligibility.js');
-    patients = await import('../../server/practice/patients.js');
+    eligibility = await import('../../server/exams/eligibility.js');
+    patients = await import('../../server/exams/patients.js');
   });
   afterEach(() => ctx.teardown());
 

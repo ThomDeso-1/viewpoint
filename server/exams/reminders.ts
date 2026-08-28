@@ -77,21 +77,21 @@ function formatAppointmentTime(startsAt: string): string {
     day: 'numeric',
     hour: 'numeric',
     minute: '2-digit',
-    timeZone: process.env.CLINIC_TIMEZONE || 'America/Toronto',
+    timeZone: process.env.BUSINESS_TIMEZONE || 'America/Toronto',
   });
 }
 
 /**
  * Drafts the reminder text.
  *
- * Kept plain and factual — it is sent from the practice's own mailbox and
+ * Kept plain and factual — it is sent from the business's own mailbox and
  * the operator reads it before it goes out.
  */
 export function composeReminder(
   appointment: AppointmentRow,
   patient: PatientRow,
 ): { subject: string; body: string } {
-  const practice = process.env.CLINIC_NAME || 'the practice';
+  const business = process.env.BUSINESS_NAME || 'Viewpoint Vision Care';
   const when = formatAppointmentTime(appointment.starts_at);
   const firstName = patient.full_name.split(/\s+/)[0];
 
@@ -102,7 +102,7 @@ export function composeReminder(
   const lines = [
     `Hello ${firstName},`,
     '',
-    `This is a reminder of your eye exam at ${practice} on ${when}${sentenceEnd}`,
+    `This is a reminder of your eye exam at ${business} on ${when}${sentenceEnd}`,
   ];
 
   if (appointment.location) {
@@ -115,7 +115,7 @@ export function composeReminder(
     '',
     'If you need to reschedule, just reply to this message.',
     '',
-    `— ${practice}`,
+    `— ${business}`,
   );
 
   return {

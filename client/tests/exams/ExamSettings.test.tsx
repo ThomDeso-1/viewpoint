@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { PracticeSettings } from '../../src/practice/PracticeSettings';
+import { ExamSettings } from '../../src/exams/ExamSettings';
 import { ToastProvider } from '../../src/shared/Toast';
-import type { PracticeSettings as Data } from '../../src/shared/api';
+import type { ExamSettings as Data } from '../../src/shared/api';
 
 vi.mock('../../src/shared/api');
 import * as api from '../../src/shared/api';
@@ -12,8 +12,8 @@ function settings(overrides: Partial<Data> = {}): Data {
   return {
     gmailQuery: 'label:exam-requests',
     minConfidence: 0.6,
-    clinicName: 'Viewpoint Optometry',
-    clinicTimezone: 'America/Toronto',
+    businessName: 'Viewpoint Vision Care',
+    businessTimezone: 'America/Toronto',
     reminderLeadHours: 24,
     examFeeAmount: 120,
     waveIncomeAccountId: '',
@@ -25,8 +25,8 @@ function settings(overrides: Partial<Data> = {}): Data {
 
 beforeEach(() => {
   for (const fn of Object.values(api)) (fn as any).mockReset?.();
-  api.getPracticeSettings.mockResolvedValue(settings());
-  api.savePracticeSettings.mockResolvedValue({ success: true });
+  api.getExamSettings.mockResolvedValue(settings());
+  api.saveExamSettings.mockResolvedValue({ success: true });
   api.getWaveInvoiceTargets.mockResolvedValue({
     income: [{ id: 'income-1', name: 'Professional Fees' }],
     products: [{ id: 'prod-1', name: 'Eye Exam', unitPrice: 120 }],
@@ -36,7 +36,7 @@ beforeEach(() => {
 function renderPanel() {
   return render(
     <ToastProvider>
-      <PracticeSettings />
+      <ExamSettings />
     </ToastProvider>,
   );
 }
@@ -46,14 +46,14 @@ function renderPanel() {
  * never both — and the panel has to say so, because approving a request
  * silently does nothing until one is chosen.
  */
-describe('PracticeSettings', () => {
+describe('ExamSettings', () => {
   it('warns while invoicing is not yet configured', async () => {
     renderPanel();
     expect(await screen.findByText(/invoices cannot be created without one/i)).toBeInTheDocument();
   });
 
   it('drops the warning once a target is set', async () => {
-    api.getPracticeSettings.mockResolvedValue(
+    api.getExamSettings.mockResolvedValue(
       settings({ waveIncomeAccountId: 'income-1', invoicingReady: true }),
     );
     renderPanel();
@@ -71,7 +71,7 @@ describe('PracticeSettings', () => {
   });
 
   it('choosing a product clears any income account, and vice versa', async () => {
-    api.getPracticeSettings.mockResolvedValue(
+    api.getExamSettings.mockResolvedValue(
       settings({ waveIncomeAccountId: 'income-1', invoicingReady: true }),
     );
     renderPanel();
@@ -80,8 +80,8 @@ describe('PracticeSettings', () => {
     await userEvent.selectOptions(select, 'product:prod-1');
     await userEvent.click(screen.getByRole('button', { name: 'Save' }));
 
-    await waitFor(() => expect(api.savePracticeSettings).toHaveBeenCalled());
-    const payload = api.savePracticeSettings.mock.calls[0][0];
+    await waitFor(() => expect(api.saveExamSettings).toHaveBeenCalled());
+    const payload = api.saveExamSettings.mock.calls[0][0];
     expect(payload.waveServiceProductId).toBe('prod-1');
     expect(payload.waveIncomeAccountId).toBe('');
   });
@@ -101,8 +101,8 @@ describe('PracticeSettings', () => {
     await userEvent.type(query, 'label:bookings');
     await userEvent.click(screen.getByRole('button', { name: 'Save' }));
 
-    await waitFor(() => expect(api.savePracticeSettings).toHaveBeenCalled());
-    expect(api.savePracticeSettings.mock.calls[0][0].gmailQuery).toBe('label:bookings');
+    await waitFor(() => expect(api.saveExamSettings).toHaveBeenCalled());
+    expect(api.saveExamSettings.mock.calls[0][0].gmailQuery).toBe('label:bookings');
   });
 
   it('still renders when Wave cannot be reached', async () => {
@@ -115,7 +115,7 @@ describe('PracticeSettings', () => {
   });
 
   it('surfaces a rejected save', async () => {
-    api.savePracticeSettings.mockRejectedValue(new Error('Choose either a service product or an income account, not both.'));
+    api.saveExamSettings.mockRejectedValue(new Error('Choose either a service product or an income account, not both.'));
     renderPanel();
 
     await screen.findByLabelText(/Gmail search/i);

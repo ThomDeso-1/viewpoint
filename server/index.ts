@@ -8,7 +8,7 @@ import path from 'path';
 dotenv.config({ path: process.env.ENV_FILE || undefined });
 import { createApp } from './app.js';
 import { startPolling } from './receipts/upload-queue.js';
-import { startPolling as startPracticePolling } from './practice/queue.js';
+import { startPolling as startExamsPolling } from './exams/queue.js';
 import { warnIfDemoMode } from './platform/endpoints.js';
 import { assertSafeForPhi } from './platform/phi-guard.js';
 
@@ -31,6 +31,6 @@ app.listen(PORT, '0.0.0.0', () => {
   startPolling();
   console.log('  Upload queue polling started');
 
-  startPracticePolling();
-  console.log('  Practice queue polling started');
+  startExamsPolling();
+  console.log('  Exam queue polling started');
 });

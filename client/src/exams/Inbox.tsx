@@ -13,7 +13,7 @@ import {
 } from '../shared/api';
 import { useToast } from '../shared/Toast';
 import { StatusBadge } from '../shared/StatusBadge';
-import { InvoiceEditor } from '../practice/InvoiceEditor';
+import { InvoiceEditor } from '../exams/InvoiceEditor';
 
 /**
  * The exam-request inbox.

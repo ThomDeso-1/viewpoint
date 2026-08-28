@@ -9,7 +9,7 @@ import { getDb } from '../server/db/db.js';
 import { updateEnvConfig } from '../server/platform/env-config.js';
 import { setPassword } from '../server/platform/auth.js';
 import { saveTokens } from '../server/platform/oauth-store.js';
-import { createPatient, listPatients } from '../server/practice/patients.js';
+import { createPatient, listPatients } from '../server/exams/patients.js';
 import { StorageService } from '../server/receipts/storage.js';
 import { v4 as uuid } from 'uuid';
 
@@ -44,7 +44,7 @@ async function main(): Promise<void> {
 
     WAVE_ACCESS_TOKEN: 'demo-wave-token',
     WAVE_BUSINESS_ID: 'demo-business-1',
-    WAVE_BUSINESS_NAME: 'Viewpoint Optometry (Demo)',
+    WAVE_BUSINESS_NAME: 'Viewpoint Vision Care (Demo)',
     WAVE_EXPENSE_ACCOUNT_ID: 'acct-expense-office',
     WAVE_ANCHOR_ACCOUNT_ID: 'acct-bank-chequing',
     WAVE_SALES_TAX_ID: 'tax-hst',
@@ -58,8 +58,8 @@ async function main(): Promise<void> {
     EXAM_REQUEST_MIN_CONFIDENCE: '0.6',
     EXAM_FEE_AMOUNT: '120',
 
-    CLINIC_NAME: 'Viewpoint Optometry',
-    CLINIC_TIMEZONE: 'America/Toronto',
+    BUSINESS_NAME: 'Viewpoint Vision Care',
+    BUSINESS_TIMEZONE: 'America/Toronto',
     // Higher than the 24h default so the nearest demo appointment's
     // reminder is already due — otherwise you'd wait a day to see one send.
     REMINDER_LEAD_HOURS: '36',

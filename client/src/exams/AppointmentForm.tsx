@@ -35,7 +35,7 @@ export function AppointmentForm({ patients, onCreated, onCancel }: Props) {
 
     setSaving(true);
     try {
-      // datetime-local has no zone, so it is read as the clinic's local
+      // datetime-local has no zone, so it is read as the business's local
       // time — the same assumption the calendar matcher makes.
       const start = new Date(startsAt);
       const end = new Date(start.getTime() + duration * 60_000);

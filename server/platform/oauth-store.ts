@@ -1,5 +1,5 @@
 import { getDb } from '../db/db.js';
-import type { OAuthProvider, OAuthTokenRow } from '../practice/types.js';
+import type { OAuthProvider, OAuthTokenRow } from '../exams/types.js';
 import { encrypt, decrypt, decryptOptional } from './crypto.js';
 import { audit } from './audit.js';
 

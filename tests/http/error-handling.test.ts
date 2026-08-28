@@ -43,7 +43,7 @@ describe('HTTP tail', () => {
       .run();
 
     const res = await request(ctx.app)
-      .post('/api/practice/patients/p-bad/check-eligibility')
+      .post('/api/exams/patients/p-bad/check-eligibility')
       .set('Authorization', `Bearer ${token}`)
       .send({});
 

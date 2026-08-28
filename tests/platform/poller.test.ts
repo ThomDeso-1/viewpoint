@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { makePoller } from '../../server/platform/poller.js';
 
 /**
- * The poll loop the receipt upload queue and the practice queue now
+ * the poll loop the receipt upload queue and the exams queue now
  * share (audit P2-27): re-entry guard, interval, fire-and-forget trigger
  * that logs but never rejects.
  */

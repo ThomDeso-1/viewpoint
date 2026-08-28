@@ -262,7 +262,7 @@ export function saveWaveAccounts(data: {
   });
 }
 
-// ── Practice: patients, schedule, exam requests ──
+// ── Exams: patients, schedule, exam requests ──
 
 export interface Patient {
   id: string;
@@ -370,24 +370,24 @@ export interface ExamRequestCounts {
 }
 
 export function getExamRequests(all = false): Promise<ExamRequest[]> {
-  return request(`/practice/exam-requests${all ? '?all=true' : ''}`);
+  return request(`/exams/exam-requests${all ? '?all=true' : ''}`);
 }
 
 export function getExamRequest(id: string): Promise<ExamRequest> {
-  return request(`/practice/exam-requests/${id}`);
+  return request(`/exams/exam-requests/${id}`);
 }
 
 /** The retained slice of the original email. Reading it is audited server-side. */
 export function getExamRequestSource(id: string): Promise<{ body: string | null }> {
-  return request(`/practice/exam-requests/${id}/source`);
+  return request(`/exams/exam-requests/${id}/source`);
 }
 
 export function getExamRequestCounts(): Promise<ExamRequestCounts> {
-  return request('/practice/exam-requests/counts');
+  return request('/exams/exam-requests/counts');
 }
 
 export function pollExamRequests(): Promise<{ success: boolean; created: number }> {
-  return request('/practice/exam-requests/poll', { method: 'POST' });
+  return request('/exams/exam-requests/poll', { method: 'POST' });
 }
 
 export function approveExamRequest(id: string): Promise<{
@@ -396,29 +396,29 @@ export function approveExamRequest(id: string): Promise<{
   reminder: { scheduled: boolean; error: string | null };
   request: ExamRequest;
 }> {
-  return request(`/practice/exam-requests/${id}/approve`, { method: 'POST' });
+  return request(`/exams/exam-requests/${id}/approve`, { method: 'POST' });
 }
 
 export function rejectExamRequest(id: string): Promise<{ success: boolean }> {
-  return request(`/practice/exam-requests/${id}/reject`, { method: 'POST' });
+  return request(`/exams/exam-requests/${id}/reject`, { method: 'POST' });
 }
 
 export function retryExamRequest(id: string): Promise<{ success: boolean }> {
-  return request(`/practice/exam-requests/${id}/retry`, { method: 'POST' });
+  return request(`/exams/exam-requests/${id}/retry`, { method: 'POST' });
 }
 
 export function getPatients(): Promise<Patient[]> {
-  return request('/practice/patients');
+  return request('/exams/patients');
 }
 
 export function getPatient(
   id: string,
 ): Promise<Patient & { appointments: Appointment[]; eligibility_history: EligibilityCheck[] }> {
-  return request(`/practice/patients/${id}`);
+  return request(`/exams/patients/${id}`);
 }
 
 export function updatePatient(id: string, fields: Partial<Patient> & { health_card_number?: string | null }) {
-  return request<Patient>(`/practice/patients/${id}`, {
+  return request<Patient>(`/exams/patients/${id}`, {
     method: 'PUT',
     body: JSON.stringify(fields),
   });
@@ -441,18 +441,18 @@ export function checkPatientEligibility(
   id: string,
   body: { appointmentId?: string; dateOfService?: string; force?: boolean } = {},
 ): Promise<EligibilityOutcome> {
-  return request(`/practice/patients/${id}/check-eligibility`, {
+  return request(`/exams/patients/${id}/check-eligibility`, {
     method: 'POST',
     body: JSON.stringify(body),
   });
 }
 
 export function getAppointments(): Promise<Appointment[]> {
-  return request('/practice/appointments');
+  return request('/exams/appointments');
 }
 
 export function checkAppointmentEligibility(id: string, force = false): Promise<EligibilityOutcome> {
-  return request(`/practice/appointments/${id}/check-eligibility`, {
+  return request(`/exams/appointments/${id}/check-eligibility`, {
     method: 'POST',
     body: JSON.stringify({ force }),
   });
@@ -500,7 +500,7 @@ export function updateInvoiceLineItems(
   examRequestId: string,
   lineItems: InvoiceLineItem[],
 ): Promise<{ success: boolean; request: ExamRequest }> {
-  return request(`/practice/exam-requests/${examRequestId}/invoice`, {
+  return request(`/exams/exam-requests/${examRequestId}/invoice`, {
     method: 'PUT',
     body: JSON.stringify({ line_items: lineItems }),
   });
@@ -515,18 +515,18 @@ export function createAppointment(body: {
   location?: string | null;
   patientId?: string | null;
 }): Promise<Appointment> {
-  return request('/practice/appointments', { method: 'POST', body: JSON.stringify(body) });
+  return request('/exams/appointments', { method: 'POST', body: JSON.stringify(body) });
 }
 
 export function deleteAppointment(id: string): Promise<{ success: boolean }> {
-  return request(`/practice/appointments/${id}`, { method: 'DELETE' });
+  return request(`/exams/appointments/${id}`, { method: 'DELETE' });
 }
 
 export function linkPatientToAppointment(
   appointmentId: string,
   patientId: string,
 ): Promise<{ success: boolean }> {
-  return request(`/practice/appointments/${appointmentId}/link-patient`, {
+  return request(`/exams/appointments/${appointmentId}/link-patient`, {
     method: 'POST',
     body: JSON.stringify({ patientId }),
   });
@@ -545,21 +545,21 @@ export interface AuditEntry {
 }
 
 export function getAuditLog(limit = 200): Promise<AuditEntry[]> {
-  return request(`/practice/audit?limit=${limit}`);
+  return request(`/exams/audit?limit=${limit}`);
 }
 
 /** Whether the audit-log hash chain is intact (detects an edited/deleted row). */
 export function verifyAuditChain(): Promise<{ ok: boolean; brokenAtId: number | null }> {
-  return request('/practice/audit/verify');
+  return request('/exams/audit/verify');
 }
 
-// ── Practice configuration ──
+// ── Exams configuration ──
 
-export interface PracticeSettings {
+export interface ExamSettings {
   gmailQuery: string;
   minConfidence: number;
-  clinicName: string;
-  clinicTimezone: string;
+  businessName: string;
+  businessTimezone: string;
   reminderLeadHours: number;
   examFeeAmount: number;
   waveIncomeAccountId: string;
@@ -568,12 +568,12 @@ export interface PracticeSettings {
   invoicingReady: boolean;
 }
 
-export function getPracticeSettings(): Promise<PracticeSettings> {
-  return request('/settings/practice');
+export function getExamSettings(): Promise<ExamSettings> {
+  return request('/settings/exams');
 }
 
-export function savePracticeSettings(body: Partial<PracticeSettings>): Promise<{ success: boolean }> {
-  return request('/settings/practice', { method: 'POST', body: JSON.stringify(body) });
+export function saveExamSettings(body: Partial<ExamSettings>): Promise<{ success: boolean }> {
+  return request('/settings/exams', { method: 'POST', body: JSON.stringify(body) });
 }
 
 export interface WaveInvoiceTargets {

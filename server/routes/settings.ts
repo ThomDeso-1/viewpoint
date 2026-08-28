@@ -246,13 +246,13 @@ export function settingsRoutes(): Router {
     }
   });
 
-  // ── GET /api/settings/practice — exam-request workflow configuration ──
-  router.get('/practice', (_req: Request, res: Response): void => {
+  // ── GET /api/settings/exams — exam-request workflow configuration ──
+  router.get('/exams', (_req: Request, res: Response): void => {
     res.json({
       gmailQuery: process.env.GMAIL_EXAM_REQUEST_QUERY || '',
       minConfidence: Number(process.env.EXAM_REQUEST_MIN_CONFIDENCE) || 0.6,
-      clinicName: process.env.CLINIC_NAME || '',
-      clinicTimezone: process.env.CLINIC_TIMEZONE || 'America/Toronto',
+      businessName: process.env.BUSINESS_NAME || '',
+      businessTimezone: process.env.BUSINESS_TIMEZONE || 'America/Toronto',
       reminderLeadHours: Number(process.env.REMINDER_LEAD_HOURS) || 24,
       examFeeAmount: Number(process.env.EXAM_FEE_AMOUNT) || 0,
       waveIncomeAccountId: process.env.WAVE_INCOME_ACCOUNT_ID || '',
@@ -263,13 +263,13 @@ export function settingsRoutes(): Router {
     });
   });
 
-  // ── POST /api/settings/practice ──
-  router.post('/practice', (req: Request, res: Response): void => {
+  // ── POST /api/settings/exams ──
+  router.post('/exams', (req: Request, res: Response): void => {
     const {
       gmailQuery,
       minConfidence,
-      clinicName,
-      clinicTimezone,
+      businessName,
+      businessTimezone,
       reminderLeadHours,
       examFeeAmount,
       waveIncomeAccountId,
@@ -301,8 +301,8 @@ export function settingsRoutes(): Router {
     const updates: Record<string, string> = {};
     if (gmailQuery !== undefined) updates.GMAIL_EXAM_REQUEST_QUERY = String(gmailQuery).trim();
     if (minConfidence !== undefined) updates.EXAM_REQUEST_MIN_CONFIDENCE = String(minConfidence);
-    if (clinicName !== undefined) updates.CLINIC_NAME = String(clinicName).trim();
-    if (clinicTimezone !== undefined) updates.CLINIC_TIMEZONE = String(clinicTimezone).trim();
+    if (businessName !== undefined) updates.BUSINESS_NAME = String(businessName).trim();
+    if (businessTimezone !== undefined) updates.BUSINESS_TIMEZONE = String(businessTimezone).trim();
     if (reminderLeadHours !== undefined) updates.REMINDER_LEAD_HOURS = String(reminderLeadHours);
     if (examFeeAmount !== undefined) updates.EXAM_FEE_AMOUNT = String(examFeeAmount);
     if (waveIncomeAccountId !== undefined) updates.WAVE_INCOME_ACCOUNT_ID = String(waveIncomeAccountId);

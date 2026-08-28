@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
-import { AuditLog } from '../../src/practice/AuditLog';
+import { AuditLog } from '../../src/exams/AuditLog';
 import { ToastProvider } from '../../src/shared/Toast';
 import type { AuditEntry } from '../../src/shared/api';
 
