@@ -84,7 +84,9 @@ iPhone / browser  ──HTTPS──▶  Express (server/)  ──▶  SQLite (da
 - **Two background pollers**, started only in `server/index.ts` (never in
   `createApp()`, so tests don't spawn timers):
   `server/receipts/upload-queue.ts` (Wave expenses) and
-  `server/practice/queue.ts` (the whole exam-request pipeline).
+  `server/practice/queue.ts` (the whole exam-request pipeline). Both wrap
+  their `processQueue` pass in `makePoller` (`server/platform/poller.ts`)
+  — the re-entry guard / interval / trigger are shared.
 - **Backoff is stored, not slept** (`server/platform/backoff.ts`): a
   failed row records `retry_count` + `updated_at`; each pass skips rows
   that aren't due. One flaky item never blocks the batch; a restart

@@ -399,8 +399,11 @@ yearly.
   `practice-queue.ts` — `running` guard, `pollTimer`, `triggerQueue`,
   `startPolling`, `stopPolling` are copy-pasted (backoff is already
   shared via `backoff.ts`, good).
-- **Fix:** `server/platform/poller.ts` → `makePoller({ intervalMs, pass
-  }): { trigger, start, stop }`.
+- **✅ Fixed 2026-08-28.** `server/platform/poller.ts` →
+  `makePoller({ name, intervalMs, pass }): { trigger, start, stop }`. The
+  re-entry guard, interval handle, and fire-and-forget trigger all live
+  there; `upload-queue.ts` and `queue.ts` keep only `processQueue` and a
+  one-line `makePoller(...)`. Tests: `tests/platform/poller.test.ts`.
 
 ### P3-28 — `recordFailure` state machine written three times
 

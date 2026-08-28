@@ -62,6 +62,8 @@ viewpoint-receipts/
 │   │   ├── env-config.ts           writes credential updates to .env at runtime
 │   │   ├── endpoints.ts            THE demo-mode switch — real vs mock base URLs
 │   │   ├── backoff.ts              stored-not-slept retry pacing, shared by both queues
+│   │   ├── poller.ts               makePoller: re-entry guard + interval + trigger, shared by both queues
+│   │   ├── escape.ts               escapeHtml / escapeXml (OAuth result page, HCV SOAP)
 │   │   ├── http.ts                 apiNotFound (JSON 404) + errorHandler (terminal 500)
 │   │   ├── rate-limit.ts           fixed-window limiter for paid-API / ministry routes
 │   │   └── phi-guard.ts            refuses to boot over plain HTTP once PHI is in play
@@ -131,7 +133,7 @@ viewpoint-receipts/
 | **OAuth flow plumbing (both providers)** | `server/integrations/oauth/{state-store,callback}.ts` — `state` map + the callback router factory / result page |
 | **OHIP eligibility** | `server/integrations/ohip/*`, `server/practice/eligibility.ts`, `client/src/practice/OhipSettings.tsx` |
 | **Reminders (+ future SMS)** | `server/practice/reminders.ts` (`ReminderChannel` interface) |
-| **Background queues / retry** | `server/receipts/upload-queue.ts`, `server/practice/queue.ts`, `server/platform/backoff.ts` |
+| **Background queues / retry** | `server/receipts/upload-queue.ts`, `server/practice/queue.ts`, `server/platform/{backoff,poller}.ts` |
 | **Settings screens** | `server/routes/settings.ts`, `client/src/receipts/Settings.tsx`, `client/src/auth/Onboarding.tsx`, `client/src/practice/*Settings.tsx` |
 | **DB schema** | `server/db/migrations/` (new file only) + `server/db/db.ts` / `server/practice/types.ts` |
 | **Demo mode** | `server/platform/endpoints.ts`, `demo/*` |
@@ -155,8 +157,9 @@ deliberately left out and should each be their own small commit — see
 - ~~**P2-26**~~ — ✅ done. `server/integrations/wave/wave.ts` (691 lines)
   → `transport` / `reference` / `expenses` / `customers` / `invoices`
   + an `index.ts` barrel.
-- **P2-27** — extract `server/platform/poller.ts` (`makePoller`); the two
-  queues keep only their `pass()`.
+- ~~**P2-27**~~ — ✅ done. `server/platform/poller.ts` (`makePoller`);
+  both queues keep only their `processQueue` pass + a one-line
+  `makePoller({ name, intervalMs, pass })`.
 - **P3-28** — `applyFailure` helper.
 - ~~**P3-29**~~ — ✅ done. One `server/platform/escape.ts`
   (`escapeHtml` / `escapeXml`).

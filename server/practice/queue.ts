@@ -14,6 +14,7 @@ import { checkPatientEligibility } from './eligibility.js';
 import { findOrCreateCustomer, createInvoice, approveInvoice, sendInvoice, WaveAPIError } from '../integrations/wave/index.js';
 import { getWaveToken, isWaveConfigured } from '../integrations/wave/auth.js';
 import { isReadyForRetry } from '../platform/backoff.js';
+import { makePoller } from '../platform/poller.js';
 import { audit } from '../platform/audit.js';
 
 /**
@@ -38,9 +39,6 @@ const POLL_OVERLAP_MS = 10 * 60 * 1000;
 
 const LAST_POLL_KEY = 'gmail_last_poll_at';
 
-let running = false;
-let pollTimer: ReturnType<typeof setInterval> | null = null;
-
 // ── Configuration ──
 
 export function gmailQuery(): string | null {
@@ -61,20 +59,11 @@ function confidenceThreshold(): number {
 // ── Main pass ──
 
 export async function processQueue(): Promise<void> {
-  if (running) return;
-  running = true;
-
-  try {
-    await pollGmail();
-    await extractPending();
-    await draftPending();
-    await retryApproved();
-    await sendDueReminders();
-  } catch (err) {
-    console.error('[practice-queue] pass failed:', err);
-  } finally {
-    running = false;
-  }
+  await pollGmail();
+  await extractPending();
+  await draftPending();
+  await retryApproved();
+  await sendDueReminders();
 }
 
 /** Step 1 — pull new exam-request emails into the queue. */
@@ -626,21 +615,8 @@ function isApproved(appointmentId: string): boolean {
 
 // ── Polling ──
 
-export function triggerQueue(): void {
-  processQueue().catch((err) => {
-    console.error('[practice-queue] processQueue failed:', err);
-  });
-}
+const poller = makePoller({ name: 'practice-queue', intervalMs: POLL_INTERVAL_MS, pass: processQueue });
 
-export function startPolling(): void {
-  if (pollTimer) return;
-  pollTimer = setInterval(triggerQueue, POLL_INTERVAL_MS);
-  triggerQueue();
-}
-
-export function stopPolling(): void {
-  if (pollTimer) {
-    clearInterval(pollTimer);
-    pollTimer = null;
-  }
-}
+export const triggerQueue = poller.trigger;
+export const startPolling = poller.start;
+export const stopPolling = poller.stop;
