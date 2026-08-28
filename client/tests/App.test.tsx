@@ -81,6 +81,20 @@ describe('App routing gate', () => {
     await waitFor(() => expect(screen.getByText(/enter your password/i)).toBeInTheDocument());
   });
 
+  it('leaves /login for the app once the user is authenticated', async () => {
+    // After a successful login, checkAuth updates auth state but the URL
+    // is still /login; the route guard has to carry the user through.
+    api.getAuthStatus.mockResolvedValue({ authenticated: true, needsSetup: false, needsOnboarding: false });
+    renderApp('/login');
+    await waitFor(() => expect(screen.getByText(/no receipts yet/i)).toBeInTheDocument());
+  });
+
+  it('leaves /setup for onboarding once a password exists', async () => {
+    api.getAuthStatus.mockResolvedValue({ authenticated: true, needsSetup: false, needsOnboarding: true });
+    renderApp('/setup');
+    await waitFor(() => expect(screen.getByText(/claude api key/i)).toBeInTheDocument());
+  });
+
   it('redirects an unknown path back to the app root', async () => {
     api.getAuthStatus.mockResolvedValue({ authenticated: true, needsSetup: false, needsOnboarding: false });
     renderApp('/some/unknown/path');

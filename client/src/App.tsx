@@ -76,8 +76,19 @@ export function App() {
 
   return (
     <Routes>
-      <Route path="/setup" element={<Setup onComplete={checkAuth} />} />
-      <Route path="/login" element={<Login onComplete={checkAuth} />} />
+      {/* Once the user is past a gate, don't let them sit on its screen —
+          after a successful login/setup, checkAuth updates `auth` but the
+          URL is still /login or /setup, and nothing else navigates away. */}
+      <Route
+        path="/setup"
+        element={
+          auth && !auth.needsSetup ? <Navigate to={gateTarget(auth)} replace /> : <Setup onComplete={checkAuth} />
+        }
+      />
+      <Route
+        path="/login"
+        element={authed ? <Navigate to={gateTarget(auth)} replace /> : <Login onComplete={checkAuth} />}
+      />
       <Route
         path="/onboarding"
         element={authed ? <Onboarding onComplete={checkAuth} /> : <Navigate to={gateTarget(auth)} replace />}
