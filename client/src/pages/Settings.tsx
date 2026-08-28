@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   getSettings,
   getQueueStatus,
@@ -10,6 +10,9 @@ import {
   type QueueStatus,
 } from '../api/client';
 import { useToast } from '../components/Toast';
+import { GoogleSettings } from '../components/GoogleSettings';
+import { PracticeSettings } from '../components/PracticeSettings';
+import { OhipSettings } from '../components/OhipSettings';
 
 export function Settings() {
   const navigate = useNavigate();
@@ -150,6 +153,22 @@ export function Settings() {
               {retrying ? 'Retrying…' : 'Retry All Failed'}
             </button>
           )}
+        </section>
+
+        <GoogleSettings />
+        <PracticeSettings />
+        <OhipSettings />
+
+        {/* Privacy */}
+        <section className="settings-section">
+          <h2 className="settings-section-title">Privacy</h2>
+          <p className="settings-help">
+            Every time patient data is read or changed, and everything sent to a patient, is recorded
+            locally.
+          </p>
+          <Link to="/audit" className="btn-secondary">
+            View access log
+          </Link>
         </section>
 
         {/* Account */}

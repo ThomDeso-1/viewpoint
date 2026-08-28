@@ -21,12 +21,15 @@ function renderWizard(onComplete = vi.fn()) {
 }
 
 /**
- * Spec (CONVERSION-PLAN.md "Phase 3: Onboarding Wizard"): three steps —
- * password (already done before this component mounts), Claude API key,
- * then Wave (token -> business -> accounts). Either the Claude or Wave
- * step can be skipped. Wave's account step pre-selects the account
- * automatically when there's only one option (GETTING-STARTED.md doesn't
- * spell this out, but Onboarding.tsx's own logic does).
+ * Spec (CONVERSION-PLAN.md "Phase 3: Onboarding Wizard", extended for the
+ * practice workflow): four steps — password (already done before this
+ * component mounts), Claude API key, Wave (token -> business -> accounts),
+ * then OHIP validation mode. Every credential step can be skipped.
+ *
+ * Wave's account step pre-selects the account automatically when there's
+ * only one option. Skipping OHIP records `mock` explicitly rather than
+ * leaving it unset, so eligibility results are always labelled simulated
+ * rather than silently absent.
  */
 describe('Onboarding: Claude step', () => {
   it('disables Validate & Continue with an empty key', () => {
@@ -168,7 +171,7 @@ describe('Onboarding: Wave step', () => {
     await userEvent.click(await screen.findByText('Acme'));
     await screen.findByLabelText('Expense account');
 
-    expect(screen.getByRole('button', { name: /finish setup/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /^continue$/i })).toBeDisabled();
   });
 
   it('finishing saves the account selections, marks onboarding complete, and calls onComplete', async () => {
@@ -191,18 +194,25 @@ describe('Onboarding: Wave step', () => {
     await userEvent.click(await screen.findByText('Acme'));
     await screen.findByLabelText('Expense account');
 
-    await userEvent.click(screen.getByRole('button', { name: /finish setup/i }));
+    await userEvent.click(screen.getByRole('button', { name: /^continue$/i }));
 
     expect(api.saveWaveAccounts).toHaveBeenCalledWith({
       expenseAccountId: 'exp1',
       anchorAccountId: 'anc1',
       salesTaxId: '',
     });
+
+    // Wave now hands off to the OHIP step rather than finishing.
+    await screen.findByText(/ohip validation/i);
+    expect(api.markOnboarded).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole('button', { name: /finish setup/i }));
+    expect(api.saveOhipSettings).toHaveBeenCalledWith({ mode: 'mock' });
     expect(api.markOnboarded).toHaveBeenCalled();
     expect(onComplete).toHaveBeenCalled();
   });
 
-  it('skipping Wave entirely still finishes onboarding', async () => {
+  it('skipping Wave advances to the OHIP step', async () => {
     api.markOnboarded.mockResolvedValue({ success: true });
     const onComplete = vi.fn();
     renderWizard(onComplete);
@@ -211,8 +221,98 @@ describe('Onboarding: Wave step', () => {
     await screen.findByText(/connect wave/i);
     await userEvent.click(screen.getByRole('button', { name: /skip for now/i }));
 
+    await screen.findByText(/ohip validation/i);
+    expect(api.saveWaveConnection).not.toHaveBeenCalled();
+    expect(api.markOnboarded).not.toHaveBeenCalled();
+  });
+});
+
+describe('Onboarding: OHIP step', () => {
+  async function reachOhipStep(onComplete = vi.fn()) {
+    api.markOnboarded.mockResolvedValue({ success: true });
+    api.saveOhipSettings.mockResolvedValue({ success: true, mode: 'mock' });
+    renderWizard(onComplete);
+
+    await userEvent.click(screen.getByRole('button', { name: /skip for now/i }));
+    await screen.findByText(/connect wave/i);
+    await userEvent.click(screen.getByRole('button', { name: /skip for now/i }));
+    await screen.findByText(/ohip validation/i);
+    return onComplete;
+  }
+
+  it('defaults to simulated mode and explains what that means', async () => {
+    await reachOhipStep();
+
+    expect(screen.getByLabelText('Mode')).toHaveValue('mock');
+    expect(screen.getByText(/results are simulated/i)).toBeInTheDocument();
+  });
+
+  it('finishes with mock mode without asking for credentials', async () => {
+    const onComplete = await reachOhipStep();
+
+    await userEvent.click(screen.getByRole('button', { name: /finish setup/i }));
+
+    expect(api.saveOhipSettings).toHaveBeenCalledWith({ mode: 'mock' });
     expect(api.markOnboarded).toHaveBeenCalled();
     expect(onComplete).toHaveBeenCalled();
-    expect(api.saveWaveConnection).not.toHaveBeenCalled();
+  });
+
+  it('skipping still records mock explicitly, so results stay labelled', async () => {
+    const onComplete = await reachOhipStep();
+
+    await userEvent.click(screen.getByRole('button', { name: /skip for now/i }));
+
+    expect(api.saveOhipSettings).toHaveBeenCalledWith({ mode: 'mock' });
+    expect(onComplete).toHaveBeenCalled();
+  });
+
+  it('asks for ministry credentials once a real mode is chosen', async () => {
+    await reachOhipStep();
+
+    await userEvent.selectOptions(screen.getByLabelText('Mode'), 'conformance');
+
+    expect(screen.getByLabelText(/private key path/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/go secure username/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/conformance key/i)).toBeInTheDocument();
+    // The openssl conversion is the step people get stuck on — one line
+    // for the key, one for the certificate.
+    expect(screen.getAllByText(/openssl pkcs12/i)).toHaveLength(2);
+  });
+
+  it('refuses a real mode without a key and certificate', async () => {
+    await reachOhipStep();
+    await userEvent.selectOptions(screen.getByLabelText('Mode'), 'production');
+
+    await userEvent.click(screen.getByRole('button', { name: /finish setup/i }));
+
+    expect(await screen.findByText(/private key and certificate are both required/i)).toBeInTheDocument();
+    expect(api.markOnboarded).not.toHaveBeenCalled();
+  });
+
+  it('saves ministry credentials and finishes', async () => {
+    api.saveOhipSettings.mockResolvedValue({ success: true, mode: 'conformance' });
+    const onComplete = await reachOhipStep();
+
+    await userEvent.selectOptions(screen.getByLabelText('Mode'), 'conformance');
+    await userEvent.type(screen.getByLabelText(/private key path/i), '/keys/ohip-key.pem');
+    await userEvent.type(screen.getByLabelText(/certificate path/i), '/keys/ohip-cert.pem');
+    await userEvent.type(screen.getByLabelText(/go secure username/i), 'dr-smith');
+    await userEvent.type(screen.getByLabelText(/go secure password/i), 'secret');
+    await userEvent.type(screen.getByLabelText(/moh id/i), '123456');
+    await userEvent.type(screen.getByLabelText(/conformance key/i), 'key-abc');
+
+    await userEvent.click(screen.getByRole('button', { name: /finish setup/i }));
+
+    expect(api.saveOhipSettings).toHaveBeenCalledWith({
+      mode: 'conformance',
+      privateKeyPath: '/keys/ohip-key.pem',
+      certificatePath: '/keys/ohip-cert.pem',
+      username: 'dr-smith',
+      password: 'secret',
+      mohId: '123456',
+      conformanceKey: 'key-abc',
+    });
+    expect(api.markOnboarded).toHaveBeenCalled();
+    expect(onComplete).toHaveBeenCalled();
   });
 });

@@ -14,6 +14,8 @@ beforeEach(() => {
   api.listReceipts.mockResolvedValue([]);
   api.getQueueStatus.mockResolvedValue({ uploaded: 0, pending: 0, failed: 0, captured: 0 });
   api.getHealthStatus.mockResolvedValue({ claudeConfigured: false, claudeHealthy: null, waveConfigured: false, waveHealthy: null });
+  // ReceiptList reads this for the demo-mode banner.
+  api.getSettings.mockResolvedValue({ demoMode: false } as any);
   vi.stubGlobal('confirm', vi.fn(() => true));
 });
 
@@ -152,5 +154,28 @@ describe('ReceiptList', () => {
 
     await userEvent.click(screen.getByTitle(/delete receipt/i));
     expect(await screen.findByText('Receipt not found.')).toBeInTheDocument();
+  });
+});
+
+/**
+ * Demo mode has to be unmissable: a fabricated invoice or eligibility
+ * result must never be mistaken for a real one.
+ */
+describe('ReceiptList: demo mode', () => {
+  it('warns loudly when the app is running against local fakes', async () => {
+    api.getSettings.mockResolvedValue({ demoMode: true } as any);
+    renderList();
+
+    expect(await screen.findByText(/Demo mode/i)).toBeInTheDocument();
+    expect(screen.getByText(/local fakes/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /captured/i })).toBeInTheDocument();
+  });
+
+  it('shows nothing when running normally', async () => {
+    api.getSettings.mockResolvedValue({ demoMode: false } as any);
+    renderList();
+
+    await screen.findByText(/No receipts yet|no receipts/i);
+    expect(screen.queryByText(/Demo mode/i)).not.toBeInTheDocument();
   });
 });

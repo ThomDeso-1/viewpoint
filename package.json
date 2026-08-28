@@ -11,7 +11,13 @@
     "build": "npm run build:client",
     "start": "NODE_ENV=production node --import tsx server/index.ts",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "demo": "concurrently -n mock,server,client -c magenta,blue,green \"npm run demo:mock\" \"npm run demo:server\" \"npm run demo:client\"",
+    "demo:mock": "tsx demo/mock-server.ts",
+    "demo:server": "npm run demo:seed && DEMO_MODE=1 DATA_DIR=./demo-data ENV_FILE=./demo-data/.env tsx watch server/index.ts",
+    "demo:client": "cd client && npx vite --host 0.0.0.0",
+    "demo:seed": "DEMO_MODE=1 DATA_DIR=./demo-data ENV_FILE=./demo-data/.env tsx demo/seed.ts",
+    "demo:reset": "rm -rf ./demo-data && npm run demo:seed"
   },
   "dependencies": {
     "better-sqlite3": "^13.0.3",
@@ -19,7 +25,9 @@
     "dotenv": "^16.4.0",
     "express": "^4.21.0",
     "multer": "^1.4.5-lts.1",
-    "uuid": "^10.0.0"
+    "uuid": "^10.0.0",
+    "xml-crypto": "^6.1.2",
+    "xmlbuilder2": "^4.0.3"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.0",

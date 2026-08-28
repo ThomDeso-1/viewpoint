@@ -280,16 +280,26 @@ export function receiptRoutes(storage: StorageService): Router {
       }
     }
 
+    // Only fields actually present in the body are written. Previously
+    // these four were coerced to null whenever they were absent, so a
+    // partial update (e.g. just {status}) silently wiped the extracted
+    // vendor and amounts — after which the upload queue rejected the
+    // receipt for having no total. Sending an explicit null still clears
+    // a field; omitting it now leaves it alone, matching how
+    // receipt_date/currency/status already behaved.
+    const supplied = (field: string): boolean =>
+      Object.prototype.hasOwnProperty.call(req.body, field);
+
     updateReceipt.run({
       id: row.id,
       receipt_date: receipt_date || null,
       month_folder: monthFolder,
       primary_image: primaryImage,
       additional_images: additionalImages,
-      vendor: vendor ?? null,
-      summary: summary ?? null,
-      total_amount: total_amount ?? null,
-      tax_amount: tax_amount ?? null,
+      vendor: supplied('vendor') ? (vendor ?? null) : row.vendor,
+      summary: supplied('summary') ? (summary ?? null) : row.summary,
+      total_amount: supplied('total_amount') ? (total_amount ?? null) : row.total_amount,
+      tax_amount: supplied('tax_amount') ? (tax_amount ?? null) : row.tax_amount,
       currency: currency || null,
       status: status || null,
       updated_at: now,

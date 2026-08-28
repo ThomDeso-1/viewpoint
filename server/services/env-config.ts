@@ -7,12 +7,23 @@ import path from 'path';
  * so no server restart is required.
  */
 
-const ENV_PATH = path.join(process.cwd(), '.env');
+/**
+ * Which file credentials are written to.
+ *
+ * Resolved per call rather than at module load so the demo runner (and
+ * tests) can point it elsewhere — otherwise running the demo from the
+ * project directory would rewrite the real `.env`.
+ */
+function envPath(): string {
+  return process.env.ENV_FILE || path.join(process.cwd(), '.env');
+}
 
 export function updateEnvConfig(values: Record<string, string>): void {
+  const target = envPath();
+
   let lines: string[] = [];
-  if (fs.existsSync(ENV_PATH)) {
-    lines = fs.readFileSync(ENV_PATH, 'utf-8').split('\n').filter((line) => line.trim() !== '');
+  if (fs.existsSync(target)) {
+    lines = fs.readFileSync(target, 'utf-8').split('\n').filter((line) => line.trim() !== '');
   }
 
   const seen = new Set<string>();
@@ -32,7 +43,8 @@ export function updateEnvConfig(values: Record<string, string>): void {
     }
   }
 
-  fs.writeFileSync(ENV_PATH, updatedLines.join('\n') + '\n', { mode: 0o600 });
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.writeFileSync(target, updatedLines.join('\n') + '\n', { mode: 0o600 });
 
   for (const [key, value] of Object.entries(values)) {
     process.env[key] = value;

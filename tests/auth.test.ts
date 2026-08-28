@@ -6,10 +6,22 @@ import { setupTestApp, type TestContext } from './helpers/testApp.js';
  * Spec (GETTING-STARTED.md, server/middleware/auth.ts docblock):
  *  - Before a password is set, the app is in "first-run" state: everything
  *    is open, and the user is prompted to set a password.
- *  - Once a password is set, every /api/* route requires it, either as a
- *    `Bearer <password>` header or a `token` cookie obtained by logging in.
+ *  - Once a password is set, every /api/* route requires a session token,
+ *    carried either as a `token` cookie or a `Bearer <token>` header.
+ *    Logging in is what mints that token; the password itself is not a
+ *    credential for anything after login.
  *  - The same password is used to log in from any device.
  */
+
+/** Logs in and returns the raw session token from the Set-Cookie header. */
+async function loginForToken(app: TestContext['app'], password: string): Promise<string> {
+  const res = await request(app).post('/api/auth/login').send({ password });
+  expect(res.status).toBe(200);
+  const cookies = res.headers['set-cookie'] as unknown as string[];
+  const tokenCookie = cookies.find((c) => c.startsWith('token='));
+  expect(tokenCookie).toBeDefined();
+  return tokenCookie!.split(';')[0].slice('token='.length);
+}
 describe('authentication', () => {
   let ctx: TestContext;
 
@@ -104,11 +116,21 @@ describe('authentication', () => {
       expect(receipts.status).toBe(200);
     });
 
-    it('authenticates using the password as a Bearer token', async () => {
+    it('authenticates using a session token as a Bearer token', async () => {
+      const token = await loginForToken(ctx.app, PASSWORD);
+      const res = await request(ctx.app)
+        .get('/api/receipts')
+        .set('Authorization', `Bearer ${token}`);
+      expect(res.status).toBe(200);
+    });
+
+    it('refuses the password itself as a Bearer token', async () => {
+      // The password stopped being a request credential when sessions
+      // landed. Guards against regressing to password-as-token.
       const res = await request(ctx.app)
         .get('/api/receipts')
         .set('Authorization', `Bearer ${PASSWORD}`);
-      expect(res.status).toBe(200);
+      expect(res.status).toBe(401);
     });
 
     it('rejects an incorrect Bearer token', async () => {
@@ -124,28 +146,31 @@ describe('authentication', () => {
     });
 
     it('reflects authenticated=true on /api/auth/status once logged in', async () => {
+      const token = await loginForToken(ctx.app, PASSWORD);
       const res = await request(ctx.app)
         .get('/api/auth/status')
-        .set('Authorization', `Bearer ${PASSWORD}`);
+        .set('Authorization', `Bearer ${token}`);
       expect(res.status).toBe(200);
       expect(res.body.authenticated).toBe(true);
       expect(res.body.needsSetup).toBe(false);
     });
 
     it('reports needsOnboarding until /api/settings/onboard is called', async () => {
+      const token = await loginForToken(ctx.app, PASSWORD);
+
       const before = await request(ctx.app)
         .get('/api/auth/status')
-        .set('Authorization', `Bearer ${PASSWORD}`);
+        .set('Authorization', `Bearer ${token}`);
       expect(before.body.needsOnboarding).toBe(true);
 
       const onboard = await request(ctx.app)
         .post('/api/settings/onboard')
-        .set('Authorization', `Bearer ${PASSWORD}`);
+        .set('Authorization', `Bearer ${token}`);
       expect(onboard.status).toBe(200);
 
       const after = await request(ctx.app)
         .get('/api/auth/status')
-        .set('Authorization', `Bearer ${PASSWORD}`);
+        .set('Authorization', `Bearer ${token}`);
       expect(after.body.needsOnboarding).toBe(false);
     });
 

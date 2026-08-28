@@ -1,0 +1,119 @@
+import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { getAuditLog, type AuditEntry } from '../api/client';
+import { useToast } from '../components/Toast';
+
+/**
+ * The access trail.
+ *
+ * PHIPA expects a record of who touched personal health information and
+ * of anything sent to a patient. This is the read side of that.
+ */
+
+const ACTION_LABELS: Record<string, string> = {
+  'login.success': 'Signed in',
+  'login.failure': 'Failed sign-in',
+  logout: 'Signed out',
+  'password.set': 'Password changed',
+  'patient.read': 'Viewed patient',
+  'patient.create': 'Created patient',
+  'patient.update': 'Updated patient',
+  'patient.delete': 'Deleted patient',
+  'health_card.decrypt': 'Read health card',
+  'eligibility.check': 'OHIP check',
+  'invoice.create': 'Created invoice',
+  'invoice.send': 'Sent invoice',
+  'reminder.send': 'Sent reminder',
+  'oauth.connect': 'Connected account',
+  'oauth.disconnect': 'Disconnected account',
+};
+
+/** Entries worth being able to isolate quickly. */
+const FILTERS = [
+  { id: 'all', label: 'All' },
+  { id: 'phi', label: 'Patient data', match: (a: string) => a.startsWith('patient.') || a.startsWith('health_card.') },
+  { id: 'outbound', label: 'Sent to patients', match: (a: string) => a === 'invoice.send' || a === 'reminder.send' },
+  { id: 'auth', label: 'Sign-ins', match: (a: string) => a.startsWith('login.') || a === 'logout' || a === 'password.set' },
+];
+
+export function AuditLog() {
+  const [entries, setEntries] = useState<AuditEntry[]>([]);
+  const [filter, setFilter] = useState('all');
+  const [loading, setLoading] = useState(true);
+  const { showToast } = useToast();
+
+  useEffect(() => {
+    getAuditLog(500)
+      .then(setEntries)
+      .catch((err) => showToast((err as Error).message, 'error'))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const filtered = useMemo(() => {
+    const active = FILTERS.find((f) => f.id === filter);
+    if (!active?.match) return entries;
+    return entries.filter((e) => active.match!(e.action));
+  }, [entries, filter]);
+
+  if (loading) {
+    return (
+      <div className="loading-screen">
+        <div className="loading-spinner" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="page">
+      <header className="page-header">
+        <h1>Access log</h1>
+        <Link to="/settings" className="button-link">
+          Settings
+        </Link>
+      </header>
+
+      <p className="settings-help">
+        Every time patient data is read or changed, and everything sent to a patient. Kept locally,
+        newest first. Showing the most recent 500 entries.
+      </p>
+
+      <div className="filter-row">
+        {FILTERS.map((f) => (
+          <button
+            key={f.id}
+            className={`filter-chip${filter === f.id ? ' filter-chip-active' : ''}`}
+            onClick={() => setFilter(f.id)}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+
+      {filtered.length === 0 ? (
+        <p className="empty-state">Nothing recorded yet.</p>
+      ) : (
+        <div className="audit-list">
+          {filtered.map((entry) => (
+            <div key={entry.id} className="audit-row">
+              <span className="audit-time">
+                {new Date(entry.at).toLocaleString('en-CA', {
+                  month: 'short',
+                  day: 'numeric',
+                  hour: 'numeric',
+                  minute: '2-digit',
+                })}
+              </span>
+              <span className="audit-action">{ACTION_LABELS[entry.action] ?? entry.action}</span>
+              <span className="muted audit-detail">
+                {entry.entity_type && entry.entity_id
+                  ? `${entry.entity_type} ${entry.entity_id.slice(0, 8)}`
+                  : ''}
+                {entry.detail ? ` · ${entry.detail}` : ''}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

@@ -123,6 +123,8 @@ export function getQueueStatus(): Promise<QueueStatus> {
 // ── Settings ──
 
 export interface Settings {
+  /** True when every external service is a local fake. */
+  demoMode?: boolean;
   hasClaudeKey: boolean;
   claudeKeyPreview: string | null;
   hasWaveToken: boolean;
@@ -258,4 +260,336 @@ export function saveWaveAccounts(data: {
     method: 'POST',
     body: JSON.stringify(data),
   });
+}
+
+// ── Practice: patients, schedule, exam requests ──
+
+export interface Patient {
+  id: string;
+  full_name: string;
+  email: string | null;
+  phone: string | null;
+  date_of_birth: string | null;
+  has_health_card: boolean;
+  /** Masked for display — the API never returns the full number. */
+  health_card_masked: string | null;
+  health_card_version: string | null;
+  wave_customer_id: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EligibilityCheck {
+  id: string;
+  checked_at: string;
+  date_of_service: string | null;
+  is_eligible: boolean | null;
+  response_code: string | null;
+  response_description: string | null;
+  error: string | null;
+  /** 'mock' until ministry conformance testing is complete. */
+  mode: string;
+}
+
+export interface Appointment {
+  id: string;
+  patient_id: string | null;
+  google_event_id: string | null;
+  starts_at: string;
+  ends_at: string | null;
+  title: string | null;
+  location: string | null;
+  status: string;
+  source: string;
+  patient?: Patient | null;
+  eligibility?: EligibilityCheck | null;
+}
+
+export interface ExamRequestExtraction {
+  patient_name: string | null;
+  email: string | null;
+  phone: string | null;
+  date_of_birth: string | null;
+  health_card_masked: string | null;
+  health_card_version: string | null;
+  requested_date: string | null;
+  requested_time: string | null;
+  reason: string | null;
+  confidence: number;
+}
+
+export interface ExamRequestReminder {
+  id: string;
+  status: string;
+  channel: string;
+  scheduled_for: string;
+  subject: string | null;
+  body: string | null;
+  sent_at: string | null;
+  last_error: string | null;
+}
+
+export interface ExamRequestInvoice {
+  id: string;
+  status: string;
+  amount: number | null;
+  currency: string;
+  wave_invoice_id: string | null;
+  wave_invoice_url: string | null;
+  invoice_number: string | null;
+  last_error: string | null;
+  line_items: InvoiceLineItem[];
+  /** Only a local draft can be edited; once in Wave, Wave owns it. */
+  editable: boolean;
+}
+
+export interface ExamRequest {
+  id: string;
+  status: string;
+  received_at: string;
+  from_address: string | null;
+  subject: string | null;
+  body_snippet: string | null;
+  extraction: ExamRequestExtraction | null;
+  last_error: string | null;
+  retry_count: number;
+  patient: Patient | null;
+  appointment: Appointment | null;
+  eligibility: EligibilityCheck | null;
+  reminder: ExamRequestReminder | null;
+  invoice: ExamRequestInvoice | null;
+}
+
+export interface ExamRequestCounts {
+  counts: Record<string, number>;
+  hcvMode: string;
+  gmailQueryConfigured: boolean;
+}
+
+export function getExamRequests(all = false): Promise<ExamRequest[]> {
+  return request(`/practice/exam-requests${all ? '?all=true' : ''}`);
+}
+
+export function getExamRequest(id: string): Promise<ExamRequest> {
+  return request(`/practice/exam-requests/${id}`);
+}
+
+export function getExamRequestCounts(): Promise<ExamRequestCounts> {
+  return request('/practice/exam-requests/counts');
+}
+
+export function pollExamRequests(): Promise<{ success: boolean; created: number }> {
+  return request('/practice/exam-requests/poll', { method: 'POST' });
+}
+
+export function approveExamRequest(id: string): Promise<{
+  success: boolean;
+  invoice: { created: boolean; error: string | null };
+  reminder: { scheduled: boolean; error: string | null };
+  request: ExamRequest;
+}> {
+  return request(`/practice/exam-requests/${id}/approve`, { method: 'POST' });
+}
+
+export function rejectExamRequest(id: string): Promise<{ success: boolean }> {
+  return request(`/practice/exam-requests/${id}/reject`, { method: 'POST' });
+}
+
+export function retryExamRequest(id: string): Promise<{ success: boolean }> {
+  return request(`/practice/exam-requests/${id}/retry`, { method: 'POST' });
+}
+
+export function getPatients(): Promise<Patient[]> {
+  return request('/practice/patients');
+}
+
+export function getPatient(
+  id: string,
+): Promise<Patient & { appointments: Appointment[]; eligibility_history: EligibilityCheck[] }> {
+  return request(`/practice/patients/${id}`);
+}
+
+export function updatePatient(id: string, fields: Partial<Patient> & { health_card_number?: string | null }) {
+  return request<Patient>(`/practice/patients/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(fields),
+  });
+}
+
+export function checkPatientEligibility(
+  id: string,
+  body: { appointmentId?: string; dateOfService?: string } = {},
+): Promise<EligibilityCheck & { checkId: string }> {
+  return request(`/practice/patients/${id}/check-eligibility`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export function getAppointments(): Promise<Appointment[]> {
+  return request('/practice/appointments');
+}
+
+export function checkAppointmentEligibility(id: string): Promise<EligibilityCheck & { checkId: string }> {
+  return request(`/practice/appointments/${id}/check-eligibility`, { method: 'POST' });
+}
+
+// ── Google connection ──
+
+export interface GoogleStatus {
+  configured: boolean;
+  connected: boolean;
+  redirectUri: string;
+  accountLabel: string | null;
+  scope: string | null;
+  expiresAt: string | null;
+}
+
+export function getGoogleStatus(): Promise<GoogleStatus> {
+  return request('/google/status');
+}
+
+export function saveGoogleCredentials(body: {
+  clientId: string;
+  clientSecret: string;
+  calendarId?: string;
+}): Promise<{ success: boolean; redirectUri: string }> {
+  return request('/google/credentials', { method: 'POST', body: JSON.stringify(body) });
+}
+
+export function disconnectGoogle(): Promise<{ success: boolean }> {
+  return request('/google/disconnect', { method: 'POST' });
+}
+
+// ── Invoice line items ──
+
+export interface InvoiceLineItem {
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  productId?: string | null;
+  accountId?: string | null;
+  salesTaxId?: string | null;
+}
+
+export function updateInvoiceLineItems(
+  examRequestId: string,
+  lineItems: InvoiceLineItem[],
+): Promise<{ success: boolean; request: ExamRequest }> {
+  return request(`/practice/exam-requests/${examRequestId}/invoice`, {
+    method: 'PUT',
+    body: JSON.stringify({ line_items: lineItems }),
+  });
+}
+
+// ── Appointments (manual entry + linking) ──
+
+export function createAppointment(body: {
+  startsAt: string;
+  endsAt?: string | null;
+  title?: string | null;
+  location?: string | null;
+  patientId?: string | null;
+}): Promise<Appointment> {
+  return request('/practice/appointments', { method: 'POST', body: JSON.stringify(body) });
+}
+
+export function deleteAppointment(id: string): Promise<{ success: boolean }> {
+  return request(`/practice/appointments/${id}`, { method: 'DELETE' });
+}
+
+export function linkPatientToAppointment(
+  appointmentId: string,
+  patientId: string,
+): Promise<{ success: boolean }> {
+  return request(`/practice/appointments/${appointmentId}/link-patient`, {
+    method: 'POST',
+    body: JSON.stringify({ patientId }),
+  });
+}
+
+// ── Audit log ──
+
+export interface AuditEntry {
+  id: number;
+  at: string;
+  action: string;
+  entity_type: string | null;
+  entity_id: string | null;
+  detail: string | null;
+  ip: string | null;
+}
+
+export function getAuditLog(limit = 200): Promise<AuditEntry[]> {
+  return request(`/practice/audit?limit=${limit}`);
+}
+
+// ── Practice configuration ──
+
+export interface PracticeSettings {
+  gmailQuery: string;
+  minConfidence: number;
+  clinicName: string;
+  clinicTimezone: string;
+  reminderLeadHours: number;
+  examFeeAmount: number;
+  waveIncomeAccountId: string;
+  waveServiceProductId: string;
+  /** False until a service product or income account is chosen. */
+  invoicingReady: boolean;
+}
+
+export function getPracticeSettings(): Promise<PracticeSettings> {
+  return request('/settings/practice');
+}
+
+export function savePracticeSettings(body: Partial<PracticeSettings>): Promise<{ success: boolean }> {
+  return request('/settings/practice', { method: 'POST', body: JSON.stringify(body) });
+}
+
+export interface WaveInvoiceTargets {
+  income: { id: string; name: string }[];
+  products: { id: string; name: string; unitPrice: number | null }[];
+}
+
+export function getWaveInvoiceTargets(): Promise<WaveInvoiceTargets> {
+  return request('/settings/wave/income-accounts');
+}
+
+// ── OHIP configuration ──
+
+export interface OhipSettings {
+  mode: 'mock' | 'conformance' | 'production';
+  privateKeyPath: string;
+  certificatePath: string;
+  caCertPath: string;
+  username: string;
+  mohId: string;
+  /** Secrets are never returned — only whether they are set. */
+  hasPassword: boolean;
+  hasConformanceKey: boolean;
+  endpoint: string;
+}
+
+export function getOhipSettings(): Promise<OhipSettings> {
+  return request('/settings/ohip');
+}
+
+export function saveOhipSettings(
+  body: Partial<OhipSettings> & { password?: string; conformanceKey?: string },
+): Promise<{ success: boolean; mode: string }> {
+  return request('/settings/ohip', { method: 'POST', body: JSON.stringify(body) });
+}
+
+export function testOhipConnection(body: { healthCardNumber?: string; versionCode?: string } = {}): Promise<{
+  ok: boolean;
+  checked?: 'configuration' | 'live';
+  message?: string;
+  isEligible?: boolean;
+  responseCode?: string;
+  responseDescription?: string;
+  error?: string;
+}> {
+  return request('/settings/ohip/test', { method: 'POST', body: JSON.stringify(body) });
 }

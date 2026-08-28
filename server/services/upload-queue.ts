@@ -1,5 +1,7 @@
 import { getDb, type ReceiptRow } from '../db/db.js';
 import { createExpenseTransaction, WaveAPIError } from './wave.js';
+import { getWaveToken, isWaveConfigured } from './wave-auth.js';
+import { isReadyForRetry } from './backoff.js';
 
 /**
  * Upload Queue — server-side port of UploadService.swift
@@ -46,14 +48,23 @@ export async function processQueue(): Promise<void> {
   running = true;
 
   try {
-    const token = process.env.WAVE_ACCESS_TOKEN;
     const businessId = process.env.WAVE_BUSINESS_ID;
     const expenseAccountId = process.env.WAVE_EXPENSE_ACCOUNT_ID;
     const anchorAccountId = process.env.WAVE_ANCHOR_ACCOUNT_ID;
     const salesTaxId = process.env.WAVE_SALES_TAX_ID || undefined;
 
-    if (!token || !businessId || !expenseAccountId || !anchorAccountId) {
+    if (!isWaveConfigured() || !businessId || !expenseAccountId || !anchorAccountId) {
       return; // Wave not configured — nothing to do
+    }
+
+    // Resolved once per pass rather than per receipt: in OAuth mode this
+    // may refresh, and a whole batch should not trigger a refresh each.
+    let token: string;
+    try {
+      token = await getWaveToken();
+    } catch (err) {
+      console.error('[upload-queue] could not obtain a Wave token:', (err as Error).message);
+      return;
     }
 
     const stmts = getStatements();
@@ -66,10 +77,8 @@ export async function processQueue(): Promise<void> {
       // run rather than blocking the whole batch on a per-item sleep —
       // other reviewed receipts shouldn't wait on one flaky retry, and
       // this receipt will be picked up again on a later poll.
-      if (receipt.retry_count > 0) {
-        const backoff = Math.min(BASE_DELAY_MS * Math.pow(2, receipt.retry_count - 1), MAX_DELAY_MS);
-        const readyAt = new Date(receipt.updated_at).getTime() + backoff;
-        if (now < readyAt) continue;
+      if (!isReadyForRetry(receipt, now, { baseDelayMs: BASE_DELAY_MS, maxDelayMs: MAX_DELAY_MS })) {
+        continue;
       }
 
       const amount = receipt.total_amount ?? 0;

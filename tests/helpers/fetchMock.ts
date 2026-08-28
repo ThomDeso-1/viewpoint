@@ -21,6 +21,9 @@ export function jsonResponse(
       get: (key: string) => headers[key] ?? headers[key.toLowerCase()] ?? null,
     },
     json: async () => body,
+    // Some clients read the body as text on error paths rather than
+    // assuming it parses as JSON.
+    text: async () => (typeof body === 'string' ? body : JSON.stringify(body)),
   } as unknown as Response;
 }
 

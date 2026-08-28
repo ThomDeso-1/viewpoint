@@ -1,17 +1,19 @@
 import fs from 'fs';
 import path from 'path';
+import type { ExamRequestExtraction } from '../db/practice.js';
+import { endpoint } from './endpoints.js';
 
 /**
  * Claude API Service — server-side port of ClaudeAPIService.swift
  *
  * Sends receipt images to the Claude Messages API (vision) for structured
- * data extraction. Uses claude-sonnet-4 for extraction, claude-haiku-3.5
- * for validation.
+ * data extraction, and parses incoming exam-request emails into structured
+ * patient details. Uses Sonnet for extraction, Haiku for the cheap
+ * API-key validation ping.
  */
 
-const ENDPOINT = 'https://api.anthropic.com/v1/messages';
-const EXTRACTION_MODEL = 'claude-sonnet-4-20250514';
-const VALIDATION_MODEL = 'claude-haiku-3-5-20241022';
+const EXTRACTION_MODEL = 'claude-sonnet-5';
+const VALIDATION_MODEL = 'claude-haiku-4-5-20251001';
 const API_VERSION = '2023-06-01';
 
 // ── Types ──
@@ -188,7 +190,7 @@ async function sendRequest(body: Record<string, any>, apiKey: string): Promise<s
   let res: Response;
 
   try {
-    res = await fetch(ENDPOINT, {
+    res = await fetch(endpoint('anthropicMessages'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -301,3 +303,148 @@ a decimal (e.g. 0.13 for 13%).
 - currency: default to "CAD" unless the receipt shows otherwise.
 - confidence: "high" if all fields are clearly legible, "medium" if some \
 are uncertain, "low" if the image is hard to read.`;
+
+// ── Exam Request Extraction ──
+
+/**
+ * Parses an exam-request email into structured patient details.
+ *
+ * Every field is nullable on purpose: a real email may simply not mention
+ * a health card or a preferred time, and inventing one would be far worse
+ * than reporting it missing. The queue surfaces gaps for the operator to
+ * fill rather than guessing.
+ */
+export async function extractExamRequest(
+  email: { from?: string | null; subject?: string | null; body: string; receivedAt?: string },
+  apiKey: string,
+): Promise<{ result: ExamRequestExtraction; rawJSON: string }> {
+  const context = [
+    email.from ? `From: ${email.from}` : null,
+    email.subject ? `Subject: ${email.subject}` : null,
+    email.receivedAt ? `Received: ${email.receivedAt}` : null,
+    '',
+    email.body,
+  ]
+    .filter((line) => line !== null)
+    .join('\n');
+
+  const responseText = await sendRequest(
+    {
+      model: EXTRACTION_MODEL,
+      max_tokens: 1024,
+      messages: [{ role: 'user', content: `${EXAM_REQUEST_PROMPT}\n\n---\n\n${context}` }],
+    },
+    apiKey,
+  );
+
+  const jsonString = stripCodeFences(responseText);
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(jsonString);
+  } catch (err) {
+    throw new ClaudeAPIError(
+      'extraction_failed',
+      `Failed to parse exam request JSON: ${(err as Error).message}`,
+    );
+  }
+
+  try {
+    validateExamRequestExtraction(parsed);
+  } catch (err) {
+    throw new ClaudeAPIError(
+      'extraction_failed',
+      `Claude returned an unexpected exam request format: ${(err as Error).message}`,
+    );
+  }
+
+  return { result: parsed, rawJSON: jsonString };
+}
+
+/**
+ * Same role as validateExtractionResult above: stop a reshaped response
+ * from reaching the database. Normalises absent/empty fields to null so
+ * callers only ever test for null, not for null-or-""-or-undefined.
+ */
+function validateExamRequestExtraction(value: unknown): asserts value is ExamRequestExtraction {
+  if (!value || typeof value !== 'object') {
+    throw new Error('response is not a JSON object');
+  }
+  const v = value as Record<string, unknown>;
+
+  const stringFields = [
+    'patient_name',
+    'email',
+    'phone',
+    'date_of_birth',
+    'health_card_number',
+    'health_card_version',
+    'requested_date',
+    'requested_time',
+    'reason',
+  ] as const;
+
+  for (const field of stringFields) {
+    const raw = v[field];
+    if (raw === undefined || raw === null || raw === '') {
+      v[field] = null;
+      continue;
+    }
+    if (typeof raw !== 'string') {
+      throw new Error(`"${field}" must be a string or null`);
+    }
+    v[field] = raw.trim() || null;
+  }
+
+  if (v.requested_date !== null && !/^\d{4}-\d{2}-\d{2}$/.test(v.requested_date as string)) {
+    throw new Error('"requested_date" must be a "YYYY-MM-DD" string or null');
+  }
+
+  if (typeof v.confidence !== 'number' || Number.isNaN(v.confidence)) {
+    throw new Error('"confidence" must be a number');
+  }
+  // Clamp rather than reject: a slightly out-of-range confidence is not
+  // worth failing an otherwise good extraction over.
+  v.confidence = Math.max(0, Math.min(1, v.confidence));
+
+  if (v.health_card_number !== null) {
+    // Ontario health card numbers are 10 digits; strip the spaces and
+    // dashes people write them with so downstream comparison is stable.
+    v.health_card_number = (v.health_card_number as string).replace(/[\s-]/g, '');
+  }
+
+  if (v.health_card_version !== null) {
+    v.health_card_version = (v.health_card_version as string).toUpperCase().replace(/[\s-]/g, '');
+  }
+}
+
+const EXAM_REQUEST_PROMPT = `You are helping an Ontario optometry practice triage incoming email.
+
+Read the email below and extract the details of the eye exam request it contains.
+
+Return ONLY a JSON object with exactly these keys:
+{
+  "patient_name": "full name of the patient, or null",
+  "email": "patient's email address, or null",
+  "phone": "patient's phone number, or null",
+  "date_of_birth": "YYYY-MM-DD, or null",
+  "health_card_number": "10-digit Ontario health card number, digits only, or null",
+  "health_card_version": "2-letter version code, or null",
+  "requested_date": "YYYY-MM-DD of the requested appointment, or null",
+  "requested_time": "HH:MM in 24-hour time, or null",
+  "reason": "brief reason for the visit, or null",
+  "confidence": 0.0
+}
+
+Rules:
+- Use null for anything the email does not state. Never invent or infer a
+  value that is not there — a missing field is expected and fine.
+- The sender is not necessarily the patient. A parent, spouse, or clinic
+  may be writing on someone else's behalf; extract the *patient's* details.
+- Resolve relative dates ("next Tuesday", "the 14th") against the Received
+  date if one is given. If you cannot resolve one confidently, use null.
+- "confidence" is your overall confidence from 0.0 to 1.0 that this email
+  is genuinely an eye exam request and that you read the details correctly.
+  Use a low value if the email is ambiguous, is not an exam request at all,
+  or if key details are unclear.
+- Return the raw JSON object only. No explanation, no markdown fences.`;

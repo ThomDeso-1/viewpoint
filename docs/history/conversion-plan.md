@@ -169,8 +169,8 @@ The wizard should write credentials to `.env` (or a server endpoint that updates
 - Batch review queue (swipe through multiple captured receipts) — `/review-batch`, `BatchReview.tsx` + shared `ReceiptReviewForm.tsx`
 - Image re-filing when receipt date changes months (move files between `YYYY-MM/` folders) — `storage.moveReceiptFileSet`, wired into `PUT /api/receipts/:id`
 - Better error toasts instead of `alert()` — `Toast.tsx` provider, wired into capture, delete, and retry-all failures
-- Deployment guide: Docker container, reverse proxy (nginx/Caddy), HTTPS, systemd service — see [`DEPLOYMENT.md`](DEPLOYMENT.md)
-- Backup strategy for `data/` directory — see [`DEPLOYMENT.md`](DEPLOYMENT.md) and [`scripts/backup.sh`](scripts/backup.sh)
+- Deployment guide: Docker container, reverse proxy (nginx/Caddy), HTTPS, systemd service — see [`DEPLOYMENT.md`](../DEPLOYMENT.md)
+- Backup strategy for `data/` directory — see [`DEPLOYMENT.md`](../DEPLOYMENT.md) and [`scripts/backup.sh`](../../scripts/backup.sh)
 
 ## File Structure
 

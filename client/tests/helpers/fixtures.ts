@@ -24,3 +24,105 @@ export function makeReceipt(overrides: Partial<ReceiptRow> = {}): ReceiptRow {
     ...overrides,
   };
 }
+
+// ── Practice fixtures ──
+
+import type { ExamRequest, Patient, Appointment, EligibilityCheck } from '../../src/api/client';
+
+export function makePatient(overrides: Partial<Patient> = {}): Patient {
+  return {
+    id: 'patient-1',
+    full_name: 'Ada Lovelace',
+    email: 'ada@example.com',
+    phone: '555-0100',
+    date_of_birth: '1990-01-01',
+    has_health_card: true,
+    health_card_masked: '•••• ••7890',
+    health_card_version: 'AB',
+    wave_customer_id: null,
+    notes: null,
+    created_at: '2026-08-01T00:00:00.000Z',
+    updated_at: '2026-08-01T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
+export function makeEligibility(overrides: Partial<EligibilityCheck> = {}): EligibilityCheck {
+  return {
+    id: 'check-1',
+    checked_at: '2026-08-20T12:00:00.000Z',
+    date_of_service: '2026-09-01',
+    is_eligible: true,
+    response_code: '50',
+    response_description: 'Health card is valid.',
+    error: null,
+    mode: 'mock',
+    ...overrides,
+  };
+}
+
+export function makeAppointment(overrides: Partial<Appointment> = {}): Appointment {
+  return {
+    id: 'appt-1',
+    patient_id: 'patient-1',
+    google_event_id: 'evt-1',
+    starts_at: '2026-09-01T14:00:00.000Z',
+    ends_at: '2026-09-01T14:30:00.000Z',
+    title: 'Eye exam',
+    location: null,
+    status: 'scheduled',
+    source: 'google',
+    ...overrides,
+  };
+}
+
+export function makeExamRequest(overrides: Partial<ExamRequest> = {}): ExamRequest {
+  return {
+    id: 'req-1',
+    status: 'drafted',
+    received_at: '2026-08-20T09:00:00.000Z',
+    from_address: 'ada@example.com',
+    subject: 'Eye exam request',
+    body_snippet: 'Could I book an exam for September 1st?',
+    extraction: {
+      patient_name: 'Ada Lovelace',
+      email: 'ada@example.com',
+      phone: '555-0100',
+      date_of_birth: '1990-01-01',
+      health_card_masked: '•••• ••7890',
+      health_card_version: 'AB',
+      requested_date: '2026-09-01',
+      requested_time: '10:00',
+      reason: 'Annual exam',
+      confidence: 0.95,
+    },
+    last_error: null,
+    retry_count: 0,
+    patient: makePatient(),
+    appointment: makeAppointment(),
+    eligibility: makeEligibility(),
+    reminder: {
+      id: 'rem-1',
+      status: 'pending',
+      channel: 'email',
+      scheduled_for: '2026-08-31T14:00:00.000Z',
+      subject: 'Reminder: your eye exam',
+      body: 'Hello Ada,\n\nThis is a reminder…',
+      sent_at: null,
+      last_error: null,
+    },
+    invoice: {
+      id: 'inv-row-1',
+      status: 'draft',
+      amount: 120,
+      currency: 'CAD',
+      wave_invoice_id: null,
+      wave_invoice_url: null,
+      invoice_number: null,
+      last_error: null,
+      line_items: [{ description: 'Comprehensive eye examination', quantity: 1, unitPrice: 120 }],
+      editable: true,
+    },
+    ...overrides,
+  };
+}

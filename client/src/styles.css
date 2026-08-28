@@ -1068,3 +1068,505 @@ img {
     transition-duration: 0.001ms !important;
   }
 }
+
+/* ────────────────────────────────────────
+   Practice: exam requests, schedule, patients
+   ──────────────────────────────────────── */
+
+.page {
+  padding: calc(16px + var(--safe-top)) 16px calc(24px + var(--safe-bottom));
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.page-header h1 {
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* Shared button vocabulary for these pages. The receipts screens use
+   .btn-primary/.btn-secondary; these are the same shapes under the
+   shorter names the practice pages use. */
+.page button.primary,
+.page button.secondary,
+.button-link {
+  padding: 9px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  text-decoration: none;
+  display: inline-block;
+}
+.page button.primary {
+  background: var(--accent);
+  color: #fff;
+}
+.page button.primary:active {
+  background: var(--accent-hover);
+}
+.page button.secondary,
+.button-link {
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border-color: var(--border);
+}
+.page button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.link-button {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+}
+
+.muted {
+  color: var(--text-tertiary);
+  font-size: 13px;
+}
+.error-text {
+  color: var(--status-failed);
+}
+
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 16px;
+}
+.card h2 {
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+.card label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+}
+.card input {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  padding: 10px 12px;
+  font-size: 16px; /* 16px stops iOS Safari zooming on focus */
+  color: var(--text-primary);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.card small {
+  display: block;
+  margin-top: 4px;
+  font-weight: 400;
+}
+
+.plain-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 14px;
+}
+
+/* ── Exam request cards ── */
+
+.request-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.request-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+
+.request-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.request-card-head h2 {
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.request-details {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 14px 0;
+  font-size: 14px;
+}
+.request-details dt {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-tertiary);
+}
+.request-details dd {
+  margin-top: 2px;
+}
+
+.request-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.preview-block {
+  margin: 10px 0;
+  padding: 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  /* Long unbroken lines scroll inside the block rather than widening
+     the page. */
+  overflow-x: auto;
+}
+
+/* ── Eligibility ── */
+
+.eligibility {
+  font-weight: 600;
+}
+.eligibility-ok {
+  color: var(--status-uploaded);
+}
+.eligibility-bad {
+  color: var(--status-failed);
+}
+.eligibility-unknown {
+  color: var(--status-attention);
+}
+
+.tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  border-radius: 4px;
+  vertical-align: middle;
+}
+/* Deliberately loud: a simulated OHIP result must never be mistaken for
+   real coverage. */
+.tag-mock {
+  background: var(--status-attention);
+  color: #fff;
+}
+
+/* ── Schedule ── */
+
+.schedule-day {
+  margin-bottom: 24px;
+}
+
+.appointment-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  margin-bottom: 8px;
+}
+
+.appointment-time {
+  flex-shrink: 0;
+  width: 76px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.appointment-body {
+  flex: 1;
+  min-width: 0;
+}
+.appointment-title {
+  font-size: 15px;
+  font-weight: 600;
+}
+.appointment-title a {
+  color: inherit;
+}
+.appointment-meta {
+  font-size: 13px;
+  margin-top: 2px;
+}
+
+/* ── Banners ── */
+
+.banner-info {
+  background: rgba(37, 99, 235, 0.1);
+  color: var(--accent);
+}
+.banner-error {
+  background: rgba(220, 38, 38, 0.1);
+  color: var(--status-failed);
+}
+
+/* ── Status badge additions (exam requests) ──
+   Same tinted-background / coloured-text treatment as the receipt
+   statuses above, so the two pipelines read alike. */
+
+.status-received       { background: rgba(99, 102, 241, 0.12); color: var(--status-captured); }
+.status-drafted        { background: rgba(234, 179, 8, 0.12);  color: var(--status-reviewed); }
+.status-approved       { background: rgba(22, 163, 74, 0.12);  color: var(--status-uploaded); }
+.status-completed      { background: rgba(22, 163, 74, 0.12);  color: var(--status-uploaded); }
+.status-rejected       { background: rgba(156, 163, 175, 0.15); color: var(--text-tertiary); }
+
+/* ── Patient directory ── */
+
+.patient-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.patient-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+}
+.patient-row:active {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.patient-row-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.patient-row-name {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+/* ── Audit log ── */
+
+.filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0 16px;
+}
+
+.filter-chip {
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.filter-chip-active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.audit-list {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.audit-row {
+  display: grid;
+  /* Time and action stay fixed; the detail column absorbs the slack. */
+  grid-template-columns: 6.5rem 9.5rem 1fr;
+  gap: 10px;
+  align-items: baseline;
+  padding: 10px 12px;
+  font-size: 13px;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border);
+}
+.audit-row:last-child {
+  border-bottom: none;
+}
+
+.audit-time {
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+.audit-action {
+  font-weight: 600;
+}
+.audit-detail {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 480px) {
+  .audit-row {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+}
+
+/* ── Invoice editor ── */
+
+.invoice-editor {
+  margin: 12px 0;
+  padding: 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  /* A narrow phone can't fit four columns; scroll the table, not the page. */
+  overflow-x: auto;
+}
+
+.invoice-table {
+  width: 100%;
+  min-width: 30rem;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.invoice-table th {
+  text-align: left;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-tertiary);
+  padding-bottom: 6px;
+}
+.invoice-table td {
+  padding: 4px 6px 4px 0;
+  vertical-align: middle;
+}
+.invoice-table .numeric {
+  text-align: right;
+}
+.invoice-table input {
+  width: 100%;
+  padding: 7px 9px;
+  font-size: 14px;
+  color: var(--text-primary);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.invoice-table .numeric input {
+  text-align: right;
+}
+.invoice-table td:nth-child(2) input {
+  max-width: 4.5rem;
+}
+.invoice-table td:nth-child(3) input {
+  max-width: 7rem;
+}
+.invoice-table tfoot td {
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+/* ── Settings additions ── */
+
+.settings-subheading {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-tertiary);
+  margin: 20px 0 10px;
+}
+
+.settings-instructions {
+  margin: 10px 0;
+  padding: 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.settings-instructions p {
+  margin-bottom: 8px;
+}
+.settings-instructions p:last-child {
+  margin-bottom: 0;
+}
+
+/* Settings uses .btn-* rather than the .page button vocabulary, so the
+   shared action row needs those to line up here too. */
+.settings-section .request-actions {
+  margin-top: 14px;
+}
+.settings-section .btn-primary,
+.settings-section .btn-secondary {
+  display: inline-block;
+  text-decoration: none;
+}
+
+/* The form controls inside a settings panel follow the wizard styling. */
+.settings-section .wizard-field-label {
+  display: block;
+  margin-top: 12px;
+}
+
+/* Demo mode — deliberately unmissable, so a fake invoice or a fake
+   eligibility result can never be taken for a real one. */
+.banner-demo {
+  background: var(--status-attention);
+  color: #fff;
+  border-radius: 0;
+}
+.banner-demo a {
+  color: #fff;
+  text-decoration: underline;
+}

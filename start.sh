@@ -21,4 +21,4 @@ echo "Started! Open this address in a browser on this computer:"
 echo "  http://localhost:3000"
 echo
 echo "To use it from your iPhone, connect to the same Wi-Fi network and use"
-echo "this computer's network address instead of 'localhost' — see GETTING-STARTED.md."
+echo "this computer's network address instead of 'localhost' — see docs/GETTING-STARTED.md."

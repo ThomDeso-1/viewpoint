@@ -20,6 +20,8 @@ beforeEach(() => {
   api.listReceipts.mockResolvedValue([]);
   api.getQueueStatus.mockResolvedValue({ uploaded: 0, pending: 0, failed: 0, captured: 0 });
   api.getHealthStatus.mockResolvedValue({ claudeConfigured: false, claudeHealthy: null, waveConfigured: false, waveHealthy: null });
+  // ReceiptList reads this for the demo-mode banner.
+  api.getSettings.mockResolvedValue({ demoMode: false } as any);
 });
 
 function renderApp(initialPath = '/') {

@@ -345,3 +345,74 @@ describe('receipts', () => {
     });
   });
 });
+
+/**
+ * Regression: a partial update used to null out the extracted fields.
+ * Approving a receipt with just {status:'reviewed'} wiped its vendor and
+ * total, and the upload queue then rejected it for having no amount.
+ */
+describe('partial updates', () => {
+  let ctx: TestContext;
+
+  beforeAll(async () => {
+    ctx = await setupTestApp();
+  });
+  afterAll(() => ctx.teardown());
+
+  async function createExtractedReceipt(): Promise<string> {
+    const upload = await request(ctx.app)
+      .post('/api/receipts')
+      .attach('images', fakeImageBytes(`partial-${Math.random()}`), {
+        filename: 'receipt.jpg',
+        contentType: 'image/jpeg',
+      });
+    expect(upload.status).toBe(201);
+    const id = upload.body[0].id;
+
+    await request(ctx.app).put(`/api/receipts/${id}`).send({
+      vendor: 'Staples',
+      summary: 'Office supplies',
+      total_amount: 47.99,
+      tax_amount: 5.52,
+      currency: 'CAD',
+    });
+
+    return id;
+  }
+
+  it('keeps the extracted fields when the body omits them', async () => {
+    const id = await createExtractedReceipt();
+
+    const res = await request(ctx.app).put(`/api/receipts/${id}`).send({ status: 'reviewed' });
+    expect(res.status).toBe(200);
+
+    const after = await request(ctx.app).get(`/api/receipts/${id}`);
+    expect(after.body.vendor).toBe('Staples');
+    expect(after.body.summary).toBe('Office supplies');
+    expect(after.body.total_amount).toBe(47.99);
+    expect(after.body.tax_amount).toBe(5.52);
+    expect(after.body.status).toBe('reviewed');
+  });
+
+  it('still clears a field when null is sent explicitly', async () => {
+    const id = await createExtractedReceipt();
+
+    await request(ctx.app).put(`/api/receipts/${id}`).send({ vendor: null, summary: null });
+
+    const after = await request(ctx.app).get(`/api/receipts/${id}`);
+    expect(after.body.vendor).toBeNull();
+    expect(after.body.summary).toBeNull();
+    // Untouched fields survive.
+    expect(after.body.total_amount).toBe(47.99);
+  });
+
+  it('updates only what was sent', async () => {
+    const id = await createExtractedReceipt();
+
+    await request(ctx.app).put(`/api/receipts/${id}`).send({ total_amount: 99.5 });
+
+    const after = await request(ctx.app).get(`/api/receipts/${id}`);
+    expect(after.body.total_amount).toBe(99.5);
+    expect(after.body.vendor).toBe('Staples');
+  });
+});

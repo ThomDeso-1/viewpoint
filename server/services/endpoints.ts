@@ -1,0 +1,75 @@
+/**
+ * Where the app's outbound calls go.
+ *
+ * Normally these are the real providers. In **demo mode** they all point
+ * at a single local mock server (`demo/mock-server.ts`) instead, so the
+ * whole workflow can be exercised — and its bugs found — without any
+ * credentials, any spending, and without a byte leaving the machine.
+ *
+ * The client code itself is unchanged either way: the same GraphQL
+ * parsing, MIME decoding, OAuth exchange, retry and error-taxonomy paths
+ * run in demo mode as in production. That is the point — a mock that
+ * bypassed those would not find the bugs that live in them.
+ *
+ * Demo mode is deliberately a single explicit switch rather than a
+ * per-endpoint override, so there is exactly one thing to audit, and
+ * nothing can be quietly redirected one service at a time.
+ */
+
+const REAL = {
+  anthropicMessages: 'https://api.anthropic.com/v1/messages',
+  waveGraphql: 'https://gql.waveapps.com/graphql/public',
+  waveAuthorize: 'https://api.waveapps.com/oauth2/authorize',
+  waveToken: 'https://api.waveapps.com/oauth2/token/',
+  googleAuthorize: 'https://accounts.google.com/o/oauth2/v2/auth',
+  googleToken: 'https://oauth2.googleapis.com/token',
+  googleUserinfo: 'https://www.googleapis.com/oauth2/v2/userinfo',
+  gmailBase: 'https://gmail.googleapis.com/gmail/v1/users/me',
+  calendarBase: 'https://www.googleapis.com/calendar/v3',
+} as const;
+
+export type EndpointName = keyof typeof REAL;
+
+export function isDemoMode(): boolean {
+  const value = process.env.DEMO_MODE;
+  return value === '1' || value === 'true';
+}
+
+function demoBase(): string {
+  return (process.env.DEMO_API_BASE || 'http://localhost:4000').replace(/\/$/, '');
+}
+
+const DEMO_PATHS: Record<EndpointName, string> = {
+  anthropicMessages: '/anthropic/v1/messages',
+  waveGraphql: '/wave/graphql',
+  waveAuthorize: '/wave/oauth/authorize',
+  waveToken: '/wave/oauth/token',
+  googleAuthorize: '/google/oauth/authorize',
+  googleToken: '/google/oauth/token',
+  googleUserinfo: '/google/oauth/userinfo',
+  gmailBase: '/gmail/v1/users/me',
+  calendarBase: '/calendar/v3',
+};
+
+/**
+ * Resolved at call time, not module load, so tests and the demo runner
+ * can set DEMO_MODE after the module graph is already built.
+ */
+export function endpoint(name: EndpointName): string {
+  return isDemoMode() ? demoBase() + DEMO_PATHS[name] : REAL[name];
+}
+
+/** One loud line at startup — demo mode must never be mistaken for real. */
+export function warnIfDemoMode(): void {
+  if (!isDemoMode()) return;
+
+  console.warn('');
+  console.warn('  ┌─────────────────────────────────────────────────────────┐');
+  console.warn('  │  DEMO MODE — no real services are being contacted.      │');
+  console.warn('  │                                                         │');
+  console.warn('  │  Claude, Wave, Gmail and Calendar all point at the      │');
+  console.warn(`  │  local mock server at ${demoBase().padEnd(34)}│`);
+  console.warn('  │  Invoices, emails and extractions are all fabricated.   │');
+  console.warn('  └─────────────────────────────────────────────────────────┘');
+  console.warn('');
+}

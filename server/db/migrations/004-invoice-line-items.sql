@@ -1,0 +1,12 @@
+-- Editable invoice line items.
+--
+-- Previously an invoice draft carried a single `amount` taken from
+-- EXAM_FEE_AMOUNT, which could not represent a second line (a contact
+-- lens fitting, a form fee) or a per-line tax. Line items are stored as
+-- JSON rather than a child table: they are always read and written as a
+-- whole invoice, never queried across invoices, so a table would add
+-- joins without buying anything.
+--
+-- Shape: [{ description, quantity, unitPrice, productId?, accountId?, salesTaxId? }]
+-- `amount` is kept as the computed total, so existing reads keep working.
+ALTER TABLE wave_invoices ADD COLUMN line_items TEXT;

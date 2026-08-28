@@ -39,7 +39,7 @@ To update after pulling new code: `docker compose up -d --build`.
 
 ## Option B: systemd (no Docker)
 
-See [`deploy/viewpoint-receipts.service`](deploy/viewpoint-receipts.service)
+See [`deploy/viewpoint-receipts.service`](../deploy/viewpoint-receipts.service)
 for the full unit file and setup commands. In short:
 
 ```bash
@@ -65,11 +65,11 @@ behavior, so put a reverse proxy in front of it in any deployment reachable
 by anything other than `localhost`.
 
 **Caddy** (recommended — automatic cert issuance and renewal, ~5 lines of
-config): see [`deploy/Caddyfile`](deploy/Caddyfile). Point a domain's A
+config): see [`deploy/Caddyfile`](../deploy/Caddyfile). Point a domain's A
 record at the server, install Caddy, drop in the Caddyfile, done.
 
 **nginx + certbot**: see
-[`deploy/nginx.conf.example`](deploy/nginx.conf.example) for a config plus
+[`deploy/nginx.conf.example`](../deploy/nginx.conf.example) for a config plus
 the certbot commands to obtain the cert.
 
 **Tailscale**: if you're not exposing the server publicly, `tailscale cert`
@@ -94,7 +94,7 @@ Requires the `sqlite3` CLI (`apt install sqlite3` / `brew install sqlite3`)
 inside the container; `docker-compose.yml` bind-mounts `./data` from the
 host, so the default `DATA_DIR=./data` already points at the same files.
 
-[`scripts/backup.sh`](scripts/backup.sh) does both in one shot:
+[`scripts/backup.sh`](../scripts/backup.sh) does both in one shot:
 
 ```bash
 ./scripts/backup.sh

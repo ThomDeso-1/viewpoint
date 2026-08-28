@@ -4,10 +4,13 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { getDb } from './db/db.js';
 import { StorageService } from './services/storage.js';
-import { authMiddleware } from './middleware/auth.js';
+import { authMiddleware, requireAuth } from './middleware/auth.js';
 import { authRoutes } from './routes/auth.js';
 import { receiptRoutes } from './routes/receipts.js';
 import { settingsRoutes } from './routes/settings.js';
+import { googleRoutes, googleCallbackRoutes } from './routes/google.js';
+import { practiceRoutes } from './routes/practice.js';
+import { waveOAuthRoutes, waveCallbackRoutes } from './routes/wave-oauth.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -24,20 +27,39 @@ export function createApp(): Express {
 
   const app = express();
 
+  // Lets req.secure reflect X-Forwarded-Proto from a reverse proxy
+  // (deploy/Caddyfile, nginx), which is what decides whether the session
+  // cookie is marked Secure. Limited to one hop: the proxy is on the same
+  // host, and trusting further would let a client forge the header.
+  app.set('trust proxy', 1);
+
   // No cors() middleware: the client is always same-origin — proxied
   // through Vite's dev server (client/vite.config.ts) locally, and
   // served from this same Express app in production.
   app.use(express.json());
   app.use(cookieParser());
 
-  app.use('/images', express.static(path.join(DATA_DIR, 'Receipts')));
+  // Behind auth: these are photographs of the user's receipts, and were
+  // previously served to anyone who could reach the port. Same-origin
+  // <img> requests carry the session cookie, so the client is unaffected.
+  app.use('/images', requireAuth, express.static(path.join(DATA_DIR, 'Receipts')));
 
   app.use('/api/auth', authRoutes());
+
+  // Ahead of the auth gate: Google redirects the browser here from
+  // accounts.google.com, and the sameSite=strict session cookie is not
+  // sent on a cross-site navigation. Protected by its single-use `state`
+  // parameter instead — see routes/google.ts.
+  app.use('/api/google', googleCallbackRoutes());
+  app.use('/api/wave', waveCallbackRoutes());
 
   app.use('/api', authMiddleware);
 
   app.use('/api/receipts', receiptRoutes(storage));
   app.use('/api/settings', settingsRoutes());
+  app.use('/api/google', googleRoutes());
+  app.use('/api/practice', practiceRoutes());
+  app.use('/api/wave', waveOAuthRoutes());
 
   const clientDist = path.join(__dirname, '..', 'client', 'dist');
   app.use(express.static(clientDist));

@@ -8,6 +8,11 @@ import { ReceiptList } from './pages/ReceiptList';
 import { ReceiptReview } from './pages/ReceiptReview';
 import { BatchReview } from './pages/BatchReview';
 import { Settings } from './pages/Settings';
+import { Inbox } from './pages/Inbox';
+import { Schedule } from './pages/Schedule';
+import { PatientDetail } from './pages/PatientDetail';
+import { Patients } from './pages/Patients';
+import { AuditLog } from './pages/AuditLog';
 
 /**
  * Where a route guard should send an incomplete/unauthenticated session,
@@ -87,6 +92,14 @@ export function App() {
         element={authed ? <BatchReview /> : <Navigate to={gateTarget(auth)} replace />}
       />
       <Route path="/settings" element={authed ? <Settings /> : <Navigate to={gateTarget(auth)} replace />} />
+      <Route path="/inbox" element={authed ? <Inbox /> : <Navigate to={gateTarget(auth)} replace />} />
+      <Route path="/schedule" element={authed ? <Schedule /> : <Navigate to={gateTarget(auth)} replace />} />
+      <Route path="/patients" element={authed ? <Patients /> : <Navigate to={gateTarget(auth)} replace />} />
+      <Route
+        path="/patients/:id"
+        element={authed ? <PatientDetail /> : <Navigate to={gateTarget(auth)} replace />}
+      />
+      <Route path="/audit" element={authed ? <AuditLog /> : <Navigate to={gateTarget(auth)} replace />} />
       <Route path="*" element={<Navigate to={gateTarget(auth)} replace />} />
     </Routes>
   );

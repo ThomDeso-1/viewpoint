@@ -4,14 +4,18 @@ Photograph business receipts, extract vendor/date/total via Claude vision,
 review and correct the extraction, and upload the expense to Wave
 accounting. Self-hosted, single-user, installable as a PWA on iPhone.
 
-- **Just want to run it?** → [`GETTING-STARTED.md`](GETTING-STARTED.md)
+- **Just want to run it?** → [`docs/GETTING-STARTED.md`](docs/GETTING-STARTED.md)
   (Docker, non-technical, ~15 minutes).
 - **Deploying somewhere reachable from your phone, with HTTPS?** →
-  [`DEPLOYMENT.md`](DEPLOYMENT.md).
+  [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 - **Auth model, and what to harden before this stops being single-user?** →
-  [`SECURITY.md`](SECURITY.md).
+  [`docs/SECURITY.md`](docs/SECURITY.md).
+- **Working on the code?** → [`AGENTS.md`](AGENTS.md) (rules, upgrade
+  processes) and [`INDEX.md`](INDEX.md) (repo map). Known issues:
+  [`docs/AUDIT.md`](docs/AUDIT.md).
 - **Architecture / design background?** →
-  [`CONVERSION-PLAN.md`](CONVERSION-PLAN.md).
+  [`docs/history/conversion-plan.md`](docs/history/conversion-plan.md) and
+  [`docs/history/upgrade-plan.md`](docs/history/upgrade-plan.md).
 
 ## Local development
 
