@@ -10,6 +10,7 @@ import {
 } from '../integrations/google/auth.js';
 import { connectionStatus } from '../platform/oauth-store.js';
 import { updateEnvConfig } from '../platform/env-config.js';
+import { escapeHtml } from '../platform/escape.js';
 
 /**
  * Google connect/disconnect.
@@ -156,16 +157,7 @@ export function googleCallbackRoutes(): Router {
  * and is not the app's SPA, so it cannot rely on any client bundle.
  */
 function renderResult(ok: boolean, message: string): string {
-  const escaped = message.replace(/[&<>"']/g, (c) => {
-    const map: Record<string, string> = {
-      '&': '&amp;',
-      '<': '&lt;',
-      '>': '&gt;',
-      '"': '&quot;',
-      "'": '&#39;',
-    };
-    return map[c];
-  });
+  const escaped = escapeHtml(message);
 
   return `<!doctype html>
 <html>

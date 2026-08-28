@@ -10,6 +10,7 @@ import {
 } from '../integrations/wave/auth.js';
 import { connectionStatus } from '../platform/oauth-store.js';
 import { updateEnvConfig } from '../platform/env-config.js';
+import { escapeHtml } from '../platform/escape.js';
 import { WaveAPIError } from '../integrations/wave/wave.js';
 
 /**
@@ -152,16 +153,7 @@ export function waveCallbackRoutes(): Router {
 }
 
 function renderResult(ok: boolean, message: string): string {
-  const escaped = message.replace(/[&<>"']/g, (c) => {
-    const map: Record<string, string> = {
-      '&': '&amp;',
-      '<': '&lt;',
-      '>': '&gt;',
-      '"': '&quot;',
-      "'": '&#39;',
-    };
-    return map[c];
-  });
+  const escaped = escapeHtml(message);
 
   return `<!doctype html>
 <html>

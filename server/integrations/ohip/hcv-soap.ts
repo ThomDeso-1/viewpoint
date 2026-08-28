@@ -4,6 +4,7 @@ import { SignedXml } from 'xml-crypto';
 import type { HcvClient, EligibilityRequest, EligibilityResult } from './hcv-client.js';
 import { describeResponseCode, validateHealthCardFormat, HcvError } from './hcv-client.js';
 import type { HcvMode } from '../../practice/types.js';
+import { escapeXml } from '../../platform/escape.js';
 
 /**
  * The real Health Card Validation client — a TypeScript port of the PHP
@@ -122,19 +123,6 @@ export function pemToBase64Der(pem: string): string {
     .replace(/-----BEGIN CERTIFICATE-----/g, '')
     .replace(/-----END CERTIFICATE-----/g, '')
     .replace(/\s+/g, '');
-}
-
-function escapeXml(value: string): string {
-  return value.replace(/[&<>"']/g, (c) => {
-    const map: Record<string, string> = {
-      '&': '&amp;',
-      '<': '&lt;',
-      '>': '&gt;',
-      '"': '&quot;',
-      "'": '&apos;',
-    };
-    return map[c];
-  });
 }
 
 export class SoapHcvClient implements HcvClient {
