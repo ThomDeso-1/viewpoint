@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { Schedule } from '../../src/practice/Schedule';
 import { ToastProvider } from '../../src/shared/Toast';
-import { makeAppointment, makeEligibility, makePatient } from '../helpers/fixtures';
+import { makeAppointment, makeEligibility, makeEligibilityOutcome, makePatient } from '../helpers/fixtures';
 
 vi.mock('../../src/shared/api');
 import * as api from '../../src/shared/api';
@@ -81,7 +81,7 @@ describe('Schedule', () => {
     api.getAppointments.mockResolvedValue([
       { ...makeAppointment(), patient: makePatient(), eligibility: null },
     ]);
-    api.checkAppointmentEligibility.mockResolvedValue({ ...makeEligibility(), checkId: 'c1' });
+    api.checkAppointmentEligibility.mockResolvedValue(makeEligibilityOutcome());
 
     renderSchedule();
     await userEvent.click(await screen.findByRole('button', { name: /Check OHIP/i }));

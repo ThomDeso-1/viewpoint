@@ -424,10 +424,23 @@ export function updatePatient(id: string, fields: Partial<Patient> & { health_ca
   });
 }
 
+/** What the check-eligibility routes return (camelCase — not the snake_case DTO). */
+export interface EligibilityOutcome {
+  checkId: string;
+  isEligible: boolean | null;
+  responseCode: string | null;
+  responseDescription: string | null;
+  mode: string;
+  error: string | null;
+  checkedAt: string;
+  /** True when a recent stored result was returned instead of a fresh ministry call. */
+  reused?: boolean;
+}
+
 export function checkPatientEligibility(
   id: string,
-  body: { appointmentId?: string; dateOfService?: string } = {},
-): Promise<EligibilityCheck & { checkId: string }> {
+  body: { appointmentId?: string; dateOfService?: string; force?: boolean } = {},
+): Promise<EligibilityOutcome> {
   return request(`/practice/patients/${id}/check-eligibility`, {
     method: 'POST',
     body: JSON.stringify(body),
@@ -438,8 +451,11 @@ export function getAppointments(): Promise<Appointment[]> {
   return request('/practice/appointments');
 }
 
-export function checkAppointmentEligibility(id: string): Promise<EligibilityCheck & { checkId: string }> {
-  return request(`/practice/appointments/${id}/check-eligibility`, { method: 'POST' });
+export function checkAppointmentEligibility(id: string, force = false): Promise<EligibilityOutcome> {
+  return request(`/practice/appointments/${id}/check-eligibility`, {
+    method: 'POST',
+    body: JSON.stringify({ force }),
+  });
 }
 
 // ── Google connection ──

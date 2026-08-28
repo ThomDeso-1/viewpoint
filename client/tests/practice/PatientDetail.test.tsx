@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { PatientDetail } from '../../src/practice/PatientDetail';
 import { ToastProvider } from '../../src/shared/Toast';
-import { makePatient, makeAppointment, makeEligibility } from '../helpers/fixtures';
+import { makePatient, makeAppointment, makeEligibility, makeEligibilityOutcome } from '../helpers/fixtures';
 
 vi.mock('../../src/shared/api');
 import * as api from '../../src/shared/api';
@@ -78,7 +78,7 @@ describe('PatientDetail', () => {
   });
 
   it('runs an eligibility check on demand', async () => {
-    api.checkPatientEligibility.mockResolvedValue({ ...makeEligibility(), checkId: 'c1' });
+    api.checkPatientEligibility.mockResolvedValue(makeEligibilityOutcome());
     renderDetail();
     await screen.findByRole('heading', { name: 'Ada Lovelace' });
 
@@ -102,10 +102,9 @@ describe('PatientDetail', () => {
   });
 
   it('reports a failed check instead of implying coverage', async () => {
-    api.checkPatientEligibility.mockResolvedValue({
-      ...makeEligibility({ is_eligible: null, error: 'service unavailable' }),
-      checkId: 'c1',
-    });
+    api.checkPatientEligibility.mockResolvedValue(
+      makeEligibilityOutcome({ isEligible: null, error: 'service unavailable' }),
+    );
     renderDetail();
     await screen.findByRole('heading', { name: 'Ada Lovelace' });
 

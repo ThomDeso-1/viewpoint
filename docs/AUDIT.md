@@ -111,10 +111,19 @@ concrete failure it enables, and a suggested fix.
   rules both discourage redundant queries. Today a UI double-click, or a
   script, fires unlimited real checks. `poll` fans out to the Claude API
   (cost + PHI egress) with no ceiling.
-- **Fix:** reuse a recent (`< 24h`) `eligibility_checks` row instead of
-  re-querying unless `?force=true`; add a per-process token-bucket on the
-  ministry-facing and Claude-facing routes; add a confirm step in the UI
-  for a live check.
+- **✅ Fixed 2026-08-28.** `checkPatientEligibility` reuses the most
+  recent **successful** check for the same patient + date of service +
+  HCV mode within 24h (no new ministry call, no new audit entry); `force`
+  bypasses it and is wired through both check-eligibility routes.
+  `server/platform/rate-limit.ts` — a fixed-window limiter now caps
+  `poll` (10/min), `validate-claude-key` / `ohip/test` (15/min), and the
+  check-eligibility routes (30 / 5min). The client toast says "(from a
+  recent check)" when a result was reused. *Bonus:* fixed a latent
+  camelCase↔snake_case mismatch — the check routes return
+  `EligibilityOutcome` (camelCase) but `PatientDetail`/`Schedule` read
+  `is_eligible` etc., so the immediate toast always said "Not covered".
+  **Not done:** an explicit "re-check" button in the UI (the `force` API
+  path exists for it).
 
 ### P1-6 — Service worker caches PHI in the browser
 
@@ -433,8 +442,8 @@ each its own small commit.
 2. ~~**P0-2 / P0-3** (HTTPS start-guard, conditional `trust proxy`)~~ — ✅ done.
 3. ~~**P1-18** (CI test gate) + P2-20 (allowScripts)~~ — ✅ done.
 4. ~~**P1-10 / P1-11** (error handler, stuck-`approved` retry)~~ — ✅ done.
-5. **P1-4 / P1-5 / P1-6** (retention, ministry debounce, SW cache) — the
-   remaining PHI-handling items. ← next
+5. **P1-4** (eligibility-history retention + audit-log integrity) — ← next.
+   ~~P1-5 (ministry debounce + limiter)~~, ~~P1-6 (SW cache)~~ — ✅ done.
 6. ~~**P1-17, P2-21** — Dockerfile Node 22, model ID~~ — ✅ done. (P2-19 done.)
 7. **The reorg** (§5) — ✅ done.
 8. **§4 dedup** (OAuth flow, `wave.ts` split, poller helper) — now

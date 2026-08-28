@@ -163,6 +163,10 @@ npm run build              # builds client/dist (server runs from source via tsx
   tail — that's the bar. Prefer none.)
 - Widen `GMAIL_EXAM_REQUEST_QUERY`'s blast radius — every matched email
   goes to Claude.
+- Add a route that hits the ministry or a paid API without a
+  `rateLimited(...)` guard (`server/platform/rate-limit.ts`), and without
+  reusing a recent result where one applies (see `checkPatientEligibility`
+  — a repeat within 24h returns the stored answer unless `force`).
 
 ### Database changes
 

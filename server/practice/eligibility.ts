@@ -22,7 +22,17 @@ export interface EligibilityOutcome {
   mode: string;
   error: string | null;
   checkedAt: string;
+  /** True when this is a recent stored result, not a fresh ministry call. */
+  reused?: boolean;
 }
+
+/**
+ * How long a successful check is reused for instead of re-querying the
+ * ministry. Each real query discloses a health card number, so a
+ * repeated click within this window returns the stored answer (PHIPA
+ * data-minimisation — AUDIT P1-5). `force` bypasses it.
+ */
+const REUSE_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 function record(row: {
   patientId: string | null;
@@ -92,6 +102,7 @@ export async function checkPatientEligibility(opts: {
   patientId: string;
   appointmentId?: string | null;
   dateOfService?: string;
+  force?: boolean;
 }): Promise<EligibilityOutcome> {
   const patient = getPatient(opts.patientId);
   const dateOfService = opts.dateOfService ?? new Date().toISOString().slice(0, 10);
@@ -106,6 +117,22 @@ export async function checkPatientEligibility(opts: {
       result: null,
       error: `Patient not found: ${opts.patientId}`,
     });
+  }
+
+  if (!opts.force) {
+    const reusable = recentReusableCheck(opts.patientId, dateOfService);
+    if (reusable) {
+      return {
+        checkId: reusable.id,
+        isEligible: reusable.is_eligible === null ? null : reusable.is_eligible === 1,
+        responseCode: reusable.response_code,
+        responseDescription: reusable.response_description,
+        mode: reusable.mode,
+        error: reusable.error,
+        checkedAt: reusable.checked_at,
+        reused: true,
+      };
+    }
   }
 
   const healthCard = readHealthCard(opts.patientId, 'OHIP eligibility check');
@@ -150,6 +177,30 @@ export async function checkPatientEligibility(opts: {
 /** True when the failure is worth another attempt later. */
 export function isRetryableEligibilityError(err: unknown): boolean {
   return err instanceof HcvError && err.isRetryable;
+}
+
+/**
+ * The most recent successful check for this patient and date of service,
+ * in the current HCV mode, within the reuse window — or undefined.
+ *
+ * Only successful checks (`error IS NULL`) are reused; a failed one
+ * should be re-attempted. `mode` is matched so a `mock` result is never
+ * reused after switching to `conformance`.
+ */
+function recentReusableCheck(patientId: string, dateOfService: string): EligibilityCheckRow | undefined {
+  return getDb()
+    .prepare(
+      `SELECT * FROM eligibility_checks
+       WHERE patient_id = ? AND date_of_service = ? AND mode = ?
+         AND error IS NULL AND checked_at >= ?
+       ORDER BY checked_at DESC, rowid DESC LIMIT 1`,
+    )
+    .get(
+      patientId,
+      dateOfService,
+      hcvMode(),
+      new Date(Date.now() - REUSE_WINDOW_MS).toISOString(),
+    ) as EligibilityCheckRow | undefined;
 }
 
 export function latestCheckForPatient(patientId: string): EligibilityCheckRow | undefined {

@@ -287,6 +287,38 @@ describe('eligibility service', () => {
     expect(outcome.error).toContain('unavailable');
   });
 
+  it('reuses a recent successful check instead of re-querying the ministry (P1-5)', async () => {
+    const p = patients.createPatient({ full_name: 'Ada', health_card_number: '1111111111' });
+
+    const first = await eligibility.checkPatientEligibility({ patientId: p.id });
+    expect(first.reused).toBeUndefined();
+
+    const second = await eligibility.checkPatientEligibility({ patientId: p.id });
+    expect(second.reused).toBe(true);
+    expect(second.checkId).toBe(first.checkId);
+    expect(rawChecks()).toHaveLength(1); // no second row, no second disclosure
+  });
+
+  it('force re-queries even inside the reuse window', async () => {
+    const p = patients.createPatient({ full_name: 'Ada', health_card_number: '1111111111' });
+
+    await eligibility.checkPatientEligibility({ patientId: p.id });
+    const forced = await eligibility.checkPatientEligibility({ patientId: p.id, force: true });
+
+    expect(forced.reused).toBeUndefined();
+    expect(rawChecks()).toHaveLength(2);
+  });
+
+  it('does not reuse a failed check', async () => {
+    const p = patients.createPatient({ full_name: 'Carol', health_card_number: '9999999999' });
+
+    await eligibility.checkPatientEligibility({ patientId: p.id });
+    const second = await eligibility.checkPatientEligibility({ patientId: p.id });
+
+    expect(second.reused).toBeUndefined();
+    expect(rawChecks()).toHaveLength(2);
+  });
+
   it('reports a missing health card without calling the service', async () => {
     const p = patients.createPatient({ full_name: 'Dave' });
 

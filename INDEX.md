@@ -62,6 +62,7 @@ viewpoint-receipts/
 │   │   ├── endpoints.ts            THE demo-mode switch — real vs mock base URLs
 │   │   ├── backoff.ts              stored-not-slept retry pacing, shared by both queues
 │   │   ├── http.ts                 apiNotFound (JSON 404) + errorHandler (terminal 500)
+│   │   ├── rate-limit.ts           fixed-window limiter for paid-API / ministry routes
 │   │   └── phi-guard.ts            refuses to boot over plain HTTP once PHI is in play
 │   ├── receipts/
 │   │   ├── storage.ts              monthly folders, image hash, sidecars, re-filing
@@ -98,7 +99,7 @@ viewpoint-receipts/
 │
 ├── tests/                          server suite (vitest + supertest) — mirrors server/
 │   ├── helpers/  testApp.ts (isolated temp DB + cwd per file)  fetchMock.ts
-│   ├── platform/  auth  security  phi-guard
+│   ├── platform/  auth  security  phi-guard  rate-limit
 │   ├── receipts/  receipts  receipts-extract  storage  upload-queue
 │   ├── practice/  patients  queue  routes
 │   ├── integrations/  claude  wave  wave-oauth  google  ohip  demo-mode

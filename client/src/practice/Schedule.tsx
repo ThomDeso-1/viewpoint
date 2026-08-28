@@ -59,13 +59,14 @@ export function Schedule() {
     setCheckingId(appointment.id);
     try {
       const result = await checkAppointmentEligibility(appointment.id);
+      const suffix = result.reused ? ' (from a recent check)' : '';
       showToast(
         result.error
           ? `Check failed: ${result.error}`
-          : result.is_eligible
-            ? 'Coverage confirmed.'
-            : `Not covered: ${result.response_description ?? result.response_code}`,
-        result.error || !result.is_eligible ? 'error' : 'success',
+          : result.isEligible
+            ? `Coverage confirmed.${suffix}`
+            : `Not covered: ${result.responseDescription ?? result.responseCode}${suffix}`,
+        result.error || !result.isEligible ? 'error' : 'success',
       );
       await load();
     } catch (err) {

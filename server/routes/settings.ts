@@ -13,6 +13,7 @@ import {
 import { getWaveToken, isWaveConfigured, authMode } from '../integrations/wave/auth.js';
 import { hcvMode, resetHcvClient, loadConfigFromEnv, SoapHcvClient, HcvError } from '../integrations/ohip/index.js';
 import { isDemoMode } from '../platform/endpoints.js';
+import { rateLimited } from '../platform/rate-limit.js';
 
 const HEALTH_CACHE_MS = 5 * 60 * 1000; // re-check credentials at most every 5 minutes
 let claudeHealthCache: { healthy: boolean; checkedAt: number } | null = null;
@@ -45,7 +46,7 @@ export function settingsRoutes(): Router {
   });
 
   // ── POST /api/settings/validate-claude-key — Test a Claude API key ──
-  router.post('/validate-claude-key', async (req: Request, res: Response): Promise<void> => {
+  router.post('/validate-claude-key', rateLimited('claude-validate', 15, 60_000), async (req: Request, res: Response): Promise<void> => {
     const { apiKey } = req.body;
     if (!apiKey) {
       res.status(400).json({ error: 'API key is required.' });
@@ -374,7 +375,7 @@ export function settingsRoutes(): Router {
    * (unreadable PEM, wrong key, missing conformance key) without
    * contacting the ministry. With one, it runs a real validation.
    */
-  router.post('/ohip/test', async (req: Request, res: Response): Promise<void> => {
+  router.post('/ohip/test', rateLimited('ohip-test', 15, 60_000), async (req: Request, res: Response): Promise<void> => {
     if (hcvMode() === 'mock') {
       res.status(400).json({
         error: 'OHIP is in mock mode. Switch to conformance or production to test real credentials.',

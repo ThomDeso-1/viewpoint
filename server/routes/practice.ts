@@ -14,6 +14,7 @@ import {
 import { hcvMode } from '../integrations/ohip/index.js';
 import { getDb } from '../db/db.js';
 import { auditRequest, recentAuditEntries } from '../platform/audit.js';
+import { rateLimited } from '../platform/rate-limit.js';
 import type { ExamRequestRow, WaveInvoiceRow, InvoiceLineItemDraft } from '../practice/types.js';
 
 /**
@@ -127,7 +128,8 @@ export function practiceRoutes(): Router {
     });
   });
 
-  router.post('/exam-requests/poll', async (_req: Request, res: Response): Promise<void> => {
+  // Each poll can fan out to Gmail + the Claude API for every new message.
+  router.post('/exam-requests/poll', rateLimited('exam-poll', 10, 60_000), async (_req: Request, res: Response): Promise<void> => {
     try {
       const created = await queue.pollGmail();
       await queue.extractPending();
@@ -272,7 +274,7 @@ export function practiceRoutes(): Router {
     res.json({ success: true });
   });
 
-  router.post('/patients/:id/check-eligibility', async (req: Request, res: Response): Promise<void> => {
+  router.post('/patients/:id/check-eligibility', rateLimited('eligibility', 30, 5 * 60_000), async (req: Request, res: Response): Promise<void> => {
     if (!patientsService.getPatient(req.params.id)) {
       res.status(404).json({ error: 'Patient not found.' });
       return;
@@ -282,6 +284,7 @@ export function practiceRoutes(): Router {
       patientId: req.params.id,
       appointmentId: req.body?.appointmentId ?? null,
       dateOfService: req.body?.dateOfService,
+      force: req.body?.force === true || req.query.force === 'true',
     });
 
     res.json(outcome);
@@ -311,7 +314,7 @@ export function practiceRoutes(): Router {
     );
   });
 
-  router.post('/appointments/:id/check-eligibility', async (req: Request, res: Response): Promise<void> => {
+  router.post('/appointments/:id/check-eligibility', rateLimited('eligibility', 30, 5 * 60_000), async (req: Request, res: Response): Promise<void> => {
     const appointment = appointmentsService.getAppointment(req.params.id);
     if (!appointment) {
       res.status(404).json({ error: 'Appointment not found.' });
@@ -326,6 +329,7 @@ export function practiceRoutes(): Router {
       patientId: appointment.patient_id,
       appointmentId: appointment.id,
       dateOfService: appointment.starts_at.slice(0, 10),
+      force: req.body?.force === true || req.query.force === 'true',
     });
 
     res.json(outcome);

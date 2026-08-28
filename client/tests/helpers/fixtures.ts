@@ -27,7 +27,7 @@ export function makeReceipt(overrides: Partial<ReceiptRow> = {}): ReceiptRow {
 
 // ── Practice fixtures ──
 
-import type { ExamRequest, Patient, Appointment, EligibilityCheck } from '../../src/shared/api';
+import type { ExamRequest, Patient, Appointment, EligibilityCheck, EligibilityOutcome } from '../../src/shared/api';
 
 export function makePatient(overrides: Partial<Patient> = {}): Patient {
   return {
@@ -57,6 +57,22 @@ export function makeEligibility(overrides: Partial<EligibilityCheck> = {}): Elig
     response_description: 'Health card is valid.',
     error: null,
     mode: 'mock',
+    ...overrides,
+  };
+}
+
+/** What the check-eligibility routes return (camelCase) — vs the snake_case history DTO. */
+export function makeEligibilityOutcome(
+  overrides: Partial<EligibilityOutcome> = {},
+): EligibilityOutcome {
+  return {
+    checkId: 'check-1',
+    isEligible: true,
+    responseCode: '50',
+    responseDescription: 'Health card is valid.',
+    mode: 'mock',
+    error: null,
+    checkedAt: '2026-08-20T12:00:00.000Z',
     ...overrides,
   };
 }
