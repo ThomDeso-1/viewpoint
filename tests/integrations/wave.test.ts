@@ -10,7 +10,7 @@ import {
   createExpenseTransaction,
   checkTokenHealth,
   WaveAPIError,
-} from '../../server/integrations/wave/wave.js';
+} from '../../server/integrations/wave/index.js';
 
 /**
  * Spec (CONVERSION-PLAN.md "Wave API Service"):

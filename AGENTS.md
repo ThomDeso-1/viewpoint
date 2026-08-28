@@ -308,9 +308,9 @@ This is the one integration with real-world gates. In order:
 ### Wave: first real invoice
 
 `CustomerCreateInput` / `InvoiceCreateInput` field names in
-`server/integrations/wave/wave.ts` were written from Wave's docs, not verified in
-their Playground. Check them before the first real invoice
-(`docs/history/upgrade-plan.md` "What's left" #2).
+`server/integrations/wave/{customers,invoices}.ts` were written from
+Wave's docs, not verified in their Playground. Check them before the
+first real invoice (`docs/history/upgrade-plan.md` "What's left" #2).
 
 ### Turning on HTTPS (required before real patient data)
 

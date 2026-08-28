@@ -1,5 +1,5 @@
 import { getDb, type ReceiptRow } from '../db/db.js';
-import { createExpenseTransaction, WaveAPIError } from '../integrations/wave/wave.js';
+import { createExpenseTransaction, WaveAPIError } from '../integrations/wave/index.js';
 import { getWaveToken, isWaveConfigured } from '../integrations/wave/auth.js';
 import { isReadyForRetry } from '../platform/backoff.js';
 

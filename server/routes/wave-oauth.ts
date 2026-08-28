@@ -11,7 +11,7 @@ import { connectionStatus } from '../platform/oauth-store.js';
 import { updateEnvConfig } from '../platform/env-config.js';
 import { issueState } from '../integrations/oauth/state-store.js';
 import { makeCallbackRouter } from '../integrations/oauth/callback.js';
-import { WaveAPIError } from '../integrations/wave/wave.js';
+import { WaveAPIError } from '../integrations/wave/index.js';
 
 /**
  * Wave OAuth, structurally identical to the Google flow in routes/google.ts

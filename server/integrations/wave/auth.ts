@@ -1,6 +1,6 @@
 import { saveTokens, getTokens, isExpired, isConnected, disconnect } from '../../platform/oauth-store.js';
 import { audit } from '../../platform/audit.js';
-import { WaveAPIError } from './wave.js';
+import { WaveAPIError } from './transport.js';
 import { endpoint } from '../../platform/endpoints.js';
 
 /**

@@ -387,9 +387,11 @@ yearly.
 - Transport + `WaveAPIError` taxonomy, expense transactions, invoices,
   customers, and reference-data fetches (products / accounts / taxes) all
   in one module.
-- **Fix:** `integrations/wave/{transport,expenses,invoices,customers,reference}.ts`
-  with a barrel `index.ts`. Pure mechanical split; tests should move with
-  the code they cover.
+- **✅ Fixed 2026-08-28.** `integrations/wave/{transport,reference,expenses,customers,invoices}.ts`
+  + a barrel `index.ts` (consumers import the barrel; the modules import
+  only `transport`). `wave.ts` deleted. `WaveAPIError` + `makeRequest` +
+  `collectInputErrors` live in `transport.ts`. Tests unchanged except the
+  import path (`wave/index.js`).
 
 ### P2-27 — Queue scaffolding duplicated between the two pollers
 

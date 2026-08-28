@@ -4,7 +4,7 @@ import os from 'os';
 import path from 'path';
 import crypto from 'crypto';
 import type { Database as DatabaseType } from 'better-sqlite3';
-import { WaveAPIError } from '../../server/integrations/wave/wave.js';
+import { WaveAPIError } from '../../server/integrations/wave/index.js';
 
 /**
  * Spec (CONVERSION-PLAN.md "Receipt Pipeline" + "Upload Queue"):
@@ -19,8 +19,8 @@ import { WaveAPIError } from '../../server/integrations/wave/wave.js';
  * "vendor — summary", falling back to whichever part is present, or
  * "Expense" if neither is set.
  */
-vi.mock('../../server/integrations/wave/wave.js', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../server/integrations/wave/wave.js')>();
+vi.mock('../../server/integrations/wave/index.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../server/integrations/wave/index.js')>();
   return { ...actual, createExpenseTransaction: vi.fn() };
 });
 
@@ -42,7 +42,7 @@ async function setupQueue(envOverrides: Record<string, string | undefined> = {})
 
   vi.resetModules();
   const dbModule = await import('../../server/db/db.js');
-  const waveModule = await import('../../server/integrations/wave/wave.js');
+  const waveModule = await import('../../server/integrations/wave/index.js');
   const queueModule = await import('../../server/receipts/upload-queue.js');
 
   return {

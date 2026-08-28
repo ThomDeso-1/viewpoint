@@ -11,7 +11,7 @@ import { listEvents, matchEvent } from '../integrations/google/calendar.js';
 import { isGoogleConnected, GoogleAuthError } from '../integrations/google/auth.js';
 import { extractExamRequest, ClaudeAPIError } from '../integrations/claude.js';
 import { checkPatientEligibility } from './eligibility.js';
-import { findOrCreateCustomer, createInvoice, approveInvoice, sendInvoice, WaveAPIError } from '../integrations/wave/wave.js';
+import { findOrCreateCustomer, createInvoice, approveInvoice, sendInvoice, WaveAPIError } from '../integrations/wave/index.js';
 import { getWaveToken, isWaveConfigured } from '../integrations/wave/auth.js';
 import { isReadyForRetry } from '../platform/backoff.js';
 import { audit } from '../platform/audit.js';

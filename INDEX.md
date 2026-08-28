@@ -79,7 +79,8 @@ viewpoint-receipts/
 │   ├── integrations/               one folder per external service, bare fetch
 │   │   ├── claude.ts               receipt + exam-request extraction; prompts; model IDs
 │   │   ├── oauth/   state-store.ts (pending `state` map)  callback.ts (shared result page + router factory)
-│   │   ├── wave/    wave.ts (691 lines, audit P2-26)  auth.ts (token ↔ OAuth)
+│   │   ├── wave/    index.ts (barrel)  transport.ts  reference.ts  expenses.ts
+│   │   │            customers.ts  invoices.ts  auth.ts (token ↔ OAuth)
 │   │   ├── google/  auth.ts  gmail.ts  calendar.ts
 │   │   └── ohip/    index.ts (factory)  hcv-client.ts (interface + response codes)
 │   │                hcv-mock.ts  hcv-soap.ts (WS-Security SOAP, schema unverified)
@@ -122,10 +123,10 @@ viewpoint-receipts/
 | **Auth / login / sessions** | `server/platform/auth.ts`, `server/platform/sessions.ts`, `server/routes/auth.ts`, `client/src/auth/{Login,Setup}.tsx` |
 | **Encryption at rest** | `server/platform/crypto.ts` (+ every `*_enc` column in `db/migrations/003-practice.sql`) |
 | **Audit trail** | `server/platform/audit.ts` (`audit()`, `verifyAuditChain()`), `server/routes/practice.ts` (`GET /audit`, `/audit/verify`), `client/src/practice/AuditLog.tsx` |
-| **The receipts pipeline** | `server/routes/receipts.ts`, `server/receipts/{storage,upload-queue}.ts`, `server/integrations/{claude,wave/wave}.ts`, `client/src/receipts/*` |
+| **The receipts pipeline** | `server/routes/receipts.ts`, `server/receipts/{storage,upload-queue}.ts`, `server/integrations/claude.ts`, `server/integrations/wave/{transport,expenses}.ts`, `client/src/receipts/*` |
 | **The exam-request pipeline** | `server/practice/queue.ts` (orchestrator) + `exam-requests.ts`, `patients.ts`, `appointments.ts`, `eligibility.ts`, `reminders.ts`; `server/routes/practice.ts`; `client/src/practice/{Inbox,Schedule,Patients,PatientDetail}.tsx` |
 | **Claude prompts / models** | `server/integrations/claude.ts` |
-| **Wave (expenses + invoices)** | `server/integrations/wave/{wave,auth}.ts`, `server/routes/wave-oauth.ts` |
+| **Wave (expenses + invoices)** | `server/integrations/wave/` (`index.ts` barrel over `transport` / `reference` / `expenses` / `customers` / `invoices`; `auth.ts` for token ↔ OAuth), `server/routes/wave-oauth.ts` |
 | **Google (Gmail + Calendar)** | `server/integrations/google/{auth,gmail,calendar}.ts`, `server/platform/oauth-store.ts`, `server/routes/google.ts`, `client/src/practice/GoogleSettings.tsx` |
 | **OAuth flow plumbing (both providers)** | `server/integrations/oauth/{state-store,callback}.ts` — `state` map + the callback router factory / result page |
 | **OHIP eligibility** | `server/integrations/ohip/*`, `server/practice/eligibility.ts`, `client/src/practice/OhipSettings.tsx` |
@@ -151,8 +152,9 @@ deliberately left out and should each be their own small commit — see
   `state-store.ts` + `callback.ts` (result page + `makeCallbackRouter`
   factory); each route file keeps only its `buildAuthorizeUrl` /
   `exchange` wiring.
-- **P2-26** — split `server/integrations/wave/wave.ts` (691 lines) into
-  `transport / expenses / invoices / customers / reference`.
+- ~~**P2-26**~~ — ✅ done. `server/integrations/wave/wave.ts` (691 lines)
+  → `transport` / `reference` / `expenses` / `customers` / `invoices`
+  + an `index.ts` barrel.
 - **P2-27** — extract `server/platform/poller.ts` (`makePoller`); the two
   queues keep only their `pass()`.
 - **P3-28** — `applyFailure` helper.

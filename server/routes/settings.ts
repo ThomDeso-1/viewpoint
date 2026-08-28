@@ -9,7 +9,7 @@ import {
   fetchIncomeAccounts,
   fetchProducts,
   checkTokenHealth,
-} from '../integrations/wave/wave.js';
+} from '../integrations/wave/index.js';
 import { getWaveToken, isWaveConfigured, authMode } from '../integrations/wave/auth.js';
 import { hcvMode, resetHcvClient, loadConfigFromEnv, SoapHcvClient, HcvError } from '../integrations/ohip/index.js';
 import { isDemoMode } from '../platform/endpoints.js';
