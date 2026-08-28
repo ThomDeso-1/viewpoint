@@ -105,8 +105,8 @@ See [`AUDIT.md`](AUDIT.md) for the full list. In brief:
    attribute it to a person.
 2. **Key rotation.** `DATA_ENCRYPTION_KEY` is generated once and never
    rotated; there is no re-encryption path.
-3. **Audit log retention and integrity.** The log is append-only by
-   convention, not enforcement — anyone with database access can edit it.
-   (`AUDIT.md` P1-4.)
-4. **Service-worker PHI cache** and **no debounce on ministry-facing
-   endpoints** — `AUDIT.md` P1-5, P1-6.
+3. **Audit log retention and integrity** — see `AUDIT.md` P1-4.
+4. **No debounce on ministry-facing endpoints** — `AUDIT.md` P1-5.
+
+The service worker no longer caches `/api` responses, so patient data is
+not written to Cache Storage on the device (`AUDIT.md` P1-6).

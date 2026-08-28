@@ -126,10 +126,10 @@ concrete failure it enables, and a suggested fix.
   emails, DOB, masked cards, the plaintext `body_snippet` from P0-1) and
   receipt images are written to Cache Storage on the device. On a shared
   or lost iPhone that is PHI at rest, outside the app's auth and audit.
-- **Fix:** exclude `/api/practice/**` (and ideally all of `/api/**`) from
-  `runtimeCaching`; drop the image cache to a short TTL or remove it. If
-  offline read of receipts is a real requirement, scope it and document
-  it in `SECURITY.md`.
+- **✅ Fixed 2026-08-28.** `runtimeCaching` no longer caches `/api/*` at
+  all (the precached shell still loads offline, it just can't show server
+  data). `/images/*` stays `CacheFirst` but 24h / 50 entries instead of
+  30 days / 200. Noted in `docs/SECURITY.md`.
 
 ### P2-7 — No supported path to back up the encryption key safely
 

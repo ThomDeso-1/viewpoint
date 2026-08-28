@@ -25,16 +25,22 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        // No runtime caching of /api responses. They carry patient names,
+        // DOB, masked cards and the audit trail; a NetworkFirst cache
+        // would leave that PHI in Cache Storage on the device, outside
+        // the app's auth and audit (AUDIT P1-6). The precached app shell
+        // still loads offline — it just can't show server data.
+        //
+        // Receipt photos: CacheFirst so a captured receipt is reviewable
+        // over a flaky LAN, but a short window and a small cap.
         runtimeCaching: [
-          {
-            urlPattern: /^\/api\//,
-            handler: 'NetworkFirst',
-            options: { cacheName: 'api-cache', expiration: { maxEntries: 50, maxAgeSeconds: 300 } },
-          },
           {
             urlPattern: /^\/images\//,
             handler: 'CacheFirst',
-            options: { cacheName: 'image-cache', expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 30 } },
+            options: {
+              cacheName: 'image-cache',
+              expiration: { maxEntries: 50, maxAgeSeconds: 60 * 60 * 24 },
+            },
           },
         ],
       },
