@@ -12,8 +12,11 @@ import { endpoint } from '../platform/endpoints.js';
  * API-key validation ping.
  */
 
+// Bare model IDs (no date suffix) — the documented form for the 4.5 / 5
+// families. Called with plain fetch, deliberately, matching wave.ts /
+// google/*.ts (see AGENTS.md §6).
 const EXTRACTION_MODEL = 'claude-sonnet-5';
-const VALIDATION_MODEL = 'claude-haiku-4-5-20251001';
+const VALIDATION_MODEL = 'claude-haiku-4-5';
 const API_VERSION = '2023-06-01';
 
 // ── Types ──

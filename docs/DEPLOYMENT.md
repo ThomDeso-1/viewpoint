@@ -19,7 +19,9 @@ Pick one:
   Works, but the app is only usable while the laptop is on and running the
   server.
 
-Either way you need: Node.js 20+, and a way to keep the process running
+Either way you need: **Node.js 22+** (better-sqlite3's native addon
+crashes rather than erroring on an older ABI), and a way to keep the
+process running
 (Docker, or systemd — both covered below).
 
 ## Option A: Docker

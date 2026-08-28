@@ -1,4 +1,4 @@
-FROM node:20 AS build
+FROM node:22 AS build
 WORKDIR /app
 
 COPY package.json package-lock.json ./
@@ -11,7 +11,9 @@ COPY . .
 RUN npm run build
 
 
-FROM node:20-slim
+# Node 22+: better-sqlite3's native addon crashes on an older ABI rather
+# than erroring cleanly (same floor as lib-node-runtime.sh and CI).
+FROM node:22-slim
 WORKDIR /app
 ENV NODE_ENV=production
 ENV DATA_DIR=/app/data

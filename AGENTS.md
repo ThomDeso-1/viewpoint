@@ -243,6 +243,10 @@ npm run test:all && npm run typecheck:all && npm run build
 - Use the **bare** model ID from Anthropic's current model list
   (`claude-sonnet-5`, `claude-haiku-4-5`) — **no date suffix** on the
   4.5 / 5 families unless you are deliberately snapshot-pinning both.
+- Calls go through plain `fetch` (`sendRequest` in `claude.ts`), **not**
+  `@anthropic-ai/sdk` — a deliberate choice matching Wave / Google /
+  OHIP, to keep the dependency surface small. Don't add the SDK without
+  raising it.
 - Re-check `EXTRACTION_PROMPT` / `EXAM_REQUEST_PROMPT` still produce
   strict JSON with the new model; the `validate*Extraction` guards will
   catch a reshape but not a subtle quality drop — spot-check

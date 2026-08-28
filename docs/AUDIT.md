@@ -269,8 +269,9 @@ need it, or accept it.
 - The native path is pinned to 22; the container path ships 20. Either
   the Docker build is on borrowed time or the native floor is
   over-strict — they must agree.
-- **Fix:** bump `Dockerfile` (build and runtime stages) to `node:22` /
-  `node:22-slim`; note the floor in `docs/DEPLOYMENT.md`.
+- **✅ Fixed 2026-08-28.** `Dockerfile` build + runtime stages →
+  `node:22` / `node:22-slim`. CI already pins Node 22. Floor noted in
+  `docs/DEPLOYMENT.md`.
 
 ### P1-18 — CI publishes a user-facing release with no test gate
 
@@ -297,10 +298,12 @@ need it, or accept it.
 
 - **Where:** root `package.json` `allowScripts:
   {"better-sqlite3@11.10.0": true, "esbuild@0.28.2": true}` while the
-  dependency is `better-sqlite3@^13.0.3`. Under npm 11's script
-  allowlist this meant `better-sqlite3`'s native build was silently
-  **skipped** on a clean `npm ci` — which would have broken CI (P1-18)
-  on the first run.
+  dependency is `better-sqlite3@^13.0.3`. On **npm 11** (the script
+  allowlist) the stale key means `better-sqlite3`'s native build is
+  skipped with only a warning on a clean `npm ci` — every server test
+  then crashes on `require('better-sqlite3')`. (npm ≤10 ignores the key
+  and runs scripts, so Docker / current CI images are unaffected — but
+  the repo owner's machine is on npm 11.)
 - **✅ Fixed 2026-08-28.** Both `package.json` files now use name-only
   keys (`"better-sqlite3": true`), which don't rot on a version bump.
 
@@ -311,12 +314,9 @@ need it, or accept it.
   (`claude-haiku-4-5`); the date-suffixed form is not the documented
   identifier and risks a 400 as snapshots age. `EXTRACTION_MODEL =
   'claude-sonnet-5'` is correct.
-- **Fix:** use `claude-haiku-4-5`. If snapshot-pinning is wanted for
-  reproducibility, do it deliberately for *both* models and note why.
-  Consider the official `@anthropic-ai/sdk` (typed errors, retries) —
-  though the repo's deliberate "bare fetch everywhere" policy for Wave /
-  Google / OHIP is a legitimate reason to keep it as is; if so, say so in
-  `AGENTS.md`.
+- **✅ Fixed 2026-08-28.** `VALIDATION_MODEL = 'claude-haiku-4-5'` (bare).
+  The bare-`fetch` choice (over `@anthropic-ai/sdk`) is deliberate and
+  consistent with Wave / Google / OHIP — recorded in `AGENTS.md` §6.
 
 ### P3-22 — `client/tsconfig.json` disables unused-symbol checks
 
@@ -435,7 +435,7 @@ each its own small commit.
 4. ~~**P1-10 / P1-11** (error handler, stuck-`approved` retry)~~ — ✅ done.
 5. **P1-4 / P1-5 / P1-6** (retention, ministry debounce, SW cache) — the
    remaining PHI-handling items. ← next
-6. **P1-17, P2-21** — Dockerfile Node 22, model ID. (P2-19 done.)
+6. ~~**P1-17, P2-21** — Dockerfile Node 22, model ID~~ — ✅ done. (P2-19 done.)
 7. **The reorg** (§5) — ✅ done.
 8. **§4 dedup** (OAuth flow, `wave.ts` split, poller helper) — now
    unblocked by the reorg; see
