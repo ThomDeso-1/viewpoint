@@ -7,9 +7,9 @@ import path from 'path';
 // on the same file.
 dotenv.config({ path: process.env.ENV_FILE || undefined });
 import { createApp } from './app.js';
-import { startPolling } from './services/upload-queue.js';
-import { startPolling as startPracticePolling } from './services/practice-queue.js';
-import { warnIfDemoMode } from './services/endpoints.js';
+import { startPolling } from './receipts/upload-queue.js';
+import { startPolling as startPracticePolling } from './practice/queue.js';
+import { warnIfDemoMode } from './platform/endpoints.js';
 
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const DATA_DIR = process.env.DATA_DIR || './data';

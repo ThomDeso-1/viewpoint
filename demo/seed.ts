@@ -6,11 +6,11 @@ import fs from 'fs';
 dotenv.config({ path: process.env.ENV_FILE || undefined });
 import path from 'path';
 import { getDb } from '../server/db/db.js';
-import { updateEnvConfig } from '../server/services/env-config.js';
-import { setPassword } from '../server/middleware/auth.js';
-import { saveTokens } from '../server/services/oauth-store.js';
-import { createPatient, listPatients } from '../server/services/patients.js';
-import { StorageService } from '../server/services/storage.js';
+import { updateEnvConfig } from '../server/platform/env-config.js';
+import { setPassword } from '../server/platform/auth.js';
+import { saveTokens } from '../server/platform/oauth-store.js';
+import { createPatient, listPatients } from '../server/practice/patients.js';
+import { StorageService } from '../server/receipts/storage.js';
 import { v4 as uuid } from 'uuid';
 
 /**

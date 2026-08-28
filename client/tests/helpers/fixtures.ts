@@ -1,4 +1,4 @@
-import type { ReceiptRow } from '../../src/api/client';
+import type { ReceiptRow } from '../../src/shared/api';
 
 export function makeReceipt(overrides: Partial<ReceiptRow> = {}): ReceiptRow {
   return {
@@ -27,7 +27,7 @@ export function makeReceipt(overrides: Partial<ReceiptRow> = {}): ReceiptRow {
 
 // ── Practice fixtures ──
 
-import type { ExamRequest, Patient, Appointment, EligibilityCheck } from '../../src/api/client';
+import type { ExamRequest, Patient, Appointment, EligibilityCheck } from '../../src/shared/api';
 
 export function makePatient(overrides: Partial<Patient> = {}): Patient {
   return {

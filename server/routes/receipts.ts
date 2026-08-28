@@ -3,9 +3,9 @@ import multer from 'multer';
 import { v4 as uuid } from 'uuid';
 import path from 'path';
 import { getDb, type ReceiptRow } from '../db/db.js';
-import { StorageService } from '../services/storage.js';
-import { extractReceipt, ClaudeAPIError } from '../services/claude.js';
-import { retryReceipt, retryAll, triggerQueue } from '../services/upload-queue.js';
+import { StorageService } from '../receipts/storage.js';
+import { extractReceipt, ClaudeAPIError } from '../integrations/claude.js';
+import { retryReceipt, retryAll, triggerQueue } from '../receipts/upload-queue.js';
 
 const upload = multer({
   storage: multer.memoryStorage(),

@@ -1,18 +1,18 @@
 import { useEffect, useState } from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
-import { getAuthStatus, type AuthStatus } from './api/client';
-import { Login } from './pages/Login';
-import { Setup } from './pages/Setup';
-import { Onboarding } from './pages/Onboarding';
-import { ReceiptList } from './pages/ReceiptList';
-import { ReceiptReview } from './pages/ReceiptReview';
-import { BatchReview } from './pages/BatchReview';
-import { Settings } from './pages/Settings';
-import { Inbox } from './pages/Inbox';
-import { Schedule } from './pages/Schedule';
-import { PatientDetail } from './pages/PatientDetail';
-import { Patients } from './pages/Patients';
-import { AuditLog } from './pages/AuditLog';
+import { getAuthStatus, type AuthStatus } from './shared/api';
+import { Login } from './auth/Login';
+import { Setup } from './auth/Setup';
+import { Onboarding } from './auth/Onboarding';
+import { ReceiptList } from './receipts/ReceiptList';
+import { ReceiptReview } from './receipts/ReceiptReview';
+import { BatchReview } from './receipts/BatchReview';
+import { Settings } from './receipts/Settings';
+import { Inbox } from './practice/Inbox';
+import { Schedule } from './practice/Schedule';
+import { PatientDetail } from './practice/PatientDetail';
+import { Patients } from './practice/Patients';
+import { AuditLog } from './practice/AuditLog';
 
 /**
  * Where a route guard should send an incomplete/unauthenticated session,

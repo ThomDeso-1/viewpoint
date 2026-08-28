@@ -7,10 +7,10 @@ import {
   redirectUri,
   authMode,
   disconnectWave,
-} from '../services/wave-auth.js';
-import { connectionStatus } from '../services/oauth-store.js';
-import { updateEnvConfig } from '../services/env-config.js';
-import { WaveAPIError } from '../services/wave.js';
+} from '../integrations/wave/auth.js';
+import { connectionStatus } from '../platform/oauth-store.js';
+import { updateEnvConfig } from '../platform/env-config.js';
+import { WaveAPIError } from '../integrations/wave/wave.js';
 
 /**
  * Wave OAuth, structurally identical to the Google flow in routes/google.ts

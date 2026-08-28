@@ -52,7 +52,7 @@ an explicit operator action.**
 - **Nothing leaves `patients.ts` as a raw row.** API responses go through
   `toPatientDto()` (masks the card) and `toExtractionDto()` (masks it in
   the extraction blob). If you add a field, decide its masking there.
-- **Demo mode changes only base URLs.** `server/services/endpoints.ts` is
+- **Demo mode changes only base URLs.** `server/platform/endpoints.ts` is
   the *single* switch. Never add a per-service mock or a second toggle.
 
 ---
@@ -70,16 +70,17 @@ iPhone / browser  ──HTTPS──▶  Express (server/)  ──▶  SQLite (da
 ```
 
 - **No ORM.** `better-sqlite3`, hand-written SQL, prepared statements.
-  Row types in `server/db/db.ts` (receipts) and `server/db/practice.ts`
+  Row types in `server/db/db.ts` (receipts) and `server/practice/types.ts`
   (everything else).
 - **No API-client SDKs.** Claude, Wave, Google, and OHIP are all called
   with bare `fetch` — a deliberate choice to keep the dependency list
   tiny. Each integration has its own `*APIError` / `GoogleAuthError` /
   `HcvError` class with an `isRetryable` getter that the queues read.
 - **Two background pollers**, started only in `server/index.ts` (never in
-  `createApp()`, so tests don't spawn timers): `upload-queue.ts` (Wave
-  expenses) and `practice-queue.ts` (the whole exam-request pipeline).
-- **Backoff is stored, not slept** (`server/services/backoff.ts`): a
+  `createApp()`, so tests don't spawn timers):
+  `server/receipts/upload-queue.ts` (Wave expenses) and
+  `server/practice/queue.ts` (the whole exam-request pipeline).
+- **Backoff is stored, not slept** (`server/platform/backoff.ts`): a
   failed row records `retry_count` + `updated_at`; each pass skips rows
   that aren't due. One flaky item never blocks the batch; a restart
   resumes the schedule.
@@ -89,8 +90,8 @@ iPhone / browser  ──HTTPS──▶  Express (server/)  ──▶  SQLite (da
   update, never duplicate.
 - **Auth:** one password (scrypt + salt). Login mints a random 32-byte
   session token; only its SHA-256 is stored. The password is not a
-  credential after login. `server/middleware/auth.ts`.
-- **Encryption at rest:** AES-256-GCM (`server/services/crypto.ts`) under
+  credential after login. `server/platform/auth.ts`.
+- **Encryption at rest:** AES-256-GCM (`server/platform/crypto.ts`) under
   `DATA_ENCRYPTION_KEY`, generated once into `.env`. Encrypts health card
   numbers, OAuth tokens, raw OHIP responses, and the extraction blob.
 - **Migrations:** numbered `server/db/migrations/NNN-*.sql`, each in a
@@ -98,7 +99,7 @@ iPhone / browser  ──HTTPS──▶  Express (server/)  ──▶  SQLite (da
   is in `server/db/db.ts`.
 - **Config:** everything is entered in the app (Setup wizard →
   Settings) and written to `.env` (mode 0600) by
-  `server/services/env-config.ts`. `.env.example` documents every key.
+  `server/platform/env-config.ts`. `.env.example` documents every key.
   `APP_PASSWORD` and a few others still act as env overrides.
 
 ---
@@ -112,18 +113,18 @@ npm run dev                # server :3000, client (Vite) :5173 with API proxy
 npm run demo               # whole app against local fakes, no credentials — see docs/DEMO.md
 
 npm test                   # SERVER tests only (vitest + supertest) — 363 at last audit
-(cd client && npm test)    # CLIENT tests (vitest + testing-library) — 191 at last audit
-npx tsc -p tsconfig.json --noEmit          # server typecheck
-(cd client && npx tsc -b --noEmit)         # client typecheck
+npm run test:client        # CLIENT tests (vitest + testing-library) — 191 at last audit
+npm run test:all           # both suites
+npm run typecheck:all      # both projects (tsc --noEmit)
 
 npm run build              # builds client/dist (server runs from source via tsx)
 ```
 
-> **`npm test` does NOT run the client suite.** Until a `test:all` script
-> exists, run both explicitly. Any change touching `client/` must have the
-> client suite green; any change touching `server/` must have the server
-> suite green. A change touching shared contracts (the `/api` shapes in
-> `client/src/api/client.ts` ↔ the route handlers) needs both.
+> **`npm test` alone does NOT run the client suite** — use `npm run
+> test:all`. Any change touching `client/` must have the client suite
+> green; any change touching `server/` must have the server suite green. A
+> change touching shared contracts (the `/api` shapes in
+> `client/src/shared/api.ts` ↔ the route handlers) needs both.
 
 ---
 
@@ -140,7 +141,7 @@ npm run build              # builds client/dist (server runs from source via tsx
   the doc section they enforce (`Spec (CONVERSION-PLAN.md …)`).
 - **Keep the two status machines legible against each other.** If you add
   a status, ask whether the other pipeline needs the mirror.
-- **Put new outbound URLs in `server/services/endpoints.ts`** with a
+- **Put new outbound URLs in `server/platform/endpoints.ts`** with a
   `DEMO_PATHS` entry, or demo mode breaks.
 
 ### Never (without a very good, stated reason)
@@ -161,7 +162,7 @@ npm run build              # builds client/dist (server runs from source via tsx
 1. New file `server/db/migrations/NNN-name.sql` (next number, 3 digits).
    Never edit an applied migration.
 2. Each migration must be safe inside one transaction.
-3. Update / add the row interface in `server/db/practice.ts` (or
+3. Update / add the row interface in `server/practice/types.ts` (or
    `db.ts`).
 4. Existing installs may sit at any prior version — write additive SQL
    (`ADD COLUMN`, new tables); avoid destructive changes.
@@ -170,9 +171,9 @@ npm run build              # builds client/dist (server runs from source via tsx
 
 ### API contract changes
 
-`server/routes/*.ts` and `client/src/api/client.ts` are two halves of one
+`server/routes/*.ts` and `client/src/shared/api.ts` are two halves of one
 contract. Change both in the same commit, update the `interface` in
-`client.ts`, and run both test suites.
+`api.ts`, and run `npm run test:all`.
 
 ---
 
@@ -180,7 +181,7 @@ contract. Change both in the same commit, update the `interface` in
 
 ### A new external integration
 
-Follow the shape of `server/services/gmail.ts`:
+Follow the shape of `server/integrations/google/gmail.ts`:
 - Bare `fetch`; base URL from `endpoint('name')`.
 - Its own `FooError extends Error` with `code` and `get isRetryable()`.
 - Map HTTP status → error code (`401` → not-connected, `429`/`5xx` →
@@ -192,12 +193,12 @@ Follow the shape of `server/services/gmail.ts`:
 ### A new reminder channel (e.g. SMS)
 
 The seam already exists: implement `ReminderChannel` in
-`server/services/reminders.ts`, call `registerChannel(new SmsChannel())`,
+`server/practice/reminders.ts`, call `registerChannel(new SmsChannel())`,
 add `'sms'` handling where `channel` is chosen. No queue changes.
 
 ### A new automated step in the exam-request pipeline
 
-Add it inside `draftOne()` in `practice-queue.ts` **above**
+Add it inside `draftOne()` in `server/practice/queue.ts` **above**
 `setStatus(row.id, 'drafted')` — i.e. in the pre-approval, nothing-sent
 zone. If the step can fail transiently, throw a `*APIError` with
 `isRetryable` so `draftPending`'s catch does the right thing. If it sends
@@ -210,7 +211,8 @@ behind the gate.
 2. `GET`/`POST /api/settings/...` — read from `process.env`, write via
    `updateEnvConfig`. Secrets are **write-only**: return `hasX: boolean`,
    never the value; don't overwrite on a save that omits them.
-3. Client form in `client/src/components/*Settings.tsx`.
+3. Client form — `client/src/practice/*Settings.tsx`, or
+   `client/src/receipts/Settings.tsx` for the top-level hub.
 4. Validate ranges server-side.
 
 ---
@@ -224,15 +226,12 @@ to `main` **with no test gate** (audit P1-18 — fix this first). Until it
 does, before merging to `main`:
 
 ```bash
-npm test && (cd client && npm test) \
-  && npx tsc -p tsconfig.json --noEmit \
-  && (cd client && npx tsc -b --noEmit) \
-  && npm run build
+npm run test:all && npm run typecheck:all && npm run build
 ```
 
 ### Bumping the Claude models
 
-- Models live in `server/services/claude.ts` (`EXTRACTION_MODEL`,
+- Models live in `server/integrations/claude.ts` (`EXTRACTION_MODEL`,
   `VALIDATION_MODEL`).
 - Use the **bare** model ID from Anthropic's current model list
   (`claude-sonnet-5`, `claude-haiku-4-5`) — **no date suffix** on the
@@ -269,7 +268,7 @@ This is the one integration with real-world gates. In order:
 2. Convert the `.p12` keystore to PEM (Node can't read PKCS#12) — see
    `docs/SETUP-CREDENTIALS.md` §5.
 3. **Verify the message schema** — the element/namespace names in
-   `ELEMENTS` in `server/services/ohip/hcv-soap.ts` were written from the
+   `ELEMENTS` in `server/integrations/ohip/hcv-soap.ts` were written from the
    published spec, not generated from the WSDL. Settings → OHIP → Test
    connection (blank = credentials load; with a test number = real
    validation). A schema mismatch comes back as a SOAP fault naming the
@@ -280,7 +279,7 @@ This is the one integration with real-world gates. In order:
 ### Wave: first real invoice
 
 `CustomerCreateInput` / `InvoiceCreateInput` field names in
-`server/services/wave.ts` were written from Wave's docs, not verified in
+`server/integrations/wave/wave.ts` were written from Wave's docs, not verified in
 their Playground. Check them before the first real invoice
 (`docs/history/upgrade-plan.md` "What's left" #2).
 
@@ -303,10 +302,10 @@ deliberate "not yet" in `docs/AUDIT.md` §3 so the decision stays visible.
 
 | Symptom | Start at |
 |---|---|
-| A receipt won't upload | `server/services/upload-queue.ts`, the receipt's `last_error` / `status` / `retry_count` |
-| An exam request is stuck | `server/services/practice-queue.ts` + `exam-requests.ts`; check `status`, `last_error`, `retry_count`; `isReadyForRetry` gating |
-| Eligibility always says "mock" | `OHIP_HCV_MODE` unset/`mock`; `server/services/ohip/index.ts` |
-| Gmail/Calendar calls 401 | token refresh in `server/services/google-auth.ts` → `oauth-store.ts`; reconnect in Settings |
+| A receipt won't upload | `server/receipts/upload-queue.ts`, the receipt's `last_error` / `status` / `retry_count` |
+| An exam request is stuck | `server/practice/queue.ts` + `exam-requests.ts`; check `status`, `last_error`, `retry_count`; `isReadyForRetry` gating |
+| Eligibility always says "mock" | `OHIP_HCV_MODE` unset/`mock`; `server/integrations/ohip/index.ts` |
+| Gmail/Calendar calls 401 | token refresh in `server/integrations/google/auth.ts` → `oauth-store.ts`; reconnect in Settings |
 | "Nothing is being polled" | `GMAIL_EXAM_REQUEST_QUERY` empty, or Google not connected |
 | Approving does nothing to the invoice | no `WAVE_INCOME_ACCOUNT_ID` / `WAVE_SERVICE_PRODUCT_ID` set |
 | Login loop / stuck on `/login` | `client/src/App.tsx` `gateTarget` race; auth status endpoint |
@@ -321,7 +320,7 @@ deliberate "not yet" in `docs/AUDIT.md` §3 so the decision stays visible.
 |---|---|
 | [`README.md`](README.md) | Entry point, stack, local dev |
 | `AGENTS.md` (this file) | How to work on it, rules, upgrade processes |
-| [`INDEX.md`](INDEX.md) | Living file/directory map + target structure |
+| [`INDEX.md`](INDEX.md) | Living file/directory map + subsystem index |
 | [`docs/AUDIT.md`](docs/AUDIT.md) | Known issues, prioritized |
 | [`docs/GETTING-STARTED.md`](docs/GETTING-STARTED.md) | Non-technical setup (receipts) — needs a practice-workflow rewrite |
 | [`docs/SETUP-CREDENTIALS.md`](docs/SETUP-CREDENTIALS.md) | Every credential, where to get it |
@@ -330,7 +329,8 @@ deliberate "not yet" in `docs/AUDIT.md` §3 so the decision stays visible.
 | [`docs/DEMO.md`](docs/DEMO.md) | Credential-free full-app demo |
 | [`docs/history/`](docs/history/) | `conversion-plan.md`, `upgrade-plan.md` — historical, partly stale, still useful for rationale |
 
-The guides moved into `docs/` on 2026-08-28. The **code** reorg
-(`server/` and `client/` internals) in [`INDEX.md`](INDEX.md) §Migration
-has **not** run yet — file paths in §2 and §7 above describe the current
-(pre-reorg) layout.
+The guides moved into `docs/`, and `server/` + `client/` were regrouped by
+domain, on 2026-08-28. Paths above reflect that layout. Remaining
+refactors (OAuth-route dedup, `wave.ts` split, `makePoller`, the error
+handler, the `api.ts` split) are listed in
+[`INDEX.md`](INDEX.md) §"Deferred follow-ups".

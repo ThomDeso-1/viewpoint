@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { getConfig, setConfig } from '../db/db.js';
-import { validateApiKey } from '../services/claude.js';
-import { updateEnvConfig } from '../services/env-config.js';
+import { validateApiKey } from '../integrations/claude.js';
+import { updateEnvConfig } from '../platform/env-config.js';
 import {
   validateToken,
   fetchExpenseAndAnchorAccounts,
@@ -9,10 +9,10 @@ import {
   fetchIncomeAccounts,
   fetchProducts,
   checkTokenHealth,
-} from '../services/wave.js';
-import { getWaveToken, isWaveConfigured, authMode } from '../services/wave-auth.js';
-import { hcvMode, resetHcvClient, loadConfigFromEnv, SoapHcvClient, HcvError } from '../services/ohip/index.js';
-import { isDemoMode } from '../services/endpoints.js';
+} from '../integrations/wave/wave.js';
+import { getWaveToken, isWaveConfigured, authMode } from '../integrations/wave/auth.js';
+import { hcvMode, resetHcvClient, loadConfigFromEnv, SoapHcvClient, HcvError } from '../integrations/ohip/index.js';
+import { isDemoMode } from '../platform/endpoints.js';
 
 const HEALTH_CACHE_MS = 5 * 60 * 1000; // re-check credentials at most every 5 minutes
 let claudeHealthCache: { healthy: boolean; checkedAt: number } | null = null;

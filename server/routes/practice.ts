@@ -1,20 +1,20 @@
 import { Router, Request, Response } from 'express';
-import * as examRequests from '../services/exam-requests.js';
-import * as patientsService from '../services/patients.js';
-import * as appointmentsService from '../services/appointments.js';
-import * as remindersService from '../services/reminders.js';
-import * as queue from '../services/practice-queue.js';
+import * as examRequests from '../practice/exam-requests.js';
+import * as patientsService from '../practice/patients.js';
+import * as appointmentsService from '../practice/appointments.js';
+import * as remindersService from '../practice/reminders.js';
+import * as queue from '../practice/queue.js';
 import {
   checkPatientEligibility,
   latestCheckForAppointment,
   latestCheckForPatient,
   checksForPatient,
   toEligibilityDto,
-} from '../services/eligibility.js';
-import { hcvMode } from '../services/ohip/index.js';
+} from '../practice/eligibility.js';
+import { hcvMode } from '../integrations/ohip/index.js';
 import { getDb } from '../db/db.js';
-import { auditRequest, recentAuditEntries } from '../services/audit.js';
-import type { ExamRequestRow, WaveInvoiceRow, InvoiceLineItemDraft } from '../db/practice.js';
+import { auditRequest, recentAuditEntries } from '../platform/audit.js';
+import type { ExamRequestRow, WaveInvoiceRow, InvoiceLineItemDraft } from '../practice/types.js';
 
 /**
  * The exam-request workflow API.

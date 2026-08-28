@@ -7,9 +7,9 @@ import {
   redirectUri,
   disconnectGoogle,
   GoogleAuthError,
-} from '../services/google-auth.js';
-import { connectionStatus } from '../services/oauth-store.js';
-import { updateEnvConfig } from '../services/env-config.js';
+} from '../integrations/google/auth.js';
+import { connectionStatus } from '../platform/oauth-store.js';
+import { updateEnvConfig } from '../platform/env-config.js';
 
 /**
  * Google connect/disconnect.

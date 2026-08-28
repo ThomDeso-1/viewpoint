@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { App } from '../src/App';
-import { ToastProvider } from '../src/components/Toast';
+import { ToastProvider } from '../src/shared/Toast';
 
 /**
  * Spec (client/src/App.tsx routing gate, mirroring the server's auth
@@ -12,8 +12,8 @@ import { ToastProvider } from '../src/components/Toast';
  *   needsOnboarding    -> /onboarding
  *   authenticated, done -> the requested page (default: receipt list)
  */
-vi.mock('../src/api/client');
-import * as api from '../src/api/client';
+vi.mock('../src/shared/api');
+import * as api from '../src/shared/api';
 
 beforeEach(() => {
   for (const fn of Object.values(api)) fn.mockReset();

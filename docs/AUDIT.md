@@ -6,8 +6,12 @@
 
 This document is a point-in-time assessment. Findings are grouped by theme
 and ranked **P0 → P3** within each. Each finding names the file(s), the
-concrete failure it enables, and a suggested fix. Nothing here has been
-changed — it is input for planning.
+concrete failure it enables, and a suggested fix.
+
+**Progress since the audit:** the structure findings (§5) are resolved —
+the docs and code reorg landed 2026-08-28; file paths below reflect the
+new layout. `test:all` / `typecheck:all` scripts now exist (part of
+P2-19). Everything else is still open; P0-1/2/3 are in progress.
 
 > **Context that shapes every finding:** the app now stores **personal
 > health information** (names, DOB, contact details, Ontario health card
@@ -22,10 +26,10 @@ changed — it is input for planning.
 
 ### P0-1 — Raw exam-request email body is stored and served in plaintext
 
-- **Where:** `server/services/exam-requests.ts` (`createFromGmailMessage`
+- **Where:** `server/practice/exam-requests.ts` (`createFromGmailMessage`
   writes `body_snippet` — up to 2000 chars of the raw email — as
   plaintext); `server/routes/practice.ts` (`toExamRequestDto` returns
-  `body_snippet` to the client); `client/src/pages/Inbox.tsx:339` renders
+  `body_snippet` to the client); `client/src/practice/Inbox.tsx:339` renders
   it.
 - **Why it matters:** exam-request emails routinely contain the health
   card number, DOB, and full name in the body text. `extracted_json` is
@@ -42,7 +46,7 @@ changed — it is input for planning.
 
 ### P0-2 — Nothing prevents health card numbers crossing the network in cleartext
 
-- **Where:** `server/app.ts`, `server/services/sessions.ts`
+- **Where:** `server/app.ts`, `server/platform/sessions.ts`
   (`sessionCookieOptions` sets `secure` only when `req.secure`).
 - **Why it matters:** the documented and common deployment
   (`start-native.command`) serves plain HTTP on a LAN. In
@@ -73,8 +77,8 @@ changed — it is input for planning.
 
 - **Where:** `server/db/migrations/003-practice.sql`
   (`eligibility_checks.patient_id … ON DELETE CASCADE`);
-  `server/services/patients.ts` (`deletePatient` = hard `DELETE`);
-  `server/services/audit.ts` (append-by-convention only).
+  `server/practice/patients.ts` (`deletePatient` = hard `DELETE`);
+  `server/platform/audit.ts` (append-by-convention only).
 - **Why it matters:** deleting a patient permanently erases the record of
   every OHIP check run against them — the exact thing PHIPA expects to be
   retained and auditable. `audit_log` rows can be edited or removed by
@@ -135,7 +139,7 @@ changed — it is input for planning.
 ### P2-8 — `change-password` is not throttled
 
 - **Where:** `server/routes/auth.ts` (`POST /change-password` →
-  `verifyPassword`), `server/middleware/auth.ts` (throttle only wired
+  `verifyPassword`), `server/platform/auth.ts` (throttle only wired
   into `/login`).
 - **Why it matters:** an authenticated session can brute the current
   password through this route with no lockout. Low severity (needs a live
@@ -144,7 +148,7 @@ changed — it is input for planning.
 
 ### P3-9 — Dead `Authorization: Bearer` code path
 
-- **Where:** `server/middleware/auth.ts` (`extractToken`).
+- **Where:** `server/platform/auth.ts` (`extractToken`).
 - The client only ever authenticates by cookie. The bearer path is
   verified identically so it is not a vulnerability, but it is untested
   surface. Remove it, or document it as the intentional API-testing seam.
@@ -174,7 +178,7 @@ throttle; `/images` moved behind auth; mock HCV results stamped `mode:
 
 ### P1-11 — A transient failure at approval strands the request in `approved`
 
-- **Where:** `server/services/practice-queue.ts`
+- **Where:** `server/practice/queue.ts`
   (`approveExamRequest` → on invoice error calls
   `recordFailure(id, err, true, MAX_RETRIES)`, which leaves `status =
   'approved'`), and `processQueue` never re-drives `approved` rows.
@@ -187,9 +191,9 @@ throttle; `/images` moved behind auth; mock HCV results stamped `mode:
 
 ### P2-12 — Fuzzy patient/appointment matches silently create duplicates
 
-- **Where:** `server/services/patients.ts` (`findMatchingPatient` — exact
+- **Where:** `server/practice/patients.ts` (`findMatchingPatient` — exact
   email or exact case-insensitive name, else a brand-new patient);
-  `server/services/practice-queue.ts` (`draftOne`).
+  `server/practice/queue.ts` (`draftOne`).
 - "Robert" vs "Bob", an accented surname, a new email address → a second
   patient record that then accrues its own appointments, invoices, and
   eligibility history. Nothing surfaces the near-match to the operator.
@@ -199,9 +203,9 @@ throttle; `/images` moved behind auth; mock HCV results stamped `mode:
 
 ### P2-13 — `resolveAppointment` trusts the server clock as the clinic timezone; `reminders.ts` uses `CLINIC_TIMEZONE`
 
-- **Where:** `server/services/practice-queue.ts` (`resolveAppointment`
+- **Where:** `server/practice/queue.ts` (`resolveAppointment`
   parses `"${date}T${time}:00"` in server-local time) vs.
-  `server/services/reminders.ts` (`formatAppointmentTime` uses
+  `server/practice/reminders.ts` (`formatAppointmentTime` uses
   `CLINIC_TIMEZONE`).
 - Two code paths, two different notions of "the clinic's timezone". On a
   server whose clock isn't the clinic's, calendar matching silently
@@ -280,7 +284,7 @@ need it, or accept it.
 
 ### P2-21 — `claude-haiku-4-5-20251001` carries a date suffix
 
-- **Where:** `server/services/claude.ts:16` (`VALIDATION_MODEL`).
+- **Where:** `server/integrations/claude.ts:16` (`VALIDATION_MODEL`).
 - Current Anthropic model IDs for the 4.5 / 5 families are used **bare**
   (`claude-haiku-4-5`); the date-suffixed form is not the documented
   identifier and risks a 400 as snapshots age. `EXTRACTION_MODEL =
@@ -334,7 +338,7 @@ yearly.
 
 ### P2-27 — Queue scaffolding duplicated between the two pollers
 
-- **Where:** `server/services/upload-queue.ts` and
+- **Where:** `server/receipts/upload-queue.ts` and
   `practice-queue.ts` — `running` guard, `pollTimer`, `triggerQueue`,
   `startPolling`, `stopPolling` are copy-pasted (backoff is already
   shared via `backoff.ts`, good).
@@ -362,36 +366,19 @@ already a dependency) before conformance testing.
 
 ---
 
-## 5. Structure & navigability (input for the reorg)
+## 5. Structure & navigability — ✅ done 2026-08-28
 
-**Symptoms:** the repo root has ~35 entries (8 markdown guides + ~10
-shell / `.command` scripts + configs). `server/services/` holds 25 files
-spanning four domains. `client/src/pages` and `components` interleave the
-receipts and practice features. `docs/history/conversion-plan.md` carries
-a file tree that no longer matches reality; there is no single
-architecture map.
+The docs reorg (→ `docs/`) and the code reorg (`server/` and `client/`
+regrouped by domain: `platform/` `receipts/` `practice/` `integrations/`,
+tests mirrored) landed as their own commit. `typecheck:all` + `test:all`
+green before and after. The current map is [`../INDEX.md`](../INDEX.md).
 
-The **target structure** and an **ordered migration** live in
-[`../INDEX.md`](../INDEX.md). Summary of the moves:
-
-| Area | Now | Target |
-|---|---|---|
-| Guides | 8 `*.md` at root | `docs/` (+ `docs/history/` for the two plans) |
-| Shell impl | `start-native.sh`, `run-server.sh`, `lib-node-runtime.sh`, `stop*.sh` at root | `scripts/` — but the `.command` shims stay at root (users double-click them; `GETTING-STARTED` names them) and the launchd plist path + sibling `source` lines move in lockstep |
-| Server platform | `db/`, `middleware/auth.ts`, `services/{crypto,audit,sessions,env-config,endpoints,backoff}.ts` | `server/platform/` |
-| Server domains | `services/*` mixed | `server/receipts/`, `server/practice/` |
-| Server integrations | `services/{wave*,google*,gmail,claude,ohip/}` | `server/integrations/{wave,google,ohip,claude}/` |
-| Server HTTP | `app.ts`, `routes/` | `server/http/` |
-| Client | flat `pages/` + `components/` | `client/src/{receipts,practice,shared}/` |
-| Tests | `tests/`, `client/tests/` | mirror the new source tree |
-
-**Risk note:** this is a large mechanical change (100+ import rewrites
-plus `tsconfig` includes, `vitest` includes, `Dockerfile` COPY paths,
-`app.ts` static path, `make-bundle.sh`, the launchd plist). It should be
-its own commit, done **after** the current practice-module work is
-committed, with `npm run test:all` + `typecheck:all` green before and
-after. Doing it on top of ~7,000 uncommitted lines makes both changes
-unreviewable and hard to revert.
+The reorg was kept to **moves + import rewrites only**. The structural
+refactors it enables — deduping the two OAuth route files, splitting the
+691-line `wave.ts`, extracting a shared `makePoller`, the terminal error
+handler (P1-10), splitting `client/src/shared/api.ts` — are listed as
+[deferred follow-ups](../INDEX.md#deferred-follow-ups) and in §4 below,
+each its own small commit.
 
 ---
 
@@ -422,7 +409,8 @@ unreviewable and hard to revert.
 5. **P1-4 / P1-5 / P1-6** (retention, ministry debounce, SW cache) — the
    remaining PHI-handling items.
 6. **P1-17, P2-19, P2-20, P2-21** — the drift cluster, one small PR.
-7. **The reorg** (§5) — as its own commit, after the above land and the
-   practice module is committed.
-8. **§4 dedup** (OAuth flow, `wave.ts` split, poller helper) — folds
-   naturally into the reorg commit or follows it.
+   (P2-19 partly done: `test:all` / `typecheck:all` scripts now exist.)
+7. **The reorg** (§5) — ✅ done.
+8. **§4 dedup** (OAuth flow, `wave.ts` split, poller helper) — now
+   unblocked by the reorg; see
+   [deferred follow-ups](../INDEX.md#deferred-follow-ups).
