@@ -92,12 +92,24 @@ concrete failure it enables, and a suggested fix.
   every OHIP check run against them — the exact thing PHIPA expects to be
   retained and auditable. `audit_log` rows can be edited or removed by
   anyone with DB access, and the docs promise an access trail.
-- **Fix:** (a) change `eligibility_checks` FK to `ON DELETE SET NULL` and
-  keep the rows; (b) make `deletePatient` a soft delete (`deleted_at`
-  tombstone) so appointments/invoices/checks stay resolvable; (c) add a
-  tamper-evident measure to `audit_log` — a per-row hash chain
-  (`hash = SHA256(prev_hash || row)`) is cheap and detects edits/gaps;
-  (d) document a retention period.
+- **✅ Fixed 2026-08-28** (migration `005-retention.sql`):
+  - (a) `eligibility_checks` rebuilt with `ON DELETE SET NULL` — history
+    survives a patient delete.
+  - (b) `deletePatient()` is a soft delete (`patients.deleted_at`); every
+    read in `patients.ts` filters `deleted_at IS NULL`, so the patient is
+    otherwise gone but their appointments / invoices / checks stay
+    resolvable.
+  - (c) `audit_log` gains `prev_hash` / `entry_hash` — each row chains
+    `SHA-256(prev_hash || fields)`, so an edit or deletion breaks the
+    chain. `verifyAuditChain()` walks it; `GET /api/practice/audit/verify`
+    exposes it and the Access Log screen shows a banner when it fails.
+    Detection, not prevention.
+  - (d) retention: see `docs/SECURITY.md` — nothing is auto-pruned;
+    eligibility checks and audit entries are kept for the life of the
+    install.
+  - Tests: `tests/platform/audit-chain.test.ts`,
+    `tests/practice/patients.test.ts` ("soft delete", "hard delete nulls
+    the link").
 
 ### P1-5 — No rate-limit / debounce on endpoints that hit the ministry or Claude
 
@@ -433,6 +445,12 @@ each its own small commit.
 - ~~**P3:** `Inbox` "show email" toggle test~~ — ✅ added.
 - **Keep:** `tests/security.test.ts` covers auth, sessions, throttle, and
   the `/images` gate well.
+- **P2 (new):** the server suite (~390 tests) runs sequentially in one
+  forked worker and pays scrypt on every authenticated file. On a loaded
+  machine an unlucky test occasionally times out or flakes. `testTimeout`
+  is now 60s as a stopgap; the real fix is `fileParallelism: true` with
+  `pool: 'forks'` (each fork has its own cwd, so the `.env` isolation
+  still holds) — see the note in `vitest.config.ts`.
 
 ---
 
@@ -442,10 +460,13 @@ each its own small commit.
 2. ~~**P0-2 / P0-3** (HTTPS start-guard, conditional `trust proxy`)~~ — ✅ done.
 3. ~~**P1-18** (CI test gate) + P2-20 (allowScripts)~~ — ✅ done.
 4. ~~**P1-10 / P1-11** (error handler, stuck-`approved` retry)~~ — ✅ done.
-5. **P1-4** (eligibility-history retention + audit-log integrity) — ← next.
-   ~~P1-5 (ministry debounce + limiter)~~, ~~P1-6 (SW cache)~~ — ✅ done.
+5. ~~**P1-4 / P1-5 / P1-6**~~ — ✅ done.
 6. ~~**P1-17, P2-21** — Dockerfile Node 22, model ID~~ — ✅ done. (P2-19 done.)
 7. **The reorg** (§5) — ✅ done.
 8. **§4 dedup** (OAuth flow, `wave.ts` split, poller helper) — now
    unblocked by the reorg; see
-   [deferred follow-ups](../INDEX.md#deferred-follow-ups).
+   [deferred follow-ups](../INDEX.md#deferred-follow-ups). ← next
+
+**Still open:** P2-8 (throttle `change-password`), P2-12 (fuzzy-match
+duplicates), P2-13 (timezone), P2-14 (route ordering), P3-9/15/16/22/23/
+23b/24, and §4 / §6 items.

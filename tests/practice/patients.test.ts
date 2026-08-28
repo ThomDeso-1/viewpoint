@@ -116,6 +116,36 @@ describe('patient records', () => {
     expect(patients.getPatient(p.id)).toBeUndefined();
   });
 
+  it('delete is a soft delete — the row and its history survive (P1-4)', async () => {
+    const eligibility = await import('../../server/practice/eligibility.js');
+    const p = patients.createPatient({ full_name: 'Ada', health_card_number: '1111111111' });
+    await eligibility.checkPatientEligibility({ patientId: p.id });
+
+    expect(patients.deletePatient(p.id)).toBe(true);
+
+    // Invisible to the app…
+    expect(patients.getPatient(p.id)).toBeUndefined();
+    expect(patients.listPatients()).toHaveLength(0);
+    expect(patients.findMatchingPatient(null, 'Ada')).toBeUndefined();
+
+    // …but the row and the eligibility check are still on disk.
+    expect(rawRow(p.id).deleted_at).toBeTruthy();
+    expect(eligibility.checksForPatient(p.id)).toHaveLength(1);
+  });
+
+  it('a hard delete now nulls the eligibility link instead of cascading it away', async () => {
+    const eligibility = await import('../../server/practice/eligibility.js');
+    const { getDb } = await import('../../server/db/db.js');
+    const p = patients.createPatient({ full_name: 'Ada', health_card_number: '1111111111' });
+    await eligibility.checkPatientEligibility({ patientId: p.id });
+
+    getDb().prepare(`DELETE FROM patients WHERE id = ?`).run(p.id);
+
+    const rows = getDb().prepare(`SELECT patient_id FROM eligibility_checks`).all() as { patient_id: string | null }[];
+    expect(rows).toHaveLength(1);
+    expect(rows[0].patient_id).toBeNull();
+  });
+
   describe('matching an incoming request to an existing record', () => {
     it('matches on email, case-insensitively', () => {
       const p = patients.createPatient({ full_name: 'Ada Lovelace', email: 'ada@example.com' });

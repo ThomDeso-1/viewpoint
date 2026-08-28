@@ -25,6 +25,7 @@ function entry(overrides: Partial<AuditEntry> = {}): AuditEntry {
 beforeEach(() => {
   for (const fn of Object.values(api)) (fn as any).mockReset?.();
   api.getAuditLog.mockResolvedValue([]);
+  api.verifyAuditChain.mockResolvedValue({ ok: true, brokenAtId: null });
 });
 
 function renderLog() {
@@ -46,6 +47,13 @@ describe('AuditLog', () => {
   it('shows an empty state when nothing has happened', async () => {
     renderLog();
     expect(await screen.findByText(/Nothing recorded yet/i)).toBeInTheDocument();
+  });
+
+  it('warns when the audit-log integrity check fails (P1-4)', async () => {
+    api.getAuditLog.mockResolvedValue([entry()]);
+    api.verifyAuditChain.mockResolvedValue({ ok: false, brokenAtId: 42 });
+    renderLog();
+    expect(await screen.findByText(/integrity check failed near entry #42/i)).toBeInTheDocument();
   });
 
   it('renders entries with readable action names', async () => {

@@ -13,7 +13,7 @@ import {
 } from '../practice/eligibility.js';
 import { hcvMode } from '../integrations/ohip/index.js';
 import { getDb } from '../db/db.js';
-import { auditRequest, recentAuditEntries } from '../platform/audit.js';
+import { auditRequest, recentAuditEntries, verifyAuditChain } from '../platform/audit.js';
 import { rateLimited } from '../platform/rate-limit.js';
 import type { ExamRequestRow, WaveInvoiceRow, InvoiceLineItemDraft } from '../practice/types.js';
 
@@ -435,6 +435,11 @@ export function practiceRoutes(): Router {
   router.get('/audit', (req: Request, res: Response): void => {
     const limit = Math.min(Number(req.query.limit) || 200, 500);
     res.json(recentAuditEntries(limit));
+  });
+
+  // ── GET /api/practice/audit/verify — is the hash chain intact? ──
+  router.get('/audit/verify', (_req: Request, res: Response): void => {
+    res.json(verifyAuditChain());
   });
 
   return router;

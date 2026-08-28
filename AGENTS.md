@@ -98,7 +98,13 @@ iPhone / browser  ──HTTPS──▶  Express (server/)  ──▶  SQLite (da
   credential after login. `server/platform/auth.ts`.
 - **Encryption at rest:** AES-256-GCM (`server/platform/crypto.ts`) under
   `DATA_ENCRYPTION_KEY`, generated once into `.env`. Encrypts health card
-  numbers, OAuth tokens, raw OHIP responses, and the extraction blob.
+  numbers, OAuth tokens, raw OHIP responses, and the extraction +
+  body-snippet blobs.
+- **Audit trail** (`server/platform/audit.ts`): append-only, and
+  tamper-**evident** — each row hash-chains the previous
+  (`verifyAuditChain()`). Never `DELETE`/`UPDATE` an `audit_log` row.
+  Deleting a **patient** is a soft delete (`patients.deleted_at`); every
+  read in `patients.ts` filters it out.
 - **Migrations:** numbered `server/db/migrations/NNN-*.sql`, each in a
   transaction, version tracked in `app_config.schema_version`. The runner
   is in `server/db/db.ts`.
@@ -179,6 +185,11 @@ npm run build              # builds client/dist (server runs from source via tsx
    (`ADD COLUMN`, new tables); avoid destructive changes.
 5. `CASCADE` deletes on anything PHI-adjacent (eligibility, audit) are a
    red flag — prefer `SET NULL` and keep history (see audit P1-4).
+   Patient-scoped data uses soft delete, not `DELETE`.
+6. Rebuilding a table to change a constraint (as `005` does for
+   `eligibility_checks`) only works cleanly for a leaf table — one with
+   no inbound foreign keys. Otherwise you need the `foreign_keys` OFF
+   dance, which can't happen inside the transactional migration runner.
 
 ### API contract changes
 

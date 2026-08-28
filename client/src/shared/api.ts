@@ -548,6 +548,11 @@ export function getAuditLog(limit = 200): Promise<AuditEntry[]> {
   return request(`/practice/audit?limit=${limit}`);
 }
 
+/** Whether the audit-log hash chain is intact (detects an edited/deleted row). */
+export function verifyAuditChain(): Promise<{ ok: boolean; brokenAtId: number | null }> {
+  return request('/practice/audit/verify');
+}
+
 // ── Practice configuration ──
 
 export interface PracticeSettings {

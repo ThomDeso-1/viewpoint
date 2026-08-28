@@ -64,6 +64,8 @@ export interface PatientRow {
   notes: string | null;
   created_at: string;
   updated_at: string;
+  /** Soft-delete tombstone (migration 005) — reads filter this out. */
+  deleted_at: string | null;
 }
 
 export interface AppointmentRow {

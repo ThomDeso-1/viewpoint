@@ -51,7 +51,8 @@ viewpoint-receipts/
 │   ├── app.ts                      createApp(): middleware, route mounts, static SPA
 │   ├── db/
 │   │   ├── db.ts                   connection, migration runner, ReceiptRow, config helpers
-│   │   └── migrations/             001-initial · 002-security · 003-practice · 004-invoice-line-items
+│   │   └── migrations/             001-initial · 002-security · 003-practice
+│   │                               004-invoice-line-items · 005-retention
 │   ├── platform/                   things every feature uses
 │   │   ├── auth.ts                 scrypt, login throttle, authMiddleware, requireAuth
 │   │   ├── sessions.ts             random tokens, SHA-256 storage, cookie options
@@ -99,7 +100,7 @@ viewpoint-receipts/
 │
 ├── tests/                          server suite (vitest + supertest) — mirrors server/
 │   ├── helpers/  testApp.ts (isolated temp DB + cwd per file)  fetchMock.ts
-│   ├── platform/  auth  security  phi-guard  rate-limit
+│   ├── platform/  auth  security  phi-guard  rate-limit  audit-chain
 │   ├── receipts/  receipts  receipts-extract  storage  upload-queue
 │   ├── practice/  patients  queue  routes
 │   ├── integrations/  claude  wave  wave-oauth  google  ohip  demo-mode
@@ -119,7 +120,7 @@ viewpoint-receipts/
 |---|---|
 | **Auth / login / sessions** | `server/platform/auth.ts`, `server/platform/sessions.ts`, `server/routes/auth.ts`, `client/src/auth/{Login,Setup}.tsx` |
 | **Encryption at rest** | `server/platform/crypto.ts` (+ every `*_enc` column in `db/migrations/003-practice.sql`) |
-| **Audit trail** | `server/platform/audit.ts`, `server/routes/practice.ts` (`GET /audit`), `client/src/practice/AuditLog.tsx` |
+| **Audit trail** | `server/platform/audit.ts` (`audit()`, `verifyAuditChain()`), `server/routes/practice.ts` (`GET /audit`, `/audit/verify`), `client/src/practice/AuditLog.tsx` |
 | **The receipts pipeline** | `server/routes/receipts.ts`, `server/receipts/{storage,upload-queue}.ts`, `server/integrations/{claude,wave/wave}.ts`, `client/src/receipts/*` |
 | **The exam-request pipeline** | `server/practice/queue.ts` (orchestrator) + `exam-requests.ts`, `patients.ts`, `appointments.ts`, `eligibility.ts`, `reminders.ts`; `server/routes/practice.ts`; `client/src/practice/{Inbox,Schedule,Patients,PatientDetail}.tsx` |
 | **Claude prompts / models** | `server/integrations/claude.ts` |

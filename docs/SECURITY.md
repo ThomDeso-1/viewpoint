@@ -105,8 +105,15 @@ See [`AUDIT.md`](AUDIT.md) for the full list. In brief:
    attribute it to a person.
 2. **Key rotation.** `DATA_ENCRYPTION_KEY` is generated once and never
    rotated; there is no re-encryption path.
-3. **Audit log retention and integrity** — see `AUDIT.md` P1-4.
-4. **No debounce on ministry-facing endpoints** — `AUDIT.md` P1-5.
+3. **Audit log retention.** Nothing is auto-pruned — eligibility checks
+   and `audit_log` entries are kept for the life of the install. The log
+   is now tamper-**evident**: each row chains a hash of the previous one
+   (migration 005), and `GET /api/practice/audit/verify` (surfaced on the
+   Access Log screen) reports a break. Anyone with write access to the
+   database file can still rewrite the whole chain — this turns a silent
+   edit into a visible gap, not into an impossibility.
 
 The service worker no longer caches `/api` responses, so patient data is
-not written to Cache Storage on the device (`AUDIT.md` P1-6).
+not written to Cache Storage on the device (`AUDIT.md` P1-6). Deleting a
+patient is a soft delete — the record is hidden but its appointments,
+invoices and OHIP-check history are retained (`AUDIT.md` P1-4).

@@ -44,19 +44,25 @@ export interface PatientDto {
 
 // ── Reads ──
 
+// Every read filters out soft-deleted rows (migration 005). A deleted
+// patient is invisible to matching, the API, and the queue — but their
+// appointments, invoices and eligibility history stay resolvable.
+
 export function getPatient(id: string): PatientRow | undefined {
-  return getDb().prepare(`SELECT * FROM patients WHERE id = ?`).get(id) as PatientRow | undefined;
+  return getDb()
+    .prepare(`SELECT * FROM patients WHERE id = ? AND deleted_at IS NULL`)
+    .get(id) as PatientRow | undefined;
 }
 
 export function listPatients(): PatientRow[] {
   return getDb()
-    .prepare(`SELECT * FROM patients ORDER BY full_name COLLATE NOCASE ASC`)
+    .prepare(`SELECT * FROM patients WHERE deleted_at IS NULL ORDER BY full_name COLLATE NOCASE ASC`)
     .all() as PatientRow[];
 }
 
 export function findPatientByEmail(email: string): PatientRow | undefined {
   return getDb()
-    .prepare(`SELECT * FROM patients WHERE email = ? COLLATE NOCASE`)
+    .prepare(`SELECT * FROM patients WHERE email = ? COLLATE NOCASE AND deleted_at IS NULL`)
     .get(email) as PatientRow | undefined;
 }
 
@@ -76,7 +82,7 @@ export function findMatchingPatient(email?: string | null, fullName?: string | n
 
   if (fullName) {
     return getDb()
-      .prepare(`SELECT * FROM patients WHERE full_name = ? COLLATE NOCASE`)
+      .prepare(`SELECT * FROM patients WHERE full_name = ? COLLATE NOCASE AND deleted_at IS NULL`)
       .get(fullName) as PatientRow | undefined;
   }
 
@@ -169,8 +175,16 @@ export function setWaveCustomerId(patientId: string, waveCustomerId: string): vo
     .run(waveCustomerId, new Date().toISOString(), patientId);
 }
 
+/**
+ * Soft delete — stamps `deleted_at` rather than removing the row, so the
+ * appointments, invoices and eligibility checks that reference this
+ * patient stay resolvable (PHIPA retention, AUDIT P1-4). All reads here
+ * filter deleted rows out, so the patient is otherwise gone.
+ */
 export function deletePatient(id: string): boolean {
-  const result = getDb().prepare(`DELETE FROM patients WHERE id = ?`).run(id);
+  const result = getDb()
+    .prepare(`UPDATE patients SET deleted_at = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL`)
+    .run(new Date().toISOString(), new Date().toISOString(), id);
   if (result.changes > 0) {
     audit({ action: 'patient.delete', entityType: 'patient', entityId: id });
   }

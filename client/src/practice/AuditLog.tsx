@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { getAuditLog, type AuditEntry } from '../shared/api';
+import { getAuditLog, verifyAuditChain, type AuditEntry } from '../shared/api';
 import { useToast } from '../shared/Toast';
 
 /**
@@ -19,6 +19,7 @@ const ACTION_LABELS: Record<string, string> = {
   'patient.create': 'Created patient',
   'patient.update': 'Updated patient',
   'patient.delete': 'Deleted patient',
+  'exam_request.source_read': 'Read original email',
   'health_card.decrypt': 'Read health card',
   'eligibility.check': 'OHIP check',
   'invoice.create': 'Created invoice',
@@ -40,6 +41,7 @@ export function AuditLog() {
   const [entries, setEntries] = useState<AuditEntry[]>([]);
   const [filter, setFilter] = useState('all');
   const [loading, setLoading] = useState(true);
+  const [chain, setChain] = useState<{ ok: boolean; brokenAtId: number | null } | null>(null);
   const { showToast } = useToast();
 
   useEffect(() => {
@@ -47,6 +49,7 @@ export function AuditLog() {
       .then(setEntries)
       .catch((err) => showToast((err as Error).message, 'error'))
       .finally(() => setLoading(false));
+    verifyAuditChain().then(setChain).catch(() => setChain(null));
   }, []);
 
   const filtered = useMemo(() => {
@@ -76,6 +79,13 @@ export function AuditLog() {
         Every time patient data is read or changed, and everything sent to a patient. Kept locally,
         newest first. Showing the most recent 500 entries.
       </p>
+
+      {chain && !chain.ok && (
+        <div className="banner banner-error">
+          The audit log's integrity check failed near entry #{chain.brokenAtId} — a row may have been
+          edited or removed outside the app.
+        </div>
+      )}
 
       <div className="filter-row">
         {FILTERS.map((f) => (
