@@ -246,8 +246,11 @@ npm run test:all && npm run typecheck:all && npm run build
 ### Bumping `better-sqlite3` (native module)
 
 - Keep `Dockerfile` Node major ≥ the floor in `lib-node-runtime.sh`
-  (currently 22). Bump both together.
-- Update the `allowScripts` version key in root `package.json` to match.
+  (currently 22). Bump both together. CI (`.github/workflows/ci.yml`)
+  also pins Node 22.
+- `allowScripts` in both `package.json` files uses **name-only** keys
+  (`"better-sqlite3": true`), so a version bump needs no change there —
+  but if you add a dependency with an install script, add its name.
 - `rm -rf node_modules && npm install`, then run the **server** suite —
   a wrong ABI segfaults rather than erroring.
 - The native start path rebuilds automatically when Node changes

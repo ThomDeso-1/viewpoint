@@ -269,8 +269,10 @@ need it, or accept it.
   `npm run build` check.
 - A broken commit ships straight to the person who double-clicks
   `start-native.command`.
-- **Fix:** add `typecheck` + `test` (both suites) + `build` jobs and make
-  `bundle` `needs:` them.
+- **✅ Fixed 2026-08-28.** Renamed `.github/workflows/ci.yml`. A `verify`
+  job (Node 22, `npm ci` both projects, `typecheck:all` + `test:all` +
+  `build`) runs on every push and PR; the `bundle` job now `needs:
+  verify` and is gated to `push` on `main`.
 
 ### P2-19 — `npm test` at the root silently skips the client suite
 
@@ -284,12 +286,12 @@ need it, or accept it.
 
 - **Where:** root `package.json` `allowScripts:
   {"better-sqlite3@11.10.0": true, "esbuild@0.28.2": true}` while the
-  dependency is `better-sqlite3@^13.0.3`; `client/package.json` pins
-  `esbuild@0.25.12`. Version-keyed allow-script entries rot on every
-  bump and silently stop matching.
-- **Fix:** reconcile to the installed versions now; add a note to the
-  upgrade checklist in `AGENTS.md` to update them on any bump of these
-  two.
+  dependency is `better-sqlite3@^13.0.3`. Under npm 11's script
+  allowlist this meant `better-sqlite3`'s native build was silently
+  **skipped** on a clean `npm ci` — which would have broken CI (P1-18)
+  on the first run.
+- **✅ Fixed 2026-08-28.** Both `package.json` files now use name-only
+  keys (`"better-sqlite3": true`), which don't rot on a version bump.
 
 ### P2-21 — `claude-haiku-4-5-20251001` carries a date suffix
 
