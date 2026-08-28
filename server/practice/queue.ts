@@ -68,6 +68,7 @@ export async function processQueue(): Promise<void> {
     await pollGmail();
     await extractPending();
     await draftPending();
+    await retryApproved();
     await sendDueReminders();
   } catch (err) {
     console.error('[practice-queue] pass failed:', err);
@@ -362,16 +363,57 @@ export async function approveExamRequest(examRequestId: string): Promise<{
   if (invoice.error === null) {
     examRequests.setStatus(examRequestId, 'completed');
   } else {
+    // Stays `approved` with the error recorded; retryApproved() below
+    // re-attempts the commit on the next poll, backing off each time.
     examRequests.recordFailure(examRequestId, invoice.error, true, MAX_RETRIES);
   }
 
   return { invoice, reminder };
 }
 
+/**
+ * Step 7 — re-attempt the commit for a request that reached `approved`
+ * but whose Wave invoice failed transiently.
+ *
+ * Without this the request is stranded: the queue's other steps only
+ * touch pre-approval statuses, and the approve route rejects anything not
+ * `drafted`. commitInvoice() is resumable, so a retry never double-books.
+ */
+export async function retryApproved(): Promise<void> {
+  for (const row of examRequests.listByStatus('approved')) {
+    if (!row.last_error) continue; // approved and clean — waiting on nothing
+    if (!isReadyForRetry(row)) continue;
+
+    try {
+      const invoice = await commitInvoice(row);
+      if (invoice.error === null) {
+        examRequests.setStatus(row.id, 'completed');
+      } else {
+        examRequests.recordFailure(row.id, invoice.error, true, MAX_RETRIES);
+      }
+    } catch (err) {
+      const retryable =
+        (err instanceof WaveAPIError && err.isRetryable) ||
+        (err instanceof GoogleAuthError && err.isRetryable);
+      examRequests.recordFailure(row.id, (err as Error).message, retryable, MAX_RETRIES);
+    }
+  }
+}
+
+/**
+ * Creates the Wave invoice, approves it, and (if the patient has an
+ * email) sends it.
+ *
+ * Resumable: a retry after a transient failure picks up where it stopped
+ * rather than creating a second invoice. `approved`/`sent` means a prior
+ * attempt already committed it — nothing to do.
+ */
 async function commitInvoice(row: ExamRequestRow): Promise<{ created: boolean; error: string | null }> {
   const invoiceRow = getInvoiceForRequest(row.id);
   if (!invoiceRow) return { created: false, error: null };
-  if (invoiceRow.wave_invoice_id) return { created: true, error: null };
+  if (invoiceRow.status === 'approved' || invoiceRow.status === 'sent') {
+    return { created: true, error: null };
+  }
 
   const businessId = process.env.WAVE_BUSINESS_ID;
   const incomeAccountId = process.env.WAVE_INCOME_ACCOUNT_ID;
@@ -408,61 +450,66 @@ async function commitInvoice(row: ExamRequestRow): Promise<{ created: boolean; e
     const appointment = row.appointment_id ? appointments.getAppointment(row.appointment_id) : undefined;
     const invoiceDate = (appointment?.starts_at ?? new Date().toISOString()).slice(0, 10);
 
-    const lines = readLineItems(invoiceRow);
-    if (lines.length === 0) {
-      const error = 'This invoice has no line items.';
-      updateInvoiceRow(invoiceRow.id, { status: 'failed', last_error: error });
-      return { created: false, error };
+    // Only create the invoice if a prior attempt didn't already.
+    let invoiceId = invoiceRow.wave_invoice_id;
+    if (!invoiceId) {
+      const lines = readLineItems(invoiceRow);
+      if (lines.length === 0) {
+        const error = 'This invoice has no line items.';
+        updateInvoiceRow(invoiceRow.id, { status: 'failed', last_error: error });
+        return { created: false, error };
+      }
+
+      const created = await createInvoice({
+        businessId,
+        customerId: customer.id,
+        invoiceDate,
+        memo: appointment ? `Eye exam — ${invoiceDate}` : 'Eye exam',
+        items: lines.map((line) => ({
+          // Per-line overrides win; otherwise fall back to the practice
+          // default chosen in Settings.
+          ...(line.productId
+            ? { productId: line.productId }
+            : line.accountId
+              ? { accountId: line.accountId }
+              : productId
+                ? { productId }
+                : { accountId: incomeAccountId! }),
+          description: line.description,
+          quantity: line.quantity,
+          unitPrice: line.unitPrice,
+          ...(line.salesTaxId
+            ? { salesTaxId: line.salesTaxId }
+            : process.env.WAVE_SALES_TAX_ID
+              ? { salesTaxId: process.env.WAVE_SALES_TAX_ID }
+              : {}),
+        })),
+        token,
+      });
+
+      if (!created.didSucceed || !created.invoiceId) {
+        const error = created.errors.join('; ') || 'Wave rejected the invoice.';
+        updateInvoiceRow(invoiceRow.id, { status: 'failed', last_error: error });
+        return { created: false, error };
+      }
+
+      invoiceId = created.invoiceId;
+      updateInvoiceRow(invoiceRow.id, {
+        status: 'created',
+        wave_invoice_id: created.invoiceId,
+        wave_invoice_url: created.viewUrl,
+        invoice_number: created.invoiceNumber,
+        amount: created.total,
+        last_error: null,
+      });
     }
 
-    const created = await createInvoice({
-      businessId,
-      customerId: customer.id,
-      invoiceDate,
-      memo: appointment ? `Eye exam — ${invoiceDate}` : 'Eye exam',
-      items: lines.map((line) => ({
-        // Per-line overrides win; otherwise fall back to the practice
-        // default chosen in Settings.
-        ...(line.productId
-          ? { productId: line.productId }
-          : line.accountId
-            ? { accountId: line.accountId }
-            : productId
-              ? { productId }
-              : { accountId: incomeAccountId! }),
-        description: line.description,
-        quantity: line.quantity,
-        unitPrice: line.unitPrice,
-        ...(line.salesTaxId
-          ? { salesTaxId: line.salesTaxId }
-          : process.env.WAVE_SALES_TAX_ID
-            ? { salesTaxId: process.env.WAVE_SALES_TAX_ID }
-            : {}),
-      })),
-      token,
-    });
-
-    if (!created.didSucceed || !created.invoiceId) {
-      const error = created.errors.join('; ') || 'Wave rejected the invoice.';
-      updateInvoiceRow(invoiceRow.id, { status: 'failed', last_error: error });
-      return { created: false, error };
-    }
-
-    updateInvoiceRow(invoiceRow.id, {
-      status: 'created',
-      wave_invoice_id: created.invoiceId,
-      wave_invoice_url: created.viewUrl,
-      invoice_number: created.invoiceNumber,
-      amount: created.total,
-      last_error: null,
-    });
-
-    const approved = await approveInvoice(created.invoiceId, token);
+    const approved = await approveInvoice(invoiceId, token);
     if (approved.didSucceed) {
-      updateInvoiceRow(invoiceRow.id, { status: 'approved' });
+      updateInvoiceRow(invoiceRow.id, { status: 'approved', last_error: null });
 
       if (patient.email) {
-        const sent = await sendInvoice({ invoiceId: created.invoiceId, to: patient.email, token });
+        const sent = await sendInvoice({ invoiceId, to: patient.email, token });
         if (sent.didSucceed) {
           updateInvoiceRow(invoiceRow.id, { status: 'sent' });
           audit({ action: 'invoice.send', entityType: 'patient', entityId: patient.id });

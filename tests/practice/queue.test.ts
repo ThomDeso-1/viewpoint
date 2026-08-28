@@ -442,6 +442,42 @@ describe('practice queue', () => {
       expect(examRequests.getExamRequest(row.id)!.status).toBe('rejected');
       expect(reminders.findForAppointment(row.appointment_id!)!.status).toBe('cancelled');
     });
+
+    it('recovers a request stranded in "approved" by a transient Wave failure (P1-11)', async () => {
+      process.env.WAVE_ACCESS_TOKEN = 'wave-token';
+      process.env.WAVE_BUSINESS_ID = 'biz-1';
+      process.env.WAVE_INCOME_ACCOUNT_ID = 'income-1';
+
+      const { mock, row } = await seedDrafted();
+
+      // First commit: Wave is down.
+      mock.mockResolvedValueOnce(jsonResponse(500, {}));
+      const first = await queue.approveExamRequest(row.id);
+      expect(first.invoice.error).toBeTruthy();
+      expect(examRequests.getExamRequest(row.id)!.status).toBe('approved'); // stranded, not failed
+
+      // Make it due for retry.
+      const { getDb } = await import('../../server/db/db.js');
+      getDb()
+        .prepare(`UPDATE exam_requests SET updated_at = ? WHERE id = ?`)
+        .run(new Date(Date.now() - 60_000).toISOString(), row.id);
+
+      // Second attempt: Wave is healthy. No invoice was created the first
+      // time, so this creates exactly one.
+      mock
+        .mockResolvedValueOnce(jsonResponse(200, { data: { business: { customers: { pageInfo: { currentPage: 1, totalPages: 1 }, edges: [] } } } }))
+        .mockResolvedValueOnce(jsonResponse(200, { data: { customerCreate: { didSucceed: true, customer: { id: 'c1', name: 'Ada', email: 'ada@example.com' } } } }))
+        .mockResolvedValueOnce(jsonResponse(200, { data: { invoiceCreate: { didSucceed: true, invoice: { id: 'inv-1', invoiceNumber: '1001', viewUrl: 'https://wave/inv-1', total: { value: 120 } } } } }))
+        .mockResolvedValueOnce(jsonResponse(200, { data: { invoiceApprove: { didSucceed: true, invoice: { id: 'inv-1' } } } }))
+        .mockResolvedValueOnce(jsonResponse(200, { data: { invoiceSend: { didSucceed: true } } }));
+
+      await queue.retryApproved();
+
+      expect(examRequests.getExamRequest(row.id)!.status).toBe('completed');
+      const dto = await request(ctx.app).get(`/api/practice/exam-requests/${row.id}`);
+      expect(dto.body.invoice.status).toBe('sent');
+      expect(dto.body.invoice.wave_invoice_id).toBe('inv-1');
+    });
   });
 
   describe('reminder dispatch', () => {

@@ -237,7 +237,12 @@ function ExamRequestCard({
 
   const extraction = request.extraction;
   const canApprove = request.status === 'drafted';
-  const needsAttention = request.status === 'needsAttention' || request.status === 'failed';
+  // "approved" with an error = the Wave commit failed transiently. The
+  // queue re-attempts it on its own, but offer a manual nudge too.
+  const needsAttention =
+    request.status === 'needsAttention' ||
+    request.status === 'failed' ||
+    (request.status === 'approved' && !!request.last_error);
 
   return (
     <article className="request-card">

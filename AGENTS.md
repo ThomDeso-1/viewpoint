@@ -76,6 +76,11 @@ iPhone / browser  ──HTTPS──▶  Express (server/)  ──▶  SQLite (da
   with bare `fetch` — a deliberate choice to keep the dependency list
   tiny. Each integration has its own `*APIError` / `GoogleAuthError` /
   `HcvError` class with an `isRetryable` getter that the queues read.
+- **HTTP tail** (`server/platform/http.ts`, wired in `app.ts`): unknown
+  `/api/*` → JSON 404; a terminal `errorHandler` turns any uncaught
+  handler failure into a generic 500 (it never echoes the error text —
+  that can hold a decrypted value). `import 'express-async-errors'`
+  routes `async` handler rejections there instead of hanging the socket.
 - **Two background pollers**, started only in `server/index.ts` (never in
   `createApp()`, so tests don't spawn timers):
   `server/receipts/upload-queue.ts` (Wave expenses) and
@@ -153,7 +158,9 @@ npm run build              # builds client/dist (server runs from source via tsx
   token — including in `audit_log.detail` and in `console.error`.
 - Add a second "is this real or mock" signal, or a per-service demo
   toggle.
-- Introduce an API-client SDK or an ORM without raising it first.
+- Introduce an API-client SDK or an ORM without raising it first. (Small
+  runtime deps: `express-async-errors` was added for the async-error
+  tail — that's the bar. Prefer none.)
 - Widen `GMAIL_EXAM_REQUEST_QUERY`'s blast radius — every matched email
   goes to Claude.
 
@@ -295,9 +302,11 @@ up `DATA_ENCRYPTION_KEY` separately from `data/` (audit P2-7).
 
 ### Dependency review cadence
 
-Quarterly: `npm outdated` in both projects; review `express` (5.x),
-`multer` (2.x), and the `xml-crypto` line specifically. Record any
-deliberate "not yet" in `docs/AUDIT.md` §3 so the decision stays visible.
+Quarterly: `npm outdated` and `npm audit` in both projects; review
+`express` (5.x — would retire `express-async-errors`), `multer` (2.x),
+`uuid` (→ 11+, clears GHSA-w5hq-g745-h8pq — see `docs/AUDIT.md` P3-23b),
+and the `xml-crypto` line specifically. Record any deliberate "not yet"
+in `docs/AUDIT.md` §3 so the decision stays visible.
 
 ---
 

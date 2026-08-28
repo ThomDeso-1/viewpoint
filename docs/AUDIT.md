@@ -180,10 +180,15 @@ throttle; `/images` moved behind auth; mock HCV results stamped `mode:
 - **Where:** `server/app.ts` (no `app.use((err,…))`, no 404 handler).
 - Express 4 does not forward rejected promises from `async` route
   handlers. Most handlers have local `try/catch`, but the pattern is
-  applied by hand and any miss becomes a socket that never responds.
-- **Fix:** add a terminal error handler + JSON 404, and either an
-  `asyncHandler` wrapper or the `express-async-errors` shim. (Express 5,
-  which handles this natively, is a larger move — see 4-24.)
+  applied by hand and any miss becomes a socket that never responds
+  (e.g. `POST /patients/:id/check-eligibility` when the stored card
+  ciphertext is corrupt — `decrypt()` throws outside any catch).
+- **✅ Fixed 2026-08-28.** `server/platform/http.ts` — `apiNotFound`
+  (JSON 404 for unknown `/api` routes, mounted before the SPA catch-all)
+  and `errorHandler` (terminal, logs with route, returns a generic 500 —
+  never the error text). `import 'express-async-errors'` in `app.ts`
+  routes async rejections to it. Tests:
+  `tests/http/error-handling.test.ts`.
 
 ### P1-11 — A transient failure at approval strands the request in `approved`
 
@@ -194,9 +199,15 @@ throttle; `/images` moved behind auth; mock HCV results stamped `mode:
 - A Wave blip during approval leaves the request stuck with an error and
   no retry — the operator must notice and re-approve, but the approve
   route rejects anything not in `drafted`.
-- **Fix:** add an `approved`-reprocessing step to `processQueue`, or a
-  `POST /exam-requests/:id/retry-approval`, and document which path is
-  authoritative.
+- **✅ Fixed 2026-08-28.** `processQueue` gains a `retryApproved()` step
+  that re-runs the commit for `approved` rows carrying an error, backing
+  off each attempt. `commitInvoice()` is now **resumable** — it skips
+  invoice creation if `wave_invoice_id` is already set and returns early
+  if the invoice is `approved`/`sent`, so a retry never double-books.
+  `retryExamRequest()` keeps an `approved` row `approved` (rather than
+  rewinding to `extracted`), and the Inbox shows a retry button for
+  `approved` + error. Tests: `tests/practice/queue.test.ts` "recovers a
+  request stranded in approved".
 
 ### P2-12 — Fuzzy patient/appointment matches silently create duplicates
 
@@ -316,6 +327,14 @@ accumulates with no signal. Turn on (server tsconfig is stricter).
 
 `.DS_Store` files are in the tree; add the line.
 
+### P3-23b — `uuid@10` has a moderate advisory (GHSA-w5hq-g745-h8pq)
+
+`npm audit` flags `uuid <11.1.1` — a missing buffer bounds check in v3/v5/v6
+when a caller passes its own `buf`. This codebase only ever calls bare
+`v4()` / `uuid()`, so it is **not reachable**, but bump to `uuid@11`+ on
+the next dependency pass to clear the audit. Surfaced 2026-08-28 when
+`express-async-errors` was added (P1-10) triggered a fresh `npm audit`.
+
 ### P3-24 — Framework currency
 
 `express@4` (Express 5 GA — native async errors, would resolve P1-10),
@@ -412,12 +431,11 @@ each its own small commit.
 
 1. ~~**P0-1** (encrypt `body_snippet`, gate it)~~ — ✅ done.
 2. ~~**P0-2 / P0-3** (HTTPS start-guard, conditional `trust proxy`)~~ — ✅ done.
-3. **P1-18** (CI test gate) — cheap, stops regressions shipping. ← next
-4. **P1-10 / P1-11** (error handler, stuck-`approved` retry) — correctness.
+3. ~~**P1-18** (CI test gate) + P2-20 (allowScripts)~~ — ✅ done.
+4. ~~**P1-10 / P1-11** (error handler, stuck-`approved` retry)~~ — ✅ done.
 5. **P1-4 / P1-5 / P1-6** (retention, ministry debounce, SW cache) — the
-   remaining PHI-handling items.
-6. **P1-17, P2-19, P2-20, P2-21** — the drift cluster, one small PR.
-   (P2-19 partly done: `test:all` / `typecheck:all` scripts now exist.)
+   remaining PHI-handling items. ← next
+6. **P1-17, P2-21** — Dockerfile Node 22, model ID. (P2-19 done.)
 7. **The reorg** (§5) — ✅ done.
 8. **§4 dedup** (OAuth flow, `wave.ts` split, poller helper) — now
    unblocked by the reorg; see

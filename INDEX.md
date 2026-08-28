@@ -60,7 +60,9 @@ viewpoint-receipts/
 │   │   ├── oauth-store.ts          encrypted OAuth token storage (Google + Wave)
 │   │   ├── env-config.ts           writes credential updates to .env at runtime
 │   │   ├── endpoints.ts            THE demo-mode switch — real vs mock base URLs
-│   │   └── backoff.ts              stored-not-slept retry pacing, shared by both queues
+│   │   ├── backoff.ts              stored-not-slept retry pacing, shared by both queues
+│   │   ├── http.ts                 apiNotFound (JSON 404) + errorHandler (terminal 500)
+│   │   └── phi-guard.ts            refuses to boot over plain HTTP once PHI is in play
 │   ├── receipts/
 │   │   ├── storage.ts              monthly folders, image hash, sidecars, re-filing
 │   │   └── upload-queue.ts         background poller → Wave expenses
@@ -96,11 +98,11 @@ viewpoint-receipts/
 │
 ├── tests/                          server suite (vitest + supertest) — mirrors server/
 │   ├── helpers/  testApp.ts (isolated temp DB + cwd per file)  fetchMock.ts
-│   ├── platform/  auth  security
+│   ├── platform/  auth  security  phi-guard
 │   ├── receipts/  receipts  receipts-extract  storage  upload-queue
 │   ├── practice/  patients  queue  routes
 │   ├── integrations/  claude  wave  wave-oauth  google  ohip  demo-mode
-│   └── http/  settings
+│   └── http/  settings  error-handling
 │
 ├── client/tests/                   mirrors client/src — App.test.tsx + {shared,auth,receipts,practice}/
 │
@@ -148,8 +150,6 @@ deliberately left out and should each be their own small commit — see
   `transport / expenses / invoices / customers / reference`.
 - **P2-27** — extract `server/platform/poller.ts` (`makePoller`); the two
   queues keep only their `pass()`.
-- **P1-10** — add `server/routes/error-handler.ts` (terminal handler +
-  404) and mount it in `app.ts`.
 - **P3-28 / P3-29** — `applyFailure` helper; one `server/platform/escape.ts`.
 - **Client** — split `client/src/shared/api.ts` into
   `api/{auth,receipts,practice,settings}.ts` + a barrel.

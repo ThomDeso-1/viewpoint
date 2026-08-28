@@ -1,10 +1,15 @@
 import express, { Express } from 'express';
+// Side-effect: patches the Router so a rejected promise from an async
+// handler reaches the error handler instead of hanging the socket.
+// Must be imported before any Router is created.
+import 'express-async-errors';
 import cookieParser from 'cookie-parser';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { getDb } from './db/db.js';
 import { StorageService } from './receipts/storage.js';
 import { authMiddleware, requireAuth } from './platform/auth.js';
+import { apiNotFound, errorHandler } from './platform/http.js';
 import { authRoutes } from './routes/auth.js';
 import { receiptRoutes } from './routes/receipts.js';
 import { settingsRoutes } from './routes/settings.js';
@@ -69,11 +74,17 @@ export function createApp(): Express {
   app.use('/api/practice', practiceRoutes());
   app.use('/api/wave', waveOAuthRoutes());
 
+  // Unknown /api endpoint → JSON 404, not the SPA shell.
+  app.use('/api', apiNotFound);
+
   const clientDist = path.join(__dirname, '..', 'client', 'dist');
   app.use(express.static(clientDist));
   app.get('*', (_req, res) => {
     res.sendFile(path.join(clientDist, 'index.html'));
   });
+
+  // Terminal error handler — after every route.
+  app.use(errorHandler);
 
   return app;
 }

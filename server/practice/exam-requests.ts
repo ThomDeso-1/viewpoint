@@ -214,8 +214,10 @@ export function retryExamRequest(id: string): void {
   if (!row) return;
 
   // Rewind to the furthest stage that is known-good, so the queue redoes
-  // only the part that failed.
-  const status: ExamRequestStatus = row.extracted_json ? 'extracted' : 'received';
+  // only the part that failed. An already-approved request whose commit
+  // failed stays approved — retryApproved() re-attempts just that.
+  const status: ExamRequestStatus =
+    row.status === 'approved' ? 'approved' : row.extracted_json ? 'extracted' : 'received';
 
   getDb()
     .prepare(
