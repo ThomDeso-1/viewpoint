@@ -1,4 +1,4 @@
-import type { ReceiptRow } from '../../src/api/client';
+import type { ReceiptRow } from '../../src/shared/api';
 
 export function makeReceipt(overrides: Partial<ReceiptRow> = {}): ReceiptRow {
   return {
@@ -25,9 +25,9 @@ export function makeReceipt(overrides: Partial<ReceiptRow> = {}): ReceiptRow {
   };
 }
 
-// ── Practice fixtures ──
+// ── Exams fixtures ──
 
-import type { ExamRequest, Patient, Appointment, EligibilityCheck } from '../../src/api/client';
+import type { ExamRequest, Patient, Appointment, EligibilityCheck, EligibilityOutcome } from '../../src/shared/api';
 
 export function makePatient(overrides: Partial<Patient> = {}): Patient {
   return {
@@ -61,6 +61,22 @@ export function makeEligibility(overrides: Partial<EligibilityCheck> = {}): Elig
   };
 }
 
+/** What the check-eligibility routes return (camelCase) — vs the snake_case history DTO. */
+export function makeEligibilityOutcome(
+  overrides: Partial<EligibilityOutcome> = {},
+): EligibilityOutcome {
+  return {
+    checkId: 'check-1',
+    isEligible: true,
+    responseCode: '50',
+    responseDescription: 'Health card is valid.',
+    mode: 'mock',
+    error: null,
+    checkedAt: '2026-08-20T12:00:00.000Z',
+    ...overrides,
+  };
+}
+
 export function makeAppointment(overrides: Partial<Appointment> = {}): Appointment {
   return {
     id: 'appt-1',
@@ -83,7 +99,7 @@ export function makeExamRequest(overrides: Partial<ExamRequest> = {}): ExamReque
     received_at: '2026-08-20T09:00:00.000Z',
     from_address: 'ada@example.com',
     subject: 'Eye exam request',
-    body_snippet: 'Could I book an exam for September 1st?',
+    has_source: true,
     extraction: {
       patient_name: 'Ada Lovelace',
       email: 'ada@example.com',

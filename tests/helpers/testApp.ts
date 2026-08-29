@@ -36,10 +36,13 @@ const CREDENTIAL_ENV_KEYS = [
   'OHIP_PASSWORD',
   'OHIP_MOH_ID',
   'OHIP_CONFORMANCE_KEY',
-  'CLINIC_NAME',
+  'BUSINESS_NAME',
   'REMINDER_LEAD_HOURS',
   'DEMO_MODE',
   'DEMO_API_BASE',
+  'TRUST_PROXY',
+  'APP_PUBLIC_URL',
+  'ALLOW_INSECURE_PHI',
 ];
 
 /** Deletes every credential-related env var so tests start from a clean slate. */

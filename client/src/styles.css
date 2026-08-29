@@ -1070,7 +1070,7 @@ img {
 }
 
 /* ────────────────────────────────────────
-   Practice: exam requests, schedule, patients
+   Exams: exam requests, schedule, patients
    ──────────────────────────────────────── */
 
 .page {
@@ -1100,11 +1100,12 @@ img {
 
 /* Shared button vocabulary for these pages. The receipts screens use
    .btn-primary/.btn-secondary; these are the same shapes under the
-   shorter names the practice pages use. */
+   shorter names the exams pages use. */
 .page button.primary,
 .page button.secondary,
 .button-link {
   padding: 9px 16px;
+  font-family: inherit;
   font-size: 14px;
   font-weight: 600;
   border-radius: var(--radius-sm);

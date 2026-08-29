@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { App } from '../src/App';
-import { ToastProvider } from '../src/components/Toast';
+import { ToastProvider } from '../src/shared/Toast';
 
 /**
  * Spec (client/src/App.tsx routing gate, mirroring the server's auth
@@ -12,8 +12,8 @@ import { ToastProvider } from '../src/components/Toast';
  *   needsOnboarding    -> /onboarding
  *   authenticated, done -> the requested page (default: receipt list)
  */
-vi.mock('../src/api/client');
-import * as api from '../src/api/client';
+vi.mock('../src/shared/api');
+import * as api from '../src/shared/api';
 
 beforeEach(() => {
   for (const fn of Object.values(api)) fn.mockReset();
@@ -79,6 +79,20 @@ describe('App routing gate', () => {
     api.getAuthStatus.mockResolvedValue({ authenticated: false, needsSetup: false, needsOnboarding: false });
     renderApp('/onboarding');
     await waitFor(() => expect(screen.getByText(/enter your password/i)).toBeInTheDocument());
+  });
+
+  it('leaves /login for the app once the user is authenticated', async () => {
+    // After a successful login, checkAuth updates auth state but the URL
+    // is still /login; the route guard has to carry the user through.
+    api.getAuthStatus.mockResolvedValue({ authenticated: true, needsSetup: false, needsOnboarding: false });
+    renderApp('/login');
+    await waitFor(() => expect(screen.getByText(/no receipts yet/i)).toBeInTheDocument());
+  });
+
+  it('leaves /setup for onboarding once a password exists', async () => {
+    api.getAuthStatus.mockResolvedValue({ authenticated: true, needsSetup: false, needsOnboarding: true });
+    renderApp('/setup');
+    await waitFor(() => expect(screen.getByText(/claude api key/i)).toBeInTheDocument());
   });
 
   it('redirects an unknown path back to the app root', async () => {

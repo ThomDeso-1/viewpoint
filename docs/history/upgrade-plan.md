@@ -1,4 +1,4 @@
-# Practice Automation — Upgrade Plan & Status
+# Exam Bookings — Upgrade Plan & Status
 
 Adding two workflows to Viewpoint Receipts: **Wave client invoicing with
 appointment reminders**, and **OHIP eligibility checking from the
@@ -100,11 +100,11 @@ receipts. It was not adequate for health card numbers.
 | No audit trail | `audit_log` on logins, PHI reads/writes, card decryption, eligibility checks, and anything sent to a patient |
 | `scryptSync` blocking the event loop | Async `crypto.scrypt` — ~100 ms per login no longer stalls in-flight requests |
 
-### Phase 1 — Practice data model ✅
+### Phase 1 — Exam-workflow data model ✅
 
-Migration `003-practice.sql` adds `patients`, `appointments`,
+Migration `003-exams.sql` adds `patients`, `appointments`,
 `exam_requests`, `eligibility_checks`, `reminders`, `wave_invoices`,
-`oauth_tokens`. Row types in `server/db/practice.ts`.
+`oauth_tokens`. Row types in `server/db/db.ts`.
 
 `google_event_id` and `gmail_message_id` are `UNIQUE` — the idempotency
 guarantee for polling, the same role `externalId: viewpoint-<receiptId>`
@@ -162,7 +162,7 @@ a simulated eligibility answer must never pass for real coverage.
 
 ### Phase 5 — The automation queue ✅
 
-`server/services/practice-queue.ts` reuses the proven `upload-queue.ts`
+`server/services/exams-queue.ts` reuses the proven `upload-queue.ts`
 design rather than adding a job library: a re-entry guard, a 60 s
 interval, and backoff **stored on the row rather than slept** (extracted
 to the shared `server/services/backoff.ts`), so one flaky item never
@@ -178,7 +178,7 @@ plug into.
 `PatientDetail.tsx`, `Patients.tsx` (searchable directory), `AuditLog.tsx`
 (filterable access trail).
 
-**Components** — `GoogleSettings`, `PracticeSettings`, `OhipSettings`,
+**Components** — `GoogleSettings`, `ExamSettings`, `OhipSettings`,
 `InvoiceEditor` (editable draft lines with a live total),
 `AppointmentForm` (manual entry).
 
@@ -193,7 +193,7 @@ design tokens throughout.
   *explicitly* rather than leaving it unset, so eligibility results are
   always labelled simulated rather than silently absent.
 - **Every setting has a screen.** Gmail search, confidence threshold,
-  invoice product/account picker, exam fee, practice name, timezone,
+  invoice product/account picker, exam fee, business name, timezone,
   reminder lead time, OHIP mode and credentials, Wave auth mode. Nothing
   requires hand-editing `.env` any more.
 - **OHIP credentials can be tested** before you rely on them — blank
@@ -229,7 +229,7 @@ number anywhere on disk**, and the audit log records every decryption.
    The blob is now encrypted; the API masks the number.
 2. **Timezone bug in calendar matching.** A requested wall-clock time was
    compared against absolute event instants. Now explicitly assumes the
-   server's local zone is the clinic's — true for a Mac in the office,
+   server's local zone is the business's — true for a Mac in the office,
    and flagged in the code as the line to change if that stops holding.
 3. Foreign-key violation recording a check for an unknown patient.
 4. Non-deterministic ordering when two checks landed in the same
@@ -280,7 +280,7 @@ These are verifications against documents I don't have, not unfinished code.
 - [ ] `GETTING-STARTED.md` still describes only the receipts workflow.
       [SETUP-CREDENTIALS.md](../SETUP-CREDENTIALS.md) now covers every
       credential, but the day-to-day walkthrough hasn't been rewritten.
-- [ ] `README.md` stack list doesn't mention the practice module
+- [ ] `README.md` stack list doesn't mention the exam-bookings module
 - [ ] `CONVERSION-PLAN.md` is now partly historical
 
 ### Deferred by design
@@ -343,7 +343,7 @@ is no longer the whole story (also covered in `SECURITY.md`):
 3. **Patient names and emails go to Wave** when an invoice is raised, and
    Wave emails the invoice to the patient.
 
-Gmail and Calendar access is OAuth against the practice's own mailbox;
+Gmail and Calendar access is OAuth against the business's own mailbox;
 only encrypted tokens are stored.
 
 ---

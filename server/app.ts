@@ -1,15 +1,20 @@
 import express, { Express } from 'express';
+// Side-effect: patches the Router so a rejected promise from an async
+// handler reaches the error handler instead of hanging the socket.
+// Must be imported before any Router is created.
+import 'express-async-errors';
 import cookieParser from 'cookie-parser';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { getDb } from './db/db.js';
-import { StorageService } from './services/storage.js';
-import { authMiddleware, requireAuth } from './middleware/auth.js';
+import { StorageService } from './receipts/storage.js';
+import { authMiddleware, requireAuth } from './platform/auth.js';
+import { apiNotFound, errorHandler } from './platform/http.js';
 import { authRoutes } from './routes/auth.js';
 import { receiptRoutes } from './routes/receipts.js';
 import { settingsRoutes } from './routes/settings.js';
 import { googleRoutes, googleCallbackRoutes } from './routes/google.js';
-import { practiceRoutes } from './routes/practice.js';
+import { examsRoutes } from './routes/exams.js';
 import { waveOAuthRoutes, waveCallbackRoutes } from './routes/wave-oauth.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -31,7 +36,15 @@ export function createApp(): Express {
   // (deploy/Caddyfile, nginx), which is what decides whether the session
   // cookie is marked Secure. Limited to one hop: the proxy is on the same
   // host, and trusting further would let a client forge the header.
-  app.set('trust proxy', 1);
+  //
+  // Off unless TRUST_PROXY=1. With no proxy in front (the LAN
+  // start-native case) a client that reaches the port directly could
+  // otherwise forge X-Forwarded-For — which audit_log records — and
+  // X-Forwarded-Proto. Set TRUST_PROXY=1 in the same place you set up
+  // HTTPS (see docs/DEPLOYMENT.md).
+  if (process.env.TRUST_PROXY === '1') {
+    app.set('trust proxy', 1);
+  }
 
   // No cors() middleware: the client is always same-origin — proxied
   // through Vite's dev server (client/vite.config.ts) locally, and
@@ -58,14 +71,20 @@ export function createApp(): Express {
   app.use('/api/receipts', receiptRoutes(storage));
   app.use('/api/settings', settingsRoutes());
   app.use('/api/google', googleRoutes());
-  app.use('/api/practice', practiceRoutes());
+  app.use('/api/exams', examsRoutes());
   app.use('/api/wave', waveOAuthRoutes());
+
+  // Unknown /api endpoint → JSON 404, not the SPA shell.
+  app.use('/api', apiNotFound);
 
   const clientDist = path.join(__dirname, '..', 'client', 'dist');
   app.use(express.static(clientDist));
   app.get('*', (_req, res) => {
     res.sendFile(path.join(clientDist, 'index.html'));
   });
+
+  // Terminal error handler — after every route.
+  app.use(errorHandler);
 
   return app;
 }

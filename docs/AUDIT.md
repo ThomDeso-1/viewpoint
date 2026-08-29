@@ -1,13 +1,22 @@
 # Codebase Audit — Viewpoint Receipts
 
 **Date:** 2026-08-28
-**Scope:** whole repository at `main` (receipts pipeline + the uncommitted practice-automation module)
+**Scope:** whole repository at `main` (receipts pipeline + the exam-bookings module)
 **Baseline at audit time:** server 363 tests green, client 191 tests green, both projects typecheck clean.
 
 This document is a point-in-time assessment. Findings are grouped by theme
 and ranked **P0 → P3** within each. Each finding names the file(s), the
-concrete failure it enables, and a suggested fix. Nothing here has been
-changed — it is input for planning.
+concrete failure it enables, and a suggested fix.
+
+**Progress since the audit (2026-08-28):**
+- §5 structure findings — **resolved** (docs + code reorg; paths below
+  reflect the new layout).
+- **P0-1, P0-2, P0-3 — resolved.** See the ✅ notes on each.
+- **P1-4/5/6, P1-10/11, P1-17/18, P2-19/20/21 — resolved.**
+- **§4 (P2-25/26/27, P3-28/29) — resolved.** OAuth-flow dedup, `wave.ts`
+  split, `makePoller`, `applyFailure`, one `escape.ts`.
+- `test:all` / `typecheck:all` scripts now exist (part of P2-19).
+- Everything else is still open.
 
 > **Context that shapes every finding:** the app now stores **personal
 > health information** (names, DOB, contact details, Ontario health card
@@ -22,10 +31,10 @@ changed — it is input for planning.
 
 ### P0-1 — Raw exam-request email body is stored and served in plaintext
 
-- **Where:** `server/services/exam-requests.ts` (`createFromGmailMessage`
+- **Where:** `server/exams/exam-requests.ts` (`createFromGmailMessage`
   writes `body_snippet` — up to 2000 chars of the raw email — as
-  plaintext); `server/routes/practice.ts` (`toExamRequestDto` returns
-  `body_snippet` to the client); `client/src/pages/Inbox.tsx:339` renders
+  plaintext); `server/routes/exams.ts` (`toExamRequestDto` returns
+  `body_snippet` to the client); `client/src/exams/Inbox.tsx:339` renders
   it.
 - **Why it matters:** exam-request emails routinely contain the health
   card number, DOB, and full name in the body text. `extracted_json` is
@@ -34,15 +43,19 @@ changed — it is input for planning.
   that request, and in the browser (and its service-worker cache, see
   P0-6). `SECURITY.md` states "extracted email content is encrypted too";
   the *source* content it was extracted from is not.
-- **Fix:** encrypt `body_snippet` at rest exactly as `extracted_json` is
-  (`encrypt()` on write, tolerant decrypt on read). Drop it from the
-  default DTO; expose it only through a dedicated, audited endpoint
-  (`GET /exam-requests/:id/source`) that writes a `patient.read`-style
-  audit entry, mirroring `readHealthCard()`. Add a regression test.
+- **✅ Fixed 2026-08-28.** `body_snippet` is now `encrypt()`-ed on write
+  (tolerant decrypt on read, like `extracted_json`); dropped from the
+  exam-request DTO (replaced by `has_source: boolean`); reachable only via
+  `GET /api/exams/exam-requests/:id/source`, which writes an
+  `exam_request.source_read` audit entry. `Inbox.tsx` fetches it on
+  demand. Tests: `tests/exams/routes.test.ts` "email source is PHI",
+  `client/tests/exams/Inbox.test.tsx`. **Not migrated:** rows written
+  before this stay plaintext until re-received (same as `extracted_json`
+  did) — a one-off re-encrypt pass could be added if it matters.
 
 ### P0-2 — Nothing prevents health card numbers crossing the network in cleartext
 
-- **Where:** `server/app.ts`, `server/services/sessions.ts`
+- **Where:** `server/app.ts`, `server/platform/sessions.ts`
   (`sessionCookieOptions` sets `secure` only when `req.secure`).
 - **Why it matters:** the documented and common deployment
   (`start-native.command`) serves plain HTTP on a LAN. In
@@ -50,12 +63,14 @@ changed — it is input for planning.
   card numbers over that connection with no transport encryption, and the
   session cookie is not `Secure`. The docs *ask* the operator to turn on
   HTTPS; nothing *enforces* it.
-- **Fix:** add a startup guard in `server/index.ts` / `createApp`: if
-  `OHIP_HCV_MODE` is not `mock` **or** the `patients` table is non-empty,
-  refuse to start unless either (a) `GOOGLE_REDIRECT_URI` / an explicit
-  `PUBLIC_HTTPS_URL` is https, or (b) `ALLOW_INSECURE_PHI=1` is set
-  (logged loudly on every boot). Surface the state in `GET /api/settings`
-  so the UI can show a blocking banner.
+- **✅ Fixed 2026-08-28.** `server/platform/phi-guard.ts` →
+  `assertSafeForPhi()`, called from `server/index.ts` after
+  `createApp()`. Refuses to boot when `OHIP_HCV_MODE !== 'mock'` **or**
+  the `patients` table is non-empty, unless HTTPS is signalled
+  (`APP_PUBLIC_URL` / a redirect URI is https, or `TRUST_PROXY=1`) or
+  `ALLOW_INSECURE_PHI=1` (loud warning every boot). Skipped in demo mode.
+  Tests: `tests/platform/phi-guard.test.ts`. **Still worth doing:**
+  surface the state in `GET /api/settings` for a UI banner.
 
 ### P0-3 — `trust proxy: 1` is unconditional
 
@@ -66,29 +81,42 @@ changed — it is input for planning.
   records for every login, PHI read, eligibility check, and message sent
   (PHIPA integrity), and `X-Forwarded-Proto` to flip the cookie `Secure`
   bit. Trusting a hop that isn't there is a spoofing primitive.
-- **Fix:** set `trust proxy` only when `process.env.TRUST_PROXY === '1'`
-  (or `BEHIND_PROXY`), documented alongside the HTTPS setup. Default off.
+- **✅ Fixed 2026-08-28.** `server/app.ts` sets `trust proxy` only when
+  `TRUST_PROXY === '1'`. Documented in `.env.example` and `AGENTS.md`.
+  Tests: `tests/platform/security.test.ts` "proxy trust (P0-3)".
 
 ### P1-4 — Eligibility history is cascade-deleted with the patient; audit log has no integrity guarantee
 
-- **Where:** `server/db/migrations/003-practice.sql`
+- **Where:** `server/db/migrations/003-exams.sql`
   (`eligibility_checks.patient_id … ON DELETE CASCADE`);
-  `server/services/patients.ts` (`deletePatient` = hard `DELETE`);
-  `server/services/audit.ts` (append-by-convention only).
+  `server/exams/patients.ts` (`deletePatient` = hard `DELETE`);
+  `server/platform/audit.ts` (append-by-convention only).
 - **Why it matters:** deleting a patient permanently erases the record of
   every OHIP check run against them — the exact thing PHIPA expects to be
   retained and auditable. `audit_log` rows can be edited or removed by
   anyone with DB access, and the docs promise an access trail.
-- **Fix:** (a) change `eligibility_checks` FK to `ON DELETE SET NULL` and
-  keep the rows; (b) make `deletePatient` a soft delete (`deleted_at`
-  tombstone) so appointments/invoices/checks stay resolvable; (c) add a
-  tamper-evident measure to `audit_log` — a per-row hash chain
-  (`hash = SHA256(prev_hash || row)`) is cheap and detects edits/gaps;
-  (d) document a retention period.
+- **✅ Fixed 2026-08-28** (migration `005-retention.sql`):
+  - (a) `eligibility_checks` rebuilt with `ON DELETE SET NULL` — history
+    survives a patient delete.
+  - (b) `deletePatient()` is a soft delete (`patients.deleted_at`); every
+    read in `patients.ts` filters `deleted_at IS NULL`, so the patient is
+    otherwise gone but their appointments / invoices / checks stay
+    resolvable.
+  - (c) `audit_log` gains `prev_hash` / `entry_hash` — each row chains
+    `SHA-256(prev_hash || fields)`, so an edit or deletion breaks the
+    chain. `verifyAuditChain()` walks it; `GET /api/exams/audit/verify`
+    exposes it and the Access Log screen shows a banner when it fails.
+    Detection, not prevention.
+  - (d) retention: see `docs/SECURITY.md` — nothing is auto-pruned;
+    eligibility checks and audit entries are kept for the life of the
+    install.
+  - Tests: `tests/platform/audit-chain.test.ts`,
+    `tests/exams/patients.test.ts` ("soft delete", "hard delete nulls
+    the link").
 
 ### P1-5 — No rate-limit / debounce on endpoints that hit the ministry or Claude
 
-- **Where:** `server/routes/practice.ts`
+- **Where:** `server/routes/exams.ts`
   (`POST /patients/:id/check-eligibility`,
   `POST /appointments/:id/check-eligibility`,
   `POST /exam-requests/poll`); `server/routes/settings.ts`
@@ -98,25 +126,34 @@ changed — it is input for planning.
   rules both discourage redundant queries. Today a UI double-click, or a
   script, fires unlimited real checks. `poll` fans out to the Claude API
   (cost + PHI egress) with no ceiling.
-- **Fix:** reuse a recent (`< 24h`) `eligibility_checks` row instead of
-  re-querying unless `?force=true`; add a per-process token-bucket on the
-  ministry-facing and Claude-facing routes; add a confirm step in the UI
-  for a live check.
+- **✅ Fixed 2026-08-28.** `checkPatientEligibility` reuses the most
+  recent **successful** check for the same patient + date of service +
+  HCV mode within 24h (no new ministry call, no new audit entry); `force`
+  bypasses it and is wired through both check-eligibility routes.
+  `server/platform/rate-limit.ts` — a fixed-window limiter now caps
+  `poll` (10/min), `validate-claude-key` / `ohip/test` (15/min), and the
+  check-eligibility routes (30 / 5min). The client toast says "(from a
+  recent check)" when a result was reused. *Bonus:* fixed a latent
+  camelCase↔snake_case mismatch — the check routes return
+  `EligibilityOutcome` (camelCase) but `PatientDetail`/`Schedule` read
+  `is_eligible` etc., so the immediate toast always said "Not covered".
+  **Not done:** an explicit "re-check" button in the UI (the `force` API
+  path exists for it).
 
 ### P1-6 — Service worker caches PHI in the browser
 
 - **Where:** `client/vite.config.ts` — `runtimeCaching`: `/api/*`
   NetworkFirst (50 entries / 5 min), `/images/*` CacheFirst (200 / 30
   days).
-- **Why it matters:** `GET /api/practice/patients`,
-  `/api/practice/exam-requests`, `/api/practice/audit` responses (names,
+- **Why it matters:** `GET /api/exams/patients`,
+  `/api/exams/exam-requests`, `/api/exams/audit` responses (names,
   emails, DOB, masked cards, the plaintext `body_snippet` from P0-1) and
   receipt images are written to Cache Storage on the device. On a shared
   or lost iPhone that is PHI at rest, outside the app's auth and audit.
-- **Fix:** exclude `/api/practice/**` (and ideally all of `/api/**`) from
-  `runtimeCaching`; drop the image cache to a short TTL or remove it. If
-  offline read of receipts is a real requirement, scope it and document
-  it in `SECURITY.md`.
+- **✅ Fixed 2026-08-28.** `runtimeCaching` no longer caches `/api/*` at
+  all (the precached shell still loads offline, it just can't show server
+  data). `/images/*` stays `CacheFirst` but 24h / 50 entries instead of
+  30 days / 200. Noted in `docs/SECURITY.md`.
 
 ### P2-7 — No supported path to back up the encryption key safely
 
@@ -135,7 +172,7 @@ changed — it is input for planning.
 ### P2-8 — `change-password` is not throttled
 
 - **Where:** `server/routes/auth.ts` (`POST /change-password` →
-  `verifyPassword`), `server/middleware/auth.ts` (throttle only wired
+  `verifyPassword`), `server/platform/auth.ts` (throttle only wired
   into `/login`).
 - **Why it matters:** an authenticated session can brute the current
   password through this route with no lockout. Low severity (needs a live
@@ -144,7 +181,7 @@ changed — it is input for planning.
 
 ### P3-9 — Dead `Authorization: Bearer` code path
 
-- **Where:** `server/middleware/auth.ts` (`extractToken`).
+- **Where:** `server/platform/auth.ts` (`extractToken`).
 - The client only ever authenticates by cookie. The bearer path is
   verified identically so it is not a vulnerability, but it is untested
   surface. Remove it, or document it as the intentional API-testing seam.
@@ -167,29 +204,40 @@ throttle; `/images` moved behind auth; mock HCV results stamped `mode:
 - **Where:** `server/app.ts` (no `app.use((err,…))`, no 404 handler).
 - Express 4 does not forward rejected promises from `async` route
   handlers. Most handlers have local `try/catch`, but the pattern is
-  applied by hand and any miss becomes a socket that never responds.
-- **Fix:** add a terminal error handler + JSON 404, and either an
-  `asyncHandler` wrapper or the `express-async-errors` shim. (Express 5,
-  which handles this natively, is a larger move — see 4-24.)
+  applied by hand and any miss becomes a socket that never responds
+  (e.g. `POST /patients/:id/check-eligibility` when the stored card
+  ciphertext is corrupt — `decrypt()` throws outside any catch).
+- **✅ Fixed 2026-08-28.** `server/platform/http.ts` — `apiNotFound`
+  (JSON 404 for unknown `/api` routes, mounted before the SPA catch-all)
+  and `errorHandler` (terminal, logs with route, returns a generic 500 —
+  never the error text). `import 'express-async-errors'` in `app.ts`
+  routes async rejections to it. Tests:
+  `tests/http/error-handling.test.ts`.
 
 ### P1-11 — A transient failure at approval strands the request in `approved`
 
-- **Where:** `server/services/practice-queue.ts`
+- **Where:** `server/exams/queue.ts`
   (`approveExamRequest` → on invoice error calls
   `recordFailure(id, err, true, MAX_RETRIES)`, which leaves `status =
   'approved'`), and `processQueue` never re-drives `approved` rows.
 - A Wave blip during approval leaves the request stuck with an error and
   no retry — the operator must notice and re-approve, but the approve
   route rejects anything not in `drafted`.
-- **Fix:** add an `approved`-reprocessing step to `processQueue`, or a
-  `POST /exam-requests/:id/retry-approval`, and document which path is
-  authoritative.
+- **✅ Fixed 2026-08-28.** `processQueue` gains a `retryApproved()` step
+  that re-runs the commit for `approved` rows carrying an error, backing
+  off each attempt. `commitInvoice()` is now **resumable** — it skips
+  invoice creation if `wave_invoice_id` is already set and returns early
+  if the invoice is `approved`/`sent`, so a retry never double-books.
+  `retryExamRequest()` keeps an `approved` row `approved` (rather than
+  rewinding to `extracted`), and the Inbox shows a retry button for
+  `approved` + error. Tests: `tests/exams/queue.test.ts` "recovers a
+  request stranded in approved".
 
 ### P2-12 — Fuzzy patient/appointment matches silently create duplicates
 
-- **Where:** `server/services/patients.ts` (`findMatchingPatient` — exact
+- **Where:** `server/exams/patients.ts` (`findMatchingPatient` — exact
   email or exact case-insensitive name, else a brand-new patient);
-  `server/services/practice-queue.ts` (`draftOne`).
+  `server/exams/queue.ts` (`draftOne`).
 - "Robert" vs "Bob", an accented surname, a new email address → a second
   patient record that then accrues its own appointments, invoices, and
   eligibility history. Nothing surfaces the near-match to the operator.
@@ -197,18 +245,18 @@ throttle; `/images` moved behind auth; mock HCV results stamped `mode:
   route the request to `needsAttention` with "possible match: <name>"
   instead of creating.
 
-### P2-13 — `resolveAppointment` trusts the server clock as the clinic timezone; `reminders.ts` uses `CLINIC_TIMEZONE`
+### P2-13 — `resolveAppointment` trusts the server clock as the business timezone; `reminders.ts` uses `BUSINESS_TIMEZONE`
 
-- **Where:** `server/services/practice-queue.ts` (`resolveAppointment`
+- **Where:** `server/exams/queue.ts` (`resolveAppointment`
   parses `"${date}T${time}:00"` in server-local time) vs.
-  `server/services/reminders.ts` (`formatAppointmentTime` uses
-  `CLINIC_TIMEZONE`).
-- Two code paths, two different notions of "the clinic's timezone". On a
-  server whose clock isn't the clinic's, calendar matching silently
+  `server/exams/reminders.ts` (`formatAppointmentTime` uses
+  `BUSINESS_TIMEZONE`).
+- Two code paths, two different notions of "the business's timezone". On a
+  server whose clock isn't the business's, calendar matching silently
   drifts by the offset while reminders stay correct.
 - **Fix:** resolve `requested_date`/`requested_time` against
-  `CLINIC_TIMEZONE` too (`Intl.DateTimeFormat` parts, or a tz lib), and
-  make `CLINIC_TIMEZONE` a required setting.
+  `BUSINESS_TIMEZONE` too (`Intl.DateTimeFormat` parts, or a tz lib), and
+  make `BUSINESS_TIMEZONE` a required setting.
 
 ### P2-14 — Literal routes registered after parameterized ones
 
@@ -217,7 +265,7 @@ throttle; `/images` moved behind auth; mock HCV results stamped `mode:
   can't match two segments. `retry-all` similarly. (Already noted in
   `docs/history/upgrade-plan.md`.)
 - **Fix:** move all literal paths above the `/:id` block. Same sweep for
-  `practice.ts` (already partly done — `exam-requests/counts` is above
+  `exams.ts` (already partly done — `exam-requests/counts` is above
   `:id`).
 
 ### P3-15 — `GET /api/receipts` loads every row and filters in JS
@@ -245,8 +293,9 @@ need it, or accept it.
 - The native path is pinned to 22; the container path ships 20. Either
   the Docker build is on borrowed time or the native floor is
   over-strict — they must agree.
-- **Fix:** bump `Dockerfile` (build and runtime stages) to `node:22` /
-  `node:22-slim`; note the floor in `docs/DEPLOYMENT.md`.
+- **✅ Fixed 2026-08-28.** `Dockerfile` build + runtime stages →
+  `node:22` / `node:22-slim`. CI already pins Node 22. Floor noted in
+  `docs/DEPLOYMENT.md`.
 
 ### P1-18 — CI publishes a user-facing release with no test gate
 
@@ -256,8 +305,10 @@ need it, or accept it.
   `npm run build` check.
 - A broken commit ships straight to the person who double-clicks
   `start-native.command`.
-- **Fix:** add `typecheck` + `test` (both suites) + `build` jobs and make
-  `bundle` `needs:` them.
+- **✅ Fixed 2026-08-28.** Renamed `.github/workflows/ci.yml`. A `verify`
+  job (Node 22, `npm ci` both projects, `typecheck:all` + `test:all` +
+  `build`) runs on every push and PR; the `bundle` job now `needs:
+  verify` and is gated to `push` on `main`.
 
 ### P2-19 — `npm test` at the root silently skips the client suite
 
@@ -271,26 +322,25 @@ need it, or accept it.
 
 - **Where:** root `package.json` `allowScripts:
   {"better-sqlite3@11.10.0": true, "esbuild@0.28.2": true}` while the
-  dependency is `better-sqlite3@^13.0.3`; `client/package.json` pins
-  `esbuild@0.25.12`. Version-keyed allow-script entries rot on every
-  bump and silently stop matching.
-- **Fix:** reconcile to the installed versions now; add a note to the
-  upgrade checklist in `AGENTS.md` to update them on any bump of these
-  two.
+  dependency is `better-sqlite3@^13.0.3`. On **npm 11** (the script
+  allowlist) the stale key means `better-sqlite3`'s native build is
+  skipped with only a warning on a clean `npm ci` — every server test
+  then crashes on `require('better-sqlite3')`. (npm ≤10 ignores the key
+  and runs scripts, so Docker / current CI images are unaffected — but
+  the repo owner's machine is on npm 11.)
+- **✅ Fixed 2026-08-28.** Both `package.json` files now use name-only
+  keys (`"better-sqlite3": true`), which don't rot on a version bump.
 
 ### P2-21 — `claude-haiku-4-5-20251001` carries a date suffix
 
-- **Where:** `server/services/claude.ts:16` (`VALIDATION_MODEL`).
+- **Where:** `server/integrations/claude.ts:16` (`VALIDATION_MODEL`).
 - Current Anthropic model IDs for the 4.5 / 5 families are used **bare**
   (`claude-haiku-4-5`); the date-suffixed form is not the documented
   identifier and risks a 400 as snapshots age. `EXTRACTION_MODEL =
   'claude-sonnet-5'` is correct.
-- **Fix:** use `claude-haiku-4-5`. If snapshot-pinning is wanted for
-  reproducibility, do it deliberately for *both* models and note why.
-  Consider the official `@anthropic-ai/sdk` (typed errors, retries) —
-  though the repo's deliberate "bare fetch everywhere" policy for Wave /
-  Google / OHIP is a legitimate reason to keep it as is; if so, say so in
-  `AGENTS.md`.
+- **✅ Fixed 2026-08-28.** `VALIDATION_MODEL = 'claude-haiku-4-5'` (bare).
+  The bare-`fetch` choice (over `@anthropic-ai/sdk`) is deliberate and
+  consistent with Wave / Google / OHIP — recorded in `AGENTS.md` §6.
 
 ### P3-22 — `client/tsconfig.json` disables unused-symbol checks
 
@@ -300,6 +350,14 @@ accumulates with no signal. Turn on (server tsconfig is stricter).
 ### P3-23 — `.DS_Store` not in `.gitignore`
 
 `.DS_Store` files are in the tree; add the line.
+
+### P3-23b — `uuid@10` has a moderate advisory (GHSA-w5hq-g745-h8pq)
+
+`npm audit` flags `uuid <11.1.1` — a missing buffer bounds check in v3/v5/v6
+when a caller passes its own `buf`. This codebase only ever calls bare
+`v4()` / `uuid()`, so it is **not reachable**, but bump to `uuid@11`+ on
+the next dependency pass to clear the audit. Surfaced 2026-08-28 when
+`express-async-errors` was added (P1-10) triggered a fresh `npm audit`.
 
 ### P3-24 — Framework currency
 
@@ -318,28 +376,37 @@ yearly.
   — identical `issueState` / `consumeState` / `pruneStates` /
   `resetPendingStates`, and a byte-for-byte identical `renderResult`
   HTML template (only "Google" ↔ "Wave" differ).
-- **Fix:** `server/integrations/oauth/state-store.ts` (the pending-state
-  map) + `server/integrations/oauth/callback.ts` (shared result page +
-  a `makeCallbackRouter({ provider, exchange })` factory). Each provider
-  keeps only its `buildAuthorizeUrl` / `exchangeCode`.
+- **✅ Fixed 2026-08-28.** `server/integrations/oauth/state-store.ts` (the
+  pending-`state` map, one for both providers) +
+  `server/integrations/oauth/callback.ts` (shared result page +
+  `makeCallbackRouter({ name, exchange, describeError })`). `google.ts`
+  and `wave-oauth.ts` keep only their `buildAuthorizeUrl` / `exchange`
+  wiring — ~120 duplicated lines gone. Tests:
+  `tests/integrations/oauth.test.ts` (plus the unchanged end-to-end
+  coverage in `google.test.ts` / `wave-oauth.test.ts`).
 
 ### P2-26 — `wave.ts` is 691 lines mixing five concerns
 
 - Transport + `WaveAPIError` taxonomy, expense transactions, invoices,
   customers, and reference-data fetches (products / accounts / taxes) all
   in one module.
-- **Fix:** `integrations/wave/{transport,expenses,invoices,customers,reference}.ts`
-  with a barrel `index.ts`. Pure mechanical split; tests should move with
-  the code they cover.
+- **✅ Fixed 2026-08-28.** `integrations/wave/{transport,reference,expenses,customers,invoices}.ts`
+  + a barrel `index.ts` (consumers import the barrel; the modules import
+  only `transport`). `wave.ts` deleted. `WaveAPIError` + `makeRequest` +
+  `collectInputErrors` live in `transport.ts`. Tests unchanged except the
+  import path (`wave/index.js`).
 
 ### P2-27 — Queue scaffolding duplicated between the two pollers
 
-- **Where:** `server/services/upload-queue.ts` and
-  `practice-queue.ts` — `running` guard, `pollTimer`, `triggerQueue`,
+- **Where:** `server/receipts/upload-queue.ts` and
+  `exams-queue.ts` — `running` guard, `pollTimer`, `triggerQueue`,
   `startPolling`, `stopPolling` are copy-pasted (backoff is already
   shared via `backoff.ts`, good).
-- **Fix:** `server/platform/poller.ts` → `makePoller({ intervalMs, pass
-  }): { trigger, start, stop }`.
+- **✅ Fixed 2026-08-28.** `server/platform/poller.ts` →
+  `makePoller({ name, intervalMs, pass }): { trigger, start, stop }`. The
+  re-entry guard, interval handle, and fire-and-forget trigger all live
+  there; `upload-queue.ts` and `queue.ts` keep only `processQueue` and a
+  one-line `makePoller(...)`. Tests: `tests/platform/poller.test.ts`.
 
 ### P3-28 — `recordFailure` state machine written three times
 
@@ -347,10 +414,24 @@ yearly.
 re-implement "retryable? bump count; count ≥ max? → failed/needsAttention".
 Extract `applyFailure(row, { retryable, maxRetries })`.
 
+- **✅ Fixed 2026-08-28.** `server/platform/failure.ts` —
+  `applyFailure(row, retryable, policy)` returns `{ status, retryCount }`.
+  Policy captures the three real differences: `retrying` status,
+  `terminal` status for a non-retryable error (`failed` vs
+  `needsAttention`), and `countAlways` (the receipt queue counts a
+  non-retryable attempt; the exams loops don't). Tests:
+  `tests/platform/failure.test.ts`.
+
 ### P3-29 — Escaping helpers duplicated
 
 `escapeXml` in `hcv-soap.ts`, HTML-escape in `google.ts` and
 `wave-oauth.ts`. One `server/platform/escape.ts`.
+
+- **✅ Fixed 2026-08-28.** `server/platform/escape.ts` exports `escapeHtml`
+  (numeric `&#39;`, portable) and `escapeXml` (`&apos;`, valid in XML).
+  All three call sites updated; `google.ts` / `wave-oauth.ts` no longer
+  render the page directly (see P2-25). Tests:
+  `tests/platform/escape.test.ts`.
 
 ### P3-30 — Regex "XML parsing" in the HCV client
 
@@ -362,36 +443,19 @@ already a dependency) before conformance testing.
 
 ---
 
-## 5. Structure & navigability (input for the reorg)
+## 5. Structure & navigability — ✅ done 2026-08-28
 
-**Symptoms:** the repo root has ~35 entries (8 markdown guides + ~10
-shell / `.command` scripts + configs). `server/services/` holds 25 files
-spanning four domains. `client/src/pages` and `components` interleave the
-receipts and practice features. `docs/history/conversion-plan.md` carries
-a file tree that no longer matches reality; there is no single
-architecture map.
+The docs reorg (→ `docs/`) and the code reorg (`server/` and `client/`
+regrouped by domain: `platform/` `receipts/` `exams/` `integrations/`,
+tests mirrored) landed as their own commit. `typecheck:all` + `test:all`
+green before and after. The current map is [`../INDEX.md`](../INDEX.md).
 
-The **target structure** and an **ordered migration** live in
-[`../INDEX.md`](../INDEX.md). Summary of the moves:
-
-| Area | Now | Target |
-|---|---|---|
-| Guides | 8 `*.md` at root | `docs/` (+ `docs/history/` for the two plans) |
-| Shell impl | `start-native.sh`, `run-server.sh`, `lib-node-runtime.sh`, `stop*.sh` at root | `scripts/` — but the `.command` shims stay at root (users double-click them; `GETTING-STARTED` names them) and the launchd plist path + sibling `source` lines move in lockstep |
-| Server platform | `db/`, `middleware/auth.ts`, `services/{crypto,audit,sessions,env-config,endpoints,backoff}.ts` | `server/platform/` |
-| Server domains | `services/*` mixed | `server/receipts/`, `server/practice/` |
-| Server integrations | `services/{wave*,google*,gmail,claude,ohip/}` | `server/integrations/{wave,google,ohip,claude}/` |
-| Server HTTP | `app.ts`, `routes/` | `server/http/` |
-| Client | flat `pages/` + `components/` | `client/src/{receipts,practice,shared}/` |
-| Tests | `tests/`, `client/tests/` | mirror the new source tree |
-
-**Risk note:** this is a large mechanical change (100+ import rewrites
-plus `tsconfig` includes, `vitest` includes, `Dockerfile` COPY paths,
-`app.ts` static path, `make-bundle.sh`, the launchd plist). It should be
-its own commit, done **after** the current practice-module work is
-committed, with `npm run test:all` + `typecheck:all` green before and
-after. Doing it on top of ~7,000 uncommitted lines makes both changes
-unreviewable and hard to revert.
+The reorg was kept to **moves + import rewrites only**. The structural
+refactors it enables — deduping the two OAuth route files, splitting the
+691-line `wave.ts`, extracting a shared `makePoller`, the terminal error
+handler (P1-10) — landed afterwards as their own commits (§4, P1-10).
+Splitting `client/src/shared/api.ts` is the one still outstanding; see
+[deferred follow-ups](../INDEX.md#deferred-follow-ups).
 
 ---
 
@@ -401,28 +465,36 @@ unreviewable and hard to revert.
 - **P2:** no end-to-end test of `approveExamRequest` against the demo
   mock (happy path + Wave-failure path from P1-11). `tests/demo-mode.test.ts`
   exists but is narrower.
-- **P2:** no regression test asserting a health card number / raw email
-  body never appears in an API response (would lock in P0-1's fix and
-  guard `toPatientDto` / `toExtractionDto`).
-- **P3:** `client/tests` has good page coverage; add one for `Inbox`'s
-  "show email" toggle once `body_snippet` is gated.
+- ~~**P2:** regression test that the raw email body never appears in a
+  DTO~~ — ✅ added (`tests/exams/routes.test.ts`). A broader
+  "no health card number in any response" sweep would still be worth it.
+- ~~**P3:** `Inbox` "show email" toggle test~~ — ✅ added.
 - **Keep:** `tests/security.test.ts` covers auth, sessions, throttle, and
   the `/images` gate well.
+- **P2 (new):** the server suite (~390 tests) runs sequentially in one
+  forked worker and pays scrypt on every authenticated file. On a loaded
+  machine an unlucky test occasionally times out or flakes. `testTimeout`
+  is now 60s as a stopgap; the real fix is `fileParallelism: true` with
+  `pool: 'forks'` (each fork has its own cwd, so the `.env` isolation
+  still holds) — see the note in `vitest.config.ts`.
 
 ---
 
 ## 7. Suggested order of operations
 
-1. **P0-1** (encrypt `body_snippet`, gate it) — smallest change, largest
-   exposure reduction, and it's PHI already on disk today.
-2. **P0-2 / P0-3** (HTTPS start-guard, conditional `trust proxy`) — before
-   any real patient data.
-3. **P1-18** (CI test gate) — cheap, stops regressions shipping.
-4. **P1-10 / P1-11** (error handler, stuck-`approved` retry) — correctness.
-5. **P1-4 / P1-5 / P1-6** (retention, ministry debounce, SW cache) — the
-   remaining PHI-handling items.
-6. **P1-17, P2-19, P2-20, P2-21** — the drift cluster, one small PR.
-7. **The reorg** (§5) — as its own commit, after the above land and the
-   practice module is committed.
-8. **§4 dedup** (OAuth flow, `wave.ts` split, poller helper) — folds
-   naturally into the reorg commit or follows it.
+1. ~~**P0-1** (encrypt `body_snippet`, gate it)~~ — ✅ done.
+2. ~~**P0-2 / P0-3** (HTTPS start-guard, conditional `trust proxy`)~~ — ✅ done.
+3. ~~**P1-18** (CI test gate) + P2-20 (allowScripts)~~ — ✅ done.
+4. ~~**P1-10 / P1-11** (error handler, stuck-`approved` retry)~~ — ✅ done.
+5. ~~**P1-4 / P1-5 / P1-6**~~ — ✅ done.
+6. ~~**P1-17, P2-21** — Dockerfile Node 22, model ID~~ — ✅ done. (P2-19 done.)
+7. **The reorg** (§5) — ✅ done.
+8. ~~**§4 dedup**~~ — ✅ done. P2-25 (shared OAuth flow), P2-26 (`wave.ts`
+   split), P2-27 (`makePoller`), P3-28 (`applyFailure`), P3-29
+   (`escape.ts`) each landed as its own commit.
+
+**Still open:** P2-8 (throttle `change-password`), P2-12 (fuzzy-match
+duplicates), P2-13 (timezone), P2-14 (route ordering), P3-9/15/16/22/23/
+23b/24, the P3-30 regex-XML-parse, and §6 items. The
+`client/src/shared/api.ts` split (§5 / deferred follow-ups) is the last
+reorg-enabled refactor left.

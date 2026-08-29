@@ -7,14 +7,19 @@ import path from 'path';
 // on the same file.
 dotenv.config({ path: process.env.ENV_FILE || undefined });
 import { createApp } from './app.js';
-import { startPolling } from './services/upload-queue.js';
-import { startPolling as startPracticePolling } from './services/practice-queue.js';
-import { warnIfDemoMode } from './services/endpoints.js';
+import { startPolling } from './receipts/upload-queue.js';
+import { startPolling as startExamsPolling } from './exams/queue.js';
+import { warnIfDemoMode } from './platform/endpoints.js';
+import { assertSafeForPhi } from './platform/phi-guard.js';
 
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const DATA_DIR = process.env.DATA_DIR || './data';
 
 const app = createApp();
+
+// Won't serve health card numbers over plain HTTP unless told to. Runs
+// after createApp() so the schema exists to count patients against.
+assertSafeForPhi();
 
 app.listen(PORT, '0.0.0.0', () => {
   warnIfDemoMode();
@@ -26,6 +31,6 @@ app.listen(PORT, '0.0.0.0', () => {
   startPolling();
   console.log('  Upload queue polling started');
 
-  startPracticePolling();
-  console.log('  Practice queue polling started');
+  startExamsPolling();
+  console.log('  Exam queue polling started');
 });

@@ -8,15 +8,15 @@ import {
   isRateLimited,
   recordFailedLogin,
   clearLoginAttempts,
-} from '../middleware/auth.js';
+} from '../platform/auth.js';
 import {
   createSession,
   destroySession,
   destroyAllSessions,
   SESSION_COOKIE,
   sessionCookieOptions,
-} from '../services/sessions.js';
-import { auditRequest } from '../services/audit.js';
+} from '../platform/sessions.js';
+import { auditRequest } from '../platform/audit.js';
 import { getConfig } from '../db/db.js';
 
 export function authRoutes(): Router {

@@ -1,18 +1,18 @@
 import { useEffect, useState } from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
-import { getAuthStatus, type AuthStatus } from './api/client';
-import { Login } from './pages/Login';
-import { Setup } from './pages/Setup';
-import { Onboarding } from './pages/Onboarding';
-import { ReceiptList } from './pages/ReceiptList';
-import { ReceiptReview } from './pages/ReceiptReview';
-import { BatchReview } from './pages/BatchReview';
-import { Settings } from './pages/Settings';
-import { Inbox } from './pages/Inbox';
-import { Schedule } from './pages/Schedule';
-import { PatientDetail } from './pages/PatientDetail';
-import { Patients } from './pages/Patients';
-import { AuditLog } from './pages/AuditLog';
+import { getAuthStatus, type AuthStatus } from './shared/api';
+import { Login } from './auth/Login';
+import { Setup } from './auth/Setup';
+import { Onboarding } from './auth/Onboarding';
+import { ReceiptList } from './receipts/ReceiptList';
+import { ReceiptReview } from './receipts/ReceiptReview';
+import { BatchReview } from './receipts/BatchReview';
+import { Settings } from './receipts/Settings';
+import { Inbox } from './exams/Inbox';
+import { Schedule } from './exams/Schedule';
+import { PatientDetail } from './exams/PatientDetail';
+import { Patients } from './exams/Patients';
+import { AuditLog } from './exams/AuditLog';
 
 /**
  * Where a route guard should send an incomplete/unauthenticated session,
@@ -76,8 +76,19 @@ export function App() {
 
   return (
     <Routes>
-      <Route path="/setup" element={<Setup onComplete={checkAuth} />} />
-      <Route path="/login" element={<Login onComplete={checkAuth} />} />
+      {/* Once the user is past a gate, don't let them sit on its screen —
+          after a successful login/setup, checkAuth updates `auth` but the
+          URL is still /login or /setup, and nothing else navigates away. */}
+      <Route
+        path="/setup"
+        element={
+          auth && !auth.needsSetup ? <Navigate to={gateTarget(auth)} replace /> : <Setup onComplete={checkAuth} />
+        }
+      />
+      <Route
+        path="/login"
+        element={authed ? <Navigate to={gateTarget(auth)} replace /> : <Login onComplete={checkAuth} />}
+      />
       <Route
         path="/onboarding"
         element={authed ? <Onboarding onComplete={checkAuth} /> : <Navigate to={gateTarget(auth)} replace />}

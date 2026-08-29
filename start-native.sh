@@ -11,9 +11,10 @@ source "$APP_DIR/lib-node-runtime.sh"
 ensure_node
 
 # If the effective Node changed since the last run (e.g. it upgraded, or
-# this switched between a system install and the vendored copy), native
-# modules like better-sqlite3 need to be rebuilt for the new ABI — a stale
-# binary doesn't error cleanly, it segfaults. Wipe and let npm reinstall.
+# this switched between a system install and the vendored copy), wipe
+# node_modules and reinstall so nothing stale is left behind. better-sqlite3
+# ships a N-API prebuilt binary that works across Node majors, so this is
+# just hygiene, not a hard requirement.
 NODE_VERSION_MARKER="$APP_DIR/.node-version-used"
 CURRENT_NODE_VERSION="$(node -v)"
 if [ "$(cat "$NODE_VERSION_MARKER" 2>/dev/null || true)" != "$CURRENT_NODE_VERSION" ]; then
@@ -29,8 +30,13 @@ PORT="$(grep -E '^PORT=' .env 2>/dev/null | tail -1 | cut -d= -f2 || true)"
 PORT="${PORT:-3000}"
 
 echo "Setting up Viewpoint Receipts (first run takes a minute or two)..."
-npm install --no-fund --no-audit
-(cd client && npm install --no-fund --no-audit)
+# --ignore-scripts: every native dependency here (better-sqlite3, esbuild,
+# lightningcss, fsevents) ships a prebuilt binary in its package, so no
+# package needs a compile step. Skipping install scripts avoids invoking
+# node-gyp, which would otherwise fail on a Mac without Xcode/Python even
+# though nothing actually gets built.
+npm install --no-fund --no-audit --ignore-scripts
+(cd client && npm install --no-fund --no-audit --ignore-scripts)
 echo "$CURRENT_NODE_VERSION" > "$NODE_VERSION_MARKER"
 
 echo "Building..."

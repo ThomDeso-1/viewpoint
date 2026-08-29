@@ -12,6 +12,11 @@
     "start": "NODE_ENV=production node --import tsx server/index.ts",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:client": "cd client && npm test",
+    "test:all": "npm test && npm run test:client",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck:client": "cd client && tsc -b --noEmit",
+    "typecheck:all": "npm run typecheck && npm run typecheck:client",
     "demo": "concurrently -n mock,server,client -c magenta,blue,green \"npm run demo:mock\" \"npm run demo:server\" \"npm run demo:client\"",
     "demo:mock": "tsx demo/mock-server.ts",
     "demo:server": "npm run demo:seed && DEMO_MODE=1 DATA_DIR=./demo-data ENV_FILE=./demo-data/.env tsx watch server/index.ts",
@@ -24,6 +29,7 @@
     "cookie-parser": "^1.4.6",
     "dotenv": "^16.4.0",
     "express": "^4.21.0",
+    "express-async-errors": "^3.1.1",
     "multer": "^1.4.5-lts.1",
     "uuid": "^10.0.0",
     "xml-crypto": "^6.1.2",
@@ -43,7 +49,8 @@
     "vitest": "^4.1.11"
   },
   "allowScripts": {
-    "better-sqlite3@11.10.0": true,
-    "esbuild@0.28.2": true
+    "better-sqlite3": true,
+    "esbuild": true,
+    "fsevents": true
   }
 }

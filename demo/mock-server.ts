@@ -265,7 +265,7 @@ app.post('/wave/graphql', (req: Request, res: Response) => {
       sentEmails.push({
         at: new Date().toISOString(),
         to: variables.input.to,
-        subject: `Invoice ${found?.number ?? ''} from Viewpoint Optometry`,
+        subject: `Invoice ${found?.number ?? ''} from Viewpoint Vision Care`,
         body: `[Wave would email the invoice PDF here]\n\nTotal: $${found?.total.toFixed(2) ?? '0.00'}`,
       });
     }

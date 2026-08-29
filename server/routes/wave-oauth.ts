@@ -1,5 +1,4 @@
 import { Router, Request, Response } from 'express';
-import crypto from 'crypto';
 import {
   buildAuthorizeUrl,
   exchangeCode,
@@ -7,49 +6,23 @@ import {
   redirectUri,
   authMode,
   disconnectWave,
-} from '../services/wave-auth.js';
-import { connectionStatus } from '../services/oauth-store.js';
-import { updateEnvConfig } from '../services/env-config.js';
-import { WaveAPIError } from '../services/wave.js';
+} from '../integrations/wave/auth.js';
+import { connectionStatus } from '../platform/oauth-store.js';
+import { updateEnvConfig } from '../platform/env-config.js';
+import { issueState } from '../integrations/oauth/state-store.js';
+import { makeCallbackRouter } from '../integrations/oauth/callback.js';
+import { WaveAPIError } from '../integrations/wave/index.js';
 
 /**
  * Wave OAuth, structurally identical to the Google flow in routes/google.ts
- * — including the split between session-authenticated routes and the
- * callback, which cannot carry the sameSite=strict session cookie.
+ * — the state store, the callback router, and the result page are all
+ * shared (integrations/oauth/).
  *
  * OAuth is the alternative to the pasted access token, not a replacement:
  * Wave only allows third-party OAuth against businesses on an active Wave
  * Pro plan, and requires an HTTPS redirect URI. Token mode stays the
- * default (see services/wave-auth.ts).
+ * default (see integrations/wave/auth.ts).
  */
-
-const STATE_TTL_MS = 10 * 60 * 1000;
-const pendingStates = new Map<string, number>();
-
-function issueState(): string {
-  pruneStates();
-  const state = crypto.randomBytes(32).toString('base64url');
-  pendingStates.set(state, Date.now() + STATE_TTL_MS);
-  return state;
-}
-
-function consumeState(state: string | undefined): boolean {
-  pruneStates();
-  if (!state || !pendingStates.has(state)) return false;
-  pendingStates.delete(state);
-  return true;
-}
-
-function pruneStates(): void {
-  const now = Date.now();
-  for (const [state, expiry] of pendingStates) {
-    if (expiry <= now) pendingStates.delete(state);
-  }
-}
-
-export function resetPendingStates(): void {
-  pendingStates.clear();
-}
 
 export function waveOAuthRoutes(): Router {
   const router = Router();
@@ -116,78 +89,10 @@ export function waveOAuthRoutes(): Router {
 
 /** The callback, mounted ahead of the auth gate. */
 export function waveCallbackRoutes(): Router {
-  const router = Router();
-
-  router.get('/callback', async (req: Request, res: Response): Promise<void> => {
-    const { code, state, error } = req.query;
-
-    if (error) {
-      res.status(400).send(renderResult(false, `Wave returned an error: ${String(error)}`));
-      return;
-    }
-
-    if (!consumeState(typeof state === 'string' ? state : undefined)) {
-      res
-        .status(400)
-        .send(renderResult(false, 'This link has expired or was already used. Try again from Settings.'));
-      return;
-    }
-
-    if (!code || typeof code !== 'string') {
-      res.status(400).send(renderResult(false, 'Wave did not return an authorization code.'));
-      return;
-    }
-
-    try {
-      await exchangeCode(code);
-      res.send(renderResult(true, 'Wave is connected. You can close this tab.'));
-    } catch (err) {
-      const message =
-        err instanceof WaveAPIError ? err.message : `Unexpected error: ${(err as Error).message}`;
-      res.status(502).send(renderResult(false, message));
-    }
+  return makeCallbackRouter({
+    name: 'Wave',
+    exchange: exchangeCode,
+    describeError: (err) =>
+      err instanceof WaveAPIError ? err.message : `Unexpected error: ${(err as Error).message}`,
   });
-
-  return router;
-}
-
-function renderResult(ok: boolean, message: string): string {
-  const escaped = message.replace(/[&<>"']/g, (c) => {
-    const map: Record<string, string> = {
-      '&': '&amp;',
-      '<': '&lt;',
-      '>': '&gt;',
-      '"': '&quot;',
-      "'": '&#39;',
-    };
-    return map[c];
-  });
-
-  return `<!doctype html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>${ok ? 'Connected' : 'Connection failed'}</title>
-    <style>
-      body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-             background: #1a2332; color: #f4f6fb; display: grid; place-items: center;
-             min-height: 100vh; margin: 0; padding: 1.5rem; }
-      .card { max-width: 26rem; text-align: center; background: #22304a;
-              border-radius: 0.75rem; padding: 2rem; }
-      .icon { font-size: 2.5rem; }
-      h1 { font-size: 1.25rem; margin: 0.75rem 0 0.5rem; }
-      p { margin: 0; color: #b8c4dc; line-height: 1.5; }
-      a { color: #7aa7ff; }
-    </style>
-  </head>
-  <body>
-    <div class="card">
-      <div class="icon">${ok ? '✅' : '⚠️'}</div>
-      <h1>${ok ? 'Wave connected' : 'Connection failed'}</h1>
-      <p>${escaped}</p>
-      ${ok ? '' : '<p style="margin-top:1rem"><a href="/settings">Back to Settings</a></p>'}
-    </div>
-  </body>
-</html>`;
 }
