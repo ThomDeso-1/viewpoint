@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { getAuditLog, verifyAuditChain, type AuditEntry } from '../shared/api';
 import { useToast } from '../shared/Toast';
 
@@ -42,6 +42,7 @@ export function AuditLog() {
   const [filter, setFilter] = useState('all');
   const [loading, setLoading] = useState(true);
   const [chain, setChain] = useState<{ ok: boolean; brokenAtId: number | null } | null>(null);
+  const navigate = useNavigate();
   const { showToast } = useToast();
 
   useEffect(() => {
@@ -70,9 +71,9 @@ export function AuditLog() {
     <div className="page">
       <header className="page-header">
         <h1>Access log</h1>
-        <Link to="/settings" className="button-link">
-          Settings
-        </Link>
+        <button type="button" className="button-link" onClick={() => navigate(-1)}>
+          Back
+        </button>
       </header>
 
       <p className="settings-help">
