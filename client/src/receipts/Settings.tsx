@@ -10,6 +10,8 @@ import {
   type QueueStatus,
 } from '../shared/api';
 import { useToast } from '../shared/Toast';
+import { ClaudeSettings } from './ClaudeSettings';
+import { WaveSettings } from './WaveSettings';
 import { GoogleSettings } from '../exams/GoogleSettings';
 import { ExamSettings } from '../exams/ExamSettings';
 import { OhipSettings } from '../exams/OhipSettings';
@@ -22,12 +24,16 @@ export function Settings() {
   const [retrying, setRetrying] = useState(false);
   const { showToast } = useToast();
 
-  useEffect(() => {
+  const loadConnections = () => {
     Promise.all([
       getSettings().then(setSettings),
-      getQueueStatus().then(setQueue),
       getWaveHealth().then((h) => setWaveHealthy(h.healthy)),
     ]).catch(() => {});
+  };
+
+  useEffect(() => {
+    loadConnections();
+    getQueueStatus().then(setQueue).catch(() => {});
   }, []);
 
   const handleRetryAll = async () => {
@@ -61,59 +67,9 @@ export function Settings() {
       </header>
 
       <main className="settings-content">
-        {/* Claude API */}
-        <section className="settings-section">
-          <h2 className="settings-section-title">Claude API</h2>
-          <div className="settings-row">
-            <span className="settings-label">API Key</span>
-            <span className="settings-value">
-              {settings?.hasClaudeKey ? (
-                <span className="settings-key-preview">{settings.claudeKeyPreview}</span>
-              ) : (
-                <span className="settings-not-set">Not configured</span>
-              )}
-            </span>
-          </div>
-          <p className="settings-help">
-            Set via the <code>CLAUDE_API_KEY</code> environment variable in <code>.env</code>
-          </p>
-        </section>
+        <ClaudeSettings settings={settings} onSaved={loadConnections} />
 
-        {/* Wave */}
-        <section className="settings-section">
-          <h2 className="settings-section-title">Wave Accounting</h2>
-          <div className="settings-row">
-            <span className="settings-label">Access Token</span>
-            <span className="settings-value">
-              {settings?.hasWaveToken ? (
-                <span className="settings-key-preview">{settings.waveTokenPreview}</span>
-              ) : (
-                <span className="settings-not-set">Not configured</span>
-              )}
-            </span>
-          </div>
-          <div className="settings-row">
-            <span className="settings-label">Connection</span>
-            <span className="settings-value">
-              {waveHealthy === null ? (
-                '…'
-              ) : waveHealthy ? (
-                <span className="settings-healthy">Connected</span>
-              ) : (
-                <span className="settings-unhealthy">Disconnected</span>
-              )}
-            </span>
-          </div>
-          {settings?.waveBusinessName && (
-            <div className="settings-row">
-              <span className="settings-label">Business</span>
-              <span className="settings-value">{settings.waveBusinessName}</span>
-            </div>
-          )}
-          <p className="settings-help">
-            Configure Wave credentials in <code>.env</code>
-          </p>
-        </section>
+        <WaveSettings settings={settings} waveHealthy={waveHealthy} onSaved={loadConnections} />
 
         {/* Queue */}
         <section className="settings-section">
