@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { getPatients, type Patient } from '../shared/api';
 import { useToast } from '../shared/Toast';
+import { AppNav } from '../shared/AppNav';
 
 /**
  * The patient directory.
@@ -44,17 +45,11 @@ export function Patients() {
   }
 
   return (
-    <div className="page">
-      <header className="page-header">
-        <h1>Patients</h1>
-        <div className="header-actions">
-          <Link to="/inbox" className="button-link">
-            Exam requests
-          </Link>
-          <Link to="/schedule" className="button-link">
-            Schedule
-          </Link>
-        </div>
+    <>
+      <AppNav />
+      <div className="page">
+      <header className="screen-header">
+        <h1 className="screen-title">Patients</h1>
       </header>
 
       {patients.length === 0 ? (
@@ -101,6 +96,7 @@ export function Patients() {
           )}
         </>
       )}
-    </div>
+      </div>
+    </>
   );
 }

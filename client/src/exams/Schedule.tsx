@@ -9,6 +9,7 @@ import {
   type Patient,
 } from '../shared/api';
 import { useToast } from '../shared/Toast';
+import { AppNav } from '../shared/AppNav';
 import { AppointmentForm } from '../exams/AppointmentForm';
 
 /**
@@ -87,19 +88,15 @@ export function Schedule() {
   const groups = groupByDay(appointments);
 
   return (
-    <div className="page">
-      <header className="page-header">
-        <h1>Schedule</h1>
-        <div className="header-actions">
+    <>
+      <AppNav />
+      <div className="page">
+      <header className="screen-header">
+        <h1 className="screen-title">Schedule</h1>
+        <div className="screen-actions">
           <button className="primary" onClick={() => setAdding((v) => !v)}>
             {adding ? 'Close' : 'Add'}
           </button>
-          <Link to="/inbox" className="button-link">
-            Exam requests
-          </Link>
-          <Link to="/patients" className="button-link">
-            Patients
-          </Link>
         </div>
       </header>
 
@@ -179,7 +176,8 @@ export function Schedule() {
           </section>
         ))
       )}
-    </div>
+      </div>
+    </>
   );
 }
 

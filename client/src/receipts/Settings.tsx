@@ -80,8 +80,20 @@ export function Settings() {
       </header>
 
       <main className="settings-content">
-        <details className="settings-group" open>
-          <summary className="settings-group-title">Connections</summary>
+        <details className="settings-card" open>
+          <summary className="settings-card-summary">
+            <span className="settings-card-icon" aria-hidden="true">
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7">
+                <path d="M7 13a3.5 3.5 0 0 1 0-6l2-2a3.5 3.5 0 0 1 5 5l-1 1" strokeLinecap="round" />
+                <path d="M13 7a3.5 3.5 0 0 1 0 6l-2 2a3.5 3.5 0 0 1-5-5l1-1" strokeLinecap="round" />
+              </svg>
+            </span>
+            <span className="settings-card-text">
+              <span className="settings-card-title">Connections</span>
+              <span className="settings-card-desc">Claude, Wave, Google, Outlook, and which mailbox reminders send from</span>
+            </span>
+            <span className="settings-card-chevron" aria-hidden="true" />
+          </summary>
 
           <ClaudeSettings settings={settings} onSaved={loadConnections} />
 
@@ -131,14 +143,38 @@ export function Settings() {
           </section>
         </details>
 
-        <details className="settings-group" open>
-          <summary className="settings-group-title">Exam workflow</summary>
+        <details className="settings-card">
+          <summary className="settings-card-summary">
+            <span className="settings-card-icon" aria-hidden="true">
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7">
+                <path d="M6 2.5h5l3 3v12H6z" strokeLinejoin="round" />
+                <path d="M11 2.5v3h3M8 10h4M8 13h4" strokeLinecap="round" />
+              </svg>
+            </span>
+            <span className="settings-card-text">
+              <span className="settings-card-title">Exam workflow</span>
+              <span className="settings-card-desc">Patient files folder, invoicing defaults, and OHIP checks</span>
+            </span>
+            <span className="settings-card-chevron" aria-hidden="true" />
+          </summary>
           <ExamSettings />
           <OhipSettings />
         </details>
 
-        <details className="settings-group" open>
-          <summary className="settings-group-title">App</summary>
+        <details className="settings-card">
+          <summary className="settings-card-summary">
+            <span className="settings-card-icon" aria-hidden="true">
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7">
+                <rect x="3" y="3" width="14" height="14" rx="3" />
+                <path d="M7 10l2 2 4-4" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </span>
+            <span className="settings-card-text">
+              <span className="settings-card-title">App &amp; privacy</span>
+              <span className="settings-card-desc">Upload queue, access log, and sign out</span>
+            </span>
+            <span className="settings-card-chevron" aria-hidden="true" />
+          </summary>
 
         {/* Queue */}
         <section className="settings-section">

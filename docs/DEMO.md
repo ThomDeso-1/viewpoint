@@ -74,8 +74,8 @@ upcoming and always a reminder due.
 2. **Tap one** → it "extracts" instantly. Fix anything, tap
    **Approve & Upload**. Within a minute it shows as uploaded — and
    appears under *Receipt expenses* on http://localhost:4000.
-3. **Tap the envelope icon** (top right) → the **exam request inbox**.
-   Tap **Scan folder** — the seeded `upcoming-exams.csv` is read and three
+3. **Tap "Exam requests"** in the top-right nav → the **exam request inbox**.
+   Tap **Scan folder** (under the heading) — the seeded `upcoming-exams.csv` is read and three
    requests appear, already drafted: patient matched, appointment linked,
    OHIP checked, invoice drafted, reminder written.
 4. Notice **Grace** and **Alan** show as *not covered* — that's the
@@ -87,10 +87,10 @@ upcoming and always a reminder due.
    with your edited lines, and the invoice email. Ada's *reminder* email
    turns up within a minute (her appointment is inside the reminder
    window).
-8. **Calendar icon** → the **Schedule**. Try **Add** for a walk-in, and
+8. **Tap "Schedule"** in the top-right nav. Try **Add** for a walk-in, and
    **Link a patient** on anything unmatched, then **Check OHIP**.
-9. **Settings → View access log** → every health card read and everything
-   sent, recorded.
+9. **Settings** (gear, top-left) **→ App & privacy → View access log** →
+   every health card read and everything sent, recorded.
 
 ---
 

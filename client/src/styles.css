@@ -293,36 +293,97 @@ img {
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
 }
 
-/* ── App header ── */
+/* ── Primary navigation (AppNav) ──
+   Settings anchored left, the four screen toggles right. Shown on every
+   main screen so the toggles never move. */
 
-.app-header {
+.app-nav {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: calc(12px + var(--safe-top)) 20px 12px;
+  gap: 12px;
+  padding: calc(10px + var(--safe-top)) 12px 10px;
   background: var(--bg-header);
-  color: white;
+  color: #fff;
   position: sticky;
   top: 0;
   z-index: 100;
 }
 
-.app-title {
-  font-size: 20px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-}
-
-.header-action {
+.app-nav-settings {
+  flex-shrink: 0;
+  display: flex;
   padding: 8px;
   border-radius: 8px;
   color: rgba(255, 255, 255, 0.7);
   transition: color 0.15s, background 0.15s;
 }
 
-.header-action:hover {
-  color: white;
-  background: rgba(255, 255, 255, 0.1);
+.app-nav-settings:hover,
+.app-nav-settings.is-active {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.app-nav-toggles {
+  margin-left: auto;
+  display: flex;
+  gap: 2px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.app-nav-toggles::-webkit-scrollbar {
+  display: none;
+}
+
+.app-nav-toggle {
+  flex-shrink: 0;
+  padding: 7px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-decoration: none;
+  color: rgba(255, 255, 255, 0.6);
+  transition: color 0.15s, background 0.15s;
+}
+
+.app-nav-toggle:hover {
+  color: #fff;
+}
+
+.app-nav-toggle.is-active {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+/* ── Screen header (title + its own actions, below the nav band) ── */
+
+.screen-header {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.receipt-list-page > .screen-header {
+  padding: 16px 20px 0;
+  margin-bottom: 12px;
+}
+
+.screen-title {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.screen-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 /* ── Status bar ── */
@@ -1079,8 +1140,8 @@ img {
    ──────────────────────────────────────── */
 
 .page {
-  padding: calc(16px + var(--safe-top)) 16px calc(24px + var(--safe-bottom));
-  max-width: 720px;
+  padding: calc(16px + var(--safe-top)) 20px calc(24px + var(--safe-bottom));
+  max-width: var(--content-max);
   margin: 0 auto;
 }
 
@@ -1094,13 +1155,6 @@ img {
 .page-header h1 {
   font-size: 24px;
   font-weight: 700;
-}
-
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
 }
 
 /* Shared button vocabulary for these pages. The receipts screens use
@@ -1592,42 +1646,90 @@ img {
   min-height: 64px;
 }
 
-/* ── Settings: collapsible groups ── */
+/* ── Settings: compartmentalised cards ──
+   Each area of settings is its own collapsible card with an icon and a
+   one-line summary of what's inside, so the page reads as a short menu
+   rather than one long scroll. */
 
-.settings-group {
-  border-bottom: 1px solid var(--border);
+.settings-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 12px;
+  overflow: hidden;
 }
 
-.settings-group-title {
-  padding: 16px 0 12px;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--text-tertiary);
-  cursor: pointer;
-  list-style: none;
+.settings-card-summary {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 12px;
+  padding: 14px 16px;
+  cursor: pointer;
+  list-style: none;
 }
 
-.settings-group-title::-webkit-details-marker {
+.settings-card-summary::-webkit-details-marker {
   display: none;
 }
 
-.settings-group-title::before {
-  content: '';
-  width: 6px;
-  height: 6px;
-  border-right: 1.5px solid currentColor;
-  border-bottom: 1.5px solid currentColor;
-  transform: rotate(45deg);
+.settings-card-icon {
+  flex-shrink: 0;
+  display: flex;
+  width: 34px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--accent);
+}
+
+.settings-card-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.settings-card-title {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.settings-card-desc {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.settings-card-chevron {
+  flex-shrink: 0;
+  margin-left: auto;
+  width: 7px;
+  height: 7px;
+  border-right: 1.5px solid var(--text-tertiary);
+  border-bottom: 1.5px solid var(--text-tertiary);
+  transform: rotate(-45deg);
   transition: transform 0.15s;
 }
 
-.settings-group[open] > .settings-group-title::before {
-  transform: rotate(-135deg);
+.settings-card[open] .settings-card-chevron {
+  transform: rotate(45deg);
+}
+
+/* The card's own body gets side padding and a divider under the summary;
+   the panels inside keep their own section spacing. */
+.settings-card[open] > summary {
+  border-bottom: 1px solid var(--border);
+}
+.settings-card > :not(summary) {
+  padding-left: 16px;
+  padding-right: 16px;
+}
+.settings-card > summary + * {
+  padding-top: 16px;
+}
+.settings-card .settings-section:last-child {
+  margin-bottom: 8px;
 }
 
 /* ── Finish-setup checklist (home screen) ── */
@@ -1726,12 +1828,19 @@ img {
    ──────────────────────────────────────── */
 
 @media (min-width: 768px) {
-  .app-header,
+  .app-nav,
   .review-header,
   .search-bar,
   .status-bar {
     padding-left: max(20px, calc((100% - var(--content-max)) / 2));
     padding-right: max(20px, calc((100% - var(--content-max)) / 2));
+  }
+
+  /* Receipts screen title aligns with the same column on desktop. */
+  .receipt-list-page > .screen-header {
+    max-width: var(--content-max);
+    margin-left: auto;
+    margin-right: auto;
   }
 
   /* .search-icon is positioned from the .search-bar edge; keep it beside

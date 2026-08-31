@@ -13,6 +13,7 @@ import {
   type ExamRequestCounts,
 } from '../shared/api';
 import { useToast } from '../shared/Toast';
+import { AppNav } from '../shared/AppNav';
 import { StatusBadge } from '../shared/StatusBadge';
 import { InvoiceEditor } from '../exams/InvoiceEditor';
 
@@ -116,16 +117,15 @@ export function Inbox() {
   }
 
   return (
-    <div className="page">
-      <header className="page-header">
-        <h1>Exam requests</h1>
-        <div className="header-actions">
+    <>
+      <AppNav />
+      <div className="page">
+      <header className="screen-header">
+        <h1 className="screen-title">Exam requests</h1>
+        <div className="screen-actions">
           <button onClick={handleScan} disabled={polling} className="secondary">
             {polling ? 'Scanning…' : 'Scan folder'}
           </button>
-          <Link to="/" className="button-link">
-            Receipts
-          </Link>
         </div>
       </header>
 
@@ -167,7 +167,8 @@ export function Inbox() {
           ))}
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }
 

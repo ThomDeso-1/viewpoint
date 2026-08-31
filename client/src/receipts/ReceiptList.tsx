@@ -12,6 +12,7 @@ import {
   type Settings,
 } from '../shared/api';
 import { AddToHomeScreenTip } from '../shared/AddToHomeScreenTip';
+import { AppNav } from '../shared/AppNav';
 import { SetupChecklist } from '../receipts/SetupChecklist';
 import { CaptureButton } from '../receipts/CaptureButton';
 import { ReceiptRow } from '../receipts/ReceiptRow';
@@ -82,29 +83,10 @@ export function ReceiptList() {
 
   return (
     <div className="receipt-list-page">
-      {/* Header */}
-      <header className="app-header">
-        <h1 className="app-title">Receipts</h1>
-        <div className="header-actions">
-          <button className="header-action" onClick={() => navigate('/inbox')} title="Exam requests">
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8">
-              <path d="M2.5 5.5h15v9a1 1 0 0 1-1 1h-13a1 1 0 0 1-1-1v-9Z" strokeLinejoin="round" />
-              <path d="m2.5 6 7.5 5 7.5-5" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
-          <button className="header-action" onClick={() => navigate('/schedule')} title="Schedule">
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8">
-              <rect x="2.5" y="4" width="15" height="13.5" rx="1.5" />
-              <path d="M2.5 8h15M6.5 2.5v3M13.5 2.5v3" strokeLinecap="round" />
-            </svg>
-          </button>
-          <button className="header-action" onClick={() => navigate('/settings')} title="Settings">
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8">
-              <circle cx="10" cy="10" r="2.5" />
-              <path d="M10 1.5v2M10 16.5v2M3.4 3.4l1.4 1.4M15.2 15.2l1.4 1.4M1.5 10h2M16.5 10h2M3.4 16.6l1.4-1.4M15.2 4.8l1.4-1.4" strokeLinecap="round" />
-            </svg>
-          </button>
-        </div>
+      <AppNav />
+
+      <header className="screen-header">
+        <h1 className="screen-title">Receipts</h1>
       </header>
 
       <AddToHomeScreenTip />
