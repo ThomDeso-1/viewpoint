@@ -17,11 +17,16 @@ database, and one React PWA:
 1. **Receipts** (original) — photograph an expense receipt → Claude vision
    extracts vendor/date/total → operator reviews → a background queue
    posts it to **Wave** as an expense.
-2. **Exam bookings** (added later) — an exam-request email arrives →
-   Claude extracts patient details → patient matched → Google Calendar
-   event linked → **OHIP** eligibility checked → a **Wave** invoice and a
+2. **Exam bookings** (added later) — a patient/appointment file (Word,
+   Excel, CSV, PDF, …) lands in the scanned folder → Claude extracts one
+   or more patients, merging each one's schedule row with any notes that
+   name them → each patient matched → a calendar event is linked or a
+   local appointment recorded → **OHIP** eligibility is always re-checked
+   (the file's "Status" column is not trusted) → a **Wave** invoice and a
    **Gmail** reminder are drafted → the operator taps **Approve** once →
-   the invoice is sent and the reminder is scheduled.
+   the invoice is sent, the calendar event is written, and the reminder
+   is scheduled. (Legacy rows imported from Gmail remain in the same
+   table with `source = 'gmail'`.)
 
 Both pipelines use the **same status-machine shape** on purpose:
 
@@ -64,9 +69,10 @@ an explicit operator action.**
 ```
 iPhone / browser  ──HTTPS──▶  Express (server/)  ──▶  SQLite (data/receipts.db)
    React PWA (client/)                │                 receipt images (data/Receipts/)
-                                      ├─▶ Claude API      (receipt + email extraction)
+                                      ├─▶ Claude API      (receipt + patient-file extraction)
                                       ├─▶ Wave GraphQL     (expenses + invoices)
-                                      ├─▶ Gmail API        (read exam requests, send reminders)
+                                      ├─▶ scanned folder   (patient/appointment files — EXAM_REQUEST_SOURCE_DIR)
+                                      ├─▶ Gmail API        (send reminders)
                                       ├─▶ Google Calendar  (mirror the schedule)
                                       └─▶ MOH HCV SOAP     (OHIP eligibility)  — mock by default
 ```
@@ -95,8 +101,9 @@ iPhone / browser  ──HTTPS──▶  Express (server/)  ──▶  SQLite (da
   resumes the schedule.
 - **Idempotency keys:** `receipts` → Wave `externalId:
   viewpoint-<id>`; `appointments.google_event_id` UNIQUE;
-  `exam_requests.gmail_message_id` UNIQUE. Re-polling can only ever
-  update, never duplicate.
+  `exam_requests.source_ref` UNIQUE (`<file-content-hash>#<patient-index>`;
+  `processed_source_files` also skips a file whose hash is unchanged).
+  Re-scanning can only ever update, never duplicate.
 - **Auth:** one password (scrypt + salt). Login mints a random 32-byte
   session token; only its SHA-256 is stored. The password is not a
   credential after login. `server/platform/auth.ts`.
@@ -171,8 +178,8 @@ npm run build              # builds client/dist (server runs from source via tsx
 - Introduce an API-client SDK or an ORM without raising it first. (Small
   runtime deps: `express-async-errors` was added for the async-error
   tail — that's the bar. Prefer none.)
-- Widen `GMAIL_EXAM_REQUEST_QUERY`'s blast radius — every matched email
-  goes to Claude.
+- Point `EXAM_REQUEST_SOURCE_DIR` at a broad or shared folder — every
+  supported file in it (recursively) goes to Claude.
 - Add a route that hits the ministry or a paid API without a
   `rateLimited(...)` guard (`server/platform/rate-limit.ts`), and without
   reusing a recent result where one applies (see `checkPatientEligibility`
@@ -341,7 +348,7 @@ in `docs/AUDIT.md` §3 so the decision stays visible.
 | An exam request is stuck | `server/exams/queue.ts` + `exam-requests.ts`; check `status`, `last_error`, `retry_count`; `isReadyForRetry` gating |
 | Eligibility always says "mock" | `OHIP_HCV_MODE` unset/`mock`; `server/integrations/ohip/index.ts` |
 | Gmail/Calendar calls 401 | token refresh in `server/integrations/google/auth.ts` → `oauth-store.ts`; reconnect in Settings |
-| "Nothing is being polled" | `GMAIL_EXAM_REQUEST_QUERY` empty, or Google not connected |
+| "Nothing is being scanned" | `EXAM_REQUEST_SOURCE_DIR` unset/missing, or `CLAUDE_API_KEY` unset; a failed file backs off in `processed_source_files` |
 | Approving does nothing to the invoice | no `WAVE_INCOME_ACCOUNT_ID` / `WAVE_SERVICE_PRODUCT_ID` set |
 | Login loop / stuck on `/login` | `client/src/App.tsx` `gateTarget` race; auth status endpoint |
 | Tests fail at random | DB handle leak — a test missing `teardown()` / `closeDb()`; see `tests/helpers/testApp.ts` |

@@ -16,7 +16,8 @@ import { endpoint } from '../../platform/endpoints.js';
 
 
 export const GOOGLE_SCOPES = [
-  'https://www.googleapis.com/auth/gmail.readonly',
+  // Reminder emails are sent from the business's own mailbox; the app no
+  // longer reads the inbox (patient files come from a folder now).
   'https://www.googleapis.com/auth/gmail.send',
   'https://www.googleapis.com/auth/calendar.events',
   'https://www.googleapis.com/auth/userinfo.email',

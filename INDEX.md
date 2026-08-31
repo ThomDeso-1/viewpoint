@@ -75,16 +75,20 @@ viewpoint-receipts/
 │   │   ├── types.ts                all exam-workflow row types + status unions + extraction shape
 │   │   ├── patients.ts             ⚠ ONLY doorway to health card numbers (readHealthCard)
 │   │   ├── appointments.ts         mirrored from Google Calendar
-│   │   ├── exam-requests.ts        one row per incoming booking email; encrypted extraction
+│   │   ├── exam-requests.ts        one row per patient found in a scanned file; encrypted extraction
+│   │   ├── file-source.ts          walks EXAM_REQUEST_SOURCE_DIR; reads docx/xlsx/csv/pdf/txt/eml
+│   │   ├── docx.ts                  flattens a Word doc to tab-separated tables (wraps fflate)
+│   │   ├── xlsx.ts                  flattens a workbook to text (wraps read-excel-file)
+│   │   ├── processed-files.ts      "already scanned this file" ledger, keyed by path + content hash
 │   │   ├── eligibility.ts          runs OHIP checks, records outcomes
 │   │   ├── reminders.ts            ReminderChannel interface (email today, SMS later)
 │   │   └── queue.ts                the automation orchestrator (was exams-queue.ts)
 │   ├── integrations/               one folder per external service, bare fetch
-│   │   ├── claude.ts               receipt + exam-request extraction; prompts; model IDs
+│   │   ├── claude.ts               receipt + patient-batch extraction; prompts; model IDs
 │   │   ├── oauth/   state-store.ts (pending `state` map)  callback.ts (shared result page + router factory)
 │   │   ├── wave/    index.ts (barrel)  transport.ts  reference.ts  expenses.ts
 │   │   │            customers.ts  invoices.ts  auth.ts (token ↔ OAuth)
-│   │   ├── google/  auth.ts  gmail.ts  calendar.ts
+│   │   ├── google/  auth.ts  gmail.ts (send only)  calendar.ts
 │   │   └── ohip/    index.ts (factory)  hcv-client.ts (interface + response codes)
 │   │                hcv-mock.ts  hcv-soap.ts (WS-Security SOAP, schema unverified)
 │   └── routes/                     HTTP layer — thin, delegate to the domains above
@@ -130,7 +134,8 @@ viewpoint-receipts/
 | **The exam-request pipeline** | `server/exams/queue.ts` (orchestrator) + `exam-requests.ts`, `patients.ts`, `appointments.ts`, `eligibility.ts`, `reminders.ts`; `server/routes/exams.ts`; `client/src/exams/{Inbox,Schedule,Patients,PatientDetail}.tsx` |
 | **Claude prompts / models** | `server/integrations/claude.ts` |
 | **Wave (expenses + invoices)** | `server/integrations/wave/` (`index.ts` barrel over `transport` / `reference` / `expenses` / `customers` / `invoices`; `auth.ts` for token ↔ OAuth), `server/routes/wave-oauth.ts` |
-| **Google (Gmail + Calendar)** | `server/integrations/google/{auth,gmail,calendar}.ts`, `server/platform/oauth-store.ts`, `server/routes/google.ts`, `client/src/exams/GoogleSettings.tsx` |
+| **Patient files folder scan** | `server/exams/{file-source,xlsx,processed-files,queue}.ts`, `server/platform/paths.ts`, `EXAM_REQUEST_SOURCE_DIR`; Settings → Exam Requests |
+| **Google (Calendar + reminder send)** | `server/integrations/google/{auth,gmail,calendar}.ts`, `server/platform/oauth-store.ts`, `server/routes/google.ts`, `client/src/exams/GoogleSettings.tsx` |
 | **OAuth flow plumbing (both providers)** | `server/integrations/oauth/{state-store,callback}.ts` — `state` map + the callback router factory / result page |
 | **OHIP eligibility** | `server/integrations/ohip/*`, `server/exams/eligibility.ts`, `client/src/exams/OhipSettings.tsx` |
 | **Reminders (+ future SMS)** | `server/exams/reminders.ts` (`ReminderChannel` interface) |

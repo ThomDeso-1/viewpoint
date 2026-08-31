@@ -11,6 +11,7 @@ import { setPassword } from '../server/platform/auth.js';
 import { saveTokens } from '../server/platform/oauth-store.js';
 import { createPatient, listPatients } from '../server/exams/patients.js';
 import { StorageService } from '../server/receipts/storage.js';
+import { PEOPLE, patientFileCsv } from './fixtures.js';
 import { v4 as uuid } from 'uuid';
 
 /**
@@ -54,7 +55,7 @@ async function main(): Promise<void> {
     GOOGLE_CLIENT_SECRET: 'demo-google-client-secret',
     GOOGLE_CALENDAR_ID: 'primary',
 
-    GMAIL_EXAM_REQUEST_QUERY: 'label:exam-requests',
+    EXAM_REQUEST_SOURCE_DIR: path.join(path.resolve(dataDir), 'patient-files'),
     EXAM_REQUEST_MIN_CONFIDENCE: '0.6',
     EXAM_FEE_AMOUNT: '120',
 
@@ -86,10 +87,21 @@ async function main(): Promise<void> {
     accessToken: 'demo-access-token',
     refreshToken: 'demo-refresh-token',
     expiresAt: new Date(Date.now() + 3600_000),
-    scope: 'gmail.readonly gmail.send calendar.events',
+    scope: 'gmail.send calendar.events',
     accountLabel: 'reception@viewpoint-demo.example.com',
   });
   console.log('  ✓ Google connected (mock)');
+
+  // ── A patient files folder with a sample spreadsheet to scan ──
+  const filesDir = path.join(dataDir, 'patient-files');
+  fs.mkdirSync(filesDir, { recursive: true });
+  const samplePath = path.join(filesDir, 'upcoming-exams.csv');
+  if (!fs.existsSync(samplePath)) {
+    fs.writeFileSync(samplePath, patientFileCsv(PEOPLE));
+    console.log(`  ✓ sample patient file created (${PEOPLE.length} patients) — tap "Scan folder"`);
+  } else {
+    console.log('  · patient file already present, left alone');
+  }
 
   // ── A couple of existing patients, so matching has something to hit ──
   if (listPatients().length === 0) {

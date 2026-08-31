@@ -46,13 +46,15 @@ machine or a private server they control.
   `audit_log` table on logins, PHI reads and writes, health card
   decryption, eligibility checks, and anything sent to a patient or
   posted to Wave on their behalf.
-- **Exam-request email content is encrypted too.** Both Claude's reading
-  of the email (`exam_requests.extracted_json`) and the retained slice of
-  the raw email body (`exam_requests.body_snippet`) are AES-256-GCM
+- **Scanned patient-file content is encrypted too.** Both Claude's
+  extraction (`exam_requests.extracted_json`) and the retained slice of
+  the source record (`exam_requests.body_snippet`) are AES-256-GCM
   encrypted — they hold the same personal health information the patients
   table protects. The raw slice is never included in an API response; it
   is served only through `GET /api/exams/exam-requests/:id/source`,
-  which writes an audit entry for each access.
+  which writes an audit entry for each access. Each folder scan also
+  writes a `file_import.scanned` audit entry naming the file (never its
+  contents).
 - **CORS is same-origin only.** The client is always served from the same
   origin as the API (proxied in dev via `client/vite.config.ts`, bundled
   together in production), so there is no cross-origin policy to
@@ -63,10 +65,10 @@ machine or a private server they control.
 Three things are worth being explicit about, because "your data lives
 entirely on this computer" is no longer the whole story:
 
-1. **Exam-request emails are sent to the Anthropic API** for extraction.
-   Whatever the sender wrote — including health card numbers — is in that
-   request. Keep `GMAIL_EXAM_REQUEST_QUERY` narrow (a dedicated label is
-   best) so unrelated mail is never sent.
+1. **Files from the patient-files folder are sent to the Anthropic API**
+   for extraction. Whatever a file contains — including health card
+   numbers — is in that request. Point `EXAM_REQUEST_SOURCE_DIR` at a
+   folder that holds only patient/appointment files, nothing else.
 2. **Health card numbers are sent to the Ontario Ministry of Health** when
    an eligibility check runs. That is the point of the check, and it does
    not happen at all in the default `mock` mode.

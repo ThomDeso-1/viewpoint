@@ -3,21 +3,39 @@ import {
   getExamSettings,
   saveExamSettings,
   getWaveInvoiceTargets,
+  testExamSourceFolder,
   type ExamSettings as Data,
+  type FolderTestResult,
   type WaveInvoiceTargets,
 } from '../shared/api';
 import { useToast } from '../shared/Toast';
 
 /**
- * The exam-request workflow settings: which emails to read, how confident
- * an extraction must be, invoicing defaults, and reminder wording inputs.
+ * The exam-request workflow settings: which folder to scan for patient
+ * files, how confident an extraction must be, invoicing defaults, and
+ * reminder wording inputs.
  */
 export function ExamSettings() {
   const [form, setForm] = useState<Data | null>(null);
   const [targets, setTargets] = useState<WaveInvoiceTargets | null>(null);
   const [targetsError, setTargetsError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [folderTest, setFolderTest] = useState<FolderTestResult | null>(null);
   const { showToast } = useToast();
+
+  const handleTestFolder = async () => {
+    if (!form) return;
+    setTesting(true);
+    setFolderTest(null);
+    try {
+      setFolderTest(await testExamSourceFolder(form.sourceFolder));
+    } catch (err) {
+      setFolderTest({ ok: false, error: (err as Error).message });
+    } finally {
+      setTesting(false);
+    }
+  };
 
   const load = async () => {
     try {
@@ -78,24 +96,57 @@ export function ExamSettings() {
       <h2 className="settings-section-title">Exam Requests</h2>
 
       <p className="settings-help">
-        New requests are read from Gmail every minute, drafted automatically, and held for your
-        approval. Nothing is sent to a patient or posted to Wave until you approve it.
+        Files in the patient files folder are read every minute, drafted automatically, and held for
+        your approval. Nothing is sent to a patient or posted to Wave until you approve it.
       </p>
 
       <label className="wizard-field-label">
-        Gmail search
+        Patient files folder
         <input
           className="auth-input"
-          value={form.gmailQuery}
-          onChange={(e) => setForm({ ...form, gmailQuery: e.target.value })}
-          placeholder="label:exam-requests"
+          value={form.sourceFolder}
+          onChange={(e) => setForm({ ...form, sourceFolder: e.target.value })}
+          placeholder="/Users/you/Dropbox/Viewpoint/patient-files"
         />
         <small className="muted">
-          Which emails count as exam requests. A dedicated Gmail label is the most reliable —
-          everything matching is sent to Claude to read, so keep this tight. Nothing is polled while
-          this is empty.
+          An absolute path to a folder on this computer — typically one a Dropbox, iCloud or Google
+          Drive desktop app keeps synced. Scanned recursively for .docx, .xlsx, .csv, .pdf, .txt and
+          .eml files; a file is re-read only if its contents change. Nothing is scanned while this is
+          empty.
         </small>
       </label>
+
+      <button className="btn-secondary" onClick={handleTestFolder} disabled={testing || !form.sourceFolder}>
+        {testing ? 'Testing…' : 'Test folder'}
+      </button>
+
+      {folderTest && (
+        <div className={`banner ${folderTest.ok ? 'banner-info' : 'banner-warning'}`}>
+          {folderTest.ok ? (
+            <>
+              Found {folderTest.fileCount} file{folderTest.fileCount === 1 ? '' : 's'}
+              {folderTest.byExtension && Object.keys(folderTest.byExtension).length > 0 && (
+                <>
+                  {' '}(
+                  {Object.entries(folderTest.byExtension)
+                    .map(([ext, n]) => `${n} ${ext}`)
+                    .join(', ')}
+                  )
+                </>
+              )}
+              .
+              {folderTest.sampleNames && folderTest.sampleNames.length > 0 && (
+                <> e.g. {folderTest.sampleNames.slice(0, 5).join(', ')}</>
+              )}
+              {folderTest.tooLarge && folderTest.tooLarge.length > 0 && (
+                <> — {folderTest.tooLarge.length} file(s) skipped for being too large.</>
+              )}
+            </>
+          ) : (
+            <>Couldn't read that folder: {folderTest.error}</>
+          )}
+        </div>
+      )}
 
       <label className="wizard-field-label">
         Minimum confidence
@@ -206,15 +257,29 @@ export function ExamSettings() {
       </label>
 
       <label className="wizard-field-label">
-        Send reminders this many hours ahead
-        <input
-          className="auth-input"
-          type="number"
-          min="1"
-          step="1"
-          value={form.reminderLeadHours}
+        Default reminder time
+        <select
+          className="wizard-select"
+          value={
+            [24, 48, 72, 168, 336].includes(form.reminderLeadHours)
+              ? String(form.reminderLeadHours)
+              : 'custom'
+          }
           onChange={(e) => setForm({ ...form, reminderLeadHours: Number(e.target.value) })}
-        />
+        >
+          {![24, 48, 72, 168, 336].includes(form.reminderLeadHours) && (
+            <option value="custom">{form.reminderLeadHours} hours before</option>
+          )}
+          <option value="24">1 day before</option>
+          <option value="48">2 days before</option>
+          <option value="72">3 days before</option>
+          <option value="168">1 week before</option>
+          <option value="336">2 weeks before</option>
+        </select>
+        <small className="muted">
+          When patient reminder emails go out. You can override this per patient on the request card
+          before approving.
+        </small>
       </label>
 
       <button className="btn-primary" onClick={handleSave} disabled={saving}>

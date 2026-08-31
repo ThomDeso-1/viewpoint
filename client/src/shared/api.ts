@@ -316,6 +316,8 @@ export interface ExamRequestExtraction {
   requested_date: string | null;
   requested_time: string | null;
   reason: string | null;
+  /** Merged notes for this patient — schedule row plus any notes that name them. */
+  notes: string | null;
   confidence: number;
 }
 
@@ -324,10 +326,14 @@ export interface ExamRequestReminder {
   status: string;
   channel: string;
   scheduled_for: string;
+  /** Hours before the appointment the reminder is set to send. */
+  lead_hours: number | null;
   subject: string | null;
   body: string | null;
   sent_at: string | null;
   last_error: string | null;
+  /** Only a still-pending reminder can be rescheduled from the card. */
+  editable: boolean;
 }
 
 export interface ExamRequestInvoice {
@@ -348,9 +354,11 @@ export interface ExamRequest {
   id: string;
   status: string;
   received_at: string;
-  from_address: string | null;
-  subject: string | null;
-  /** True if a slice of the original email was retained. Fetch it with
+  /** 'file' for a scanned folder file; 'gmail' for a legacy imported email. */
+  source: 'file' | 'gmail';
+  /** Card header, e.g. `sept-bookings.xlsx — patient 3`. */
+  source_label: string | null;
+  /** True if a slice of the source record was retained. Fetch it with
    *  getExamRequestSource() — it is PHI and access is audited. */
   has_source: boolean;
   extraction: ExamRequestExtraction | null;
@@ -366,7 +374,8 @@ export interface ExamRequest {
 export interface ExamRequestCounts {
   counts: Record<string, number>;
   hcvMode: string;
-  gmailQueryConfigured: boolean;
+  sourceFolderConfigured: boolean;
+  filesWithErrors: number;
 }
 
 export function getExamRequests(all = false): Promise<ExamRequest[]> {
@@ -377,7 +386,7 @@ export function getExamRequest(id: string): Promise<ExamRequest> {
   return request(`/exams/exam-requests/${id}`);
 }
 
-/** The retained slice of the original email. Reading it is audited server-side. */
+/** The retained slice of the source record. Reading it is audited server-side. */
 export function getExamRequestSource(id: string): Promise<{ body: string | null }> {
   return request(`/exams/exam-requests/${id}/source`);
 }
@@ -386,8 +395,24 @@ export function getExamRequestCounts(): Promise<ExamRequestCounts> {
   return request('/exams/exam-requests/counts');
 }
 
-export function pollExamRequests(): Promise<{ success: boolean; created: number }> {
+export function scanExamRequests(): Promise<{ success: boolean; created: number }> {
   return request('/exams/exam-requests/poll', { method: 'POST' });
+}
+
+export interface FolderTestResult {
+  ok: boolean;
+  error?: string;
+  fileCount?: number;
+  byExtension?: Record<string, number>;
+  sampleNames?: string[];
+  tooLarge?: string[];
+}
+
+export function testExamSourceFolder(sourceFolder: string): Promise<FolderTestResult> {
+  return request('/settings/exams/test-folder', {
+    method: 'POST',
+    body: JSON.stringify({ sourceFolder }),
+  });
 }
 
 export function approveExamRequest(id: string): Promise<{
@@ -401,6 +426,17 @@ export function approveExamRequest(id: string): Promise<{
 
 export function rejectExamRequest(id: string): Promise<{ success: boolean }> {
   return request(`/exams/exam-requests/${id}/reject`, { method: 'POST' });
+}
+
+/** Override the reminder send time for one request (hours before the appointment). */
+export function updateExamReminder(
+  id: string,
+  leadHours: number,
+): Promise<{ success: boolean; request: ExamRequest }> {
+  return request(`/exams/exam-requests/${id}/reminder`, {
+    method: 'PUT',
+    body: JSON.stringify({ leadHours }),
+  });
 }
 
 export function retryExamRequest(id: string): Promise<{ success: boolean }> {
@@ -556,7 +592,8 @@ export function verifyAuditChain(): Promise<{ ok: boolean; brokenAtId: number | 
 // ── Exams configuration ──
 
 export interface ExamSettings {
-  gmailQuery: string;
+  sourceFolder: string;
+  sourceFolderExists: boolean;
   minConfidence: number;
   businessName: string;
   businessTimezone: string;

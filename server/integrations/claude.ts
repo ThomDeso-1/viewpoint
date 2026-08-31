@@ -307,36 +307,43 @@ a decimal (e.g. 0.13 for 13%).
 - confidence: "high" if all fields are clearly legible, "medium" if some \
 are uncertain, "low" if the image is hard to read.`;
 
-// ── Exam Request Extraction ──
+// ── Patient batch extraction ──
+
+/** A file handed to the folder scanner: flattened text, or a PDF to read directly. */
+export type BatchExtractionInput =
+  | { kind: 'text'; text: string }
+  | { kind: 'pdf'; base64: string };
 
 /**
- * Parses an exam-request email into structured patient details.
+ * Reads a patient/appointment file into a list of structured requests.
  *
- * Every field is nullable on purpose: a real email may simply not mention
- * a health card or a preferred time, and inventing one would be far worse
- * than reporting it missing. The queue surfaces gaps for the operator to
- * fill rather than guessing.
+ * One file routinely lists many people (a spreadsheet export, a printed
+ * day sheet), so this returns an array — one entry per patient. Every
+ * field stays nullable for the same reason the email path kept them
+ * nullable: a source that omits a health card or a time is normal, and
+ * the queue surfaces the gap rather than inventing a value.
  */
-export async function extractExamRequest(
-  email: { from?: string | null; subject?: string | null; body: string; receivedAt?: string },
+export async function extractPatientBatch(
+  input: BatchExtractionInput,
   apiKey: string,
-): Promise<{ result: ExamRequestExtraction; rawJSON: string }> {
-  const context = [
-    email.from ? `From: ${email.from}` : null,
-    email.subject ? `Subject: ${email.subject}` : null,
-    email.receivedAt ? `Received: ${email.receivedAt}` : null,
-    '',
-    email.body,
-  ]
-    .filter((line) => line !== null)
-    .join('\n');
+): Promise<{ results: ExamRequestExtraction[]; rawJSON: string }> {
+  if (input.kind === 'text' && !input.text.trim()) {
+    return { results: [], rawJSON: '[]' };
+  }
+
+  const content: any[] =
+    input.kind === 'pdf'
+      ? [
+          {
+            type: 'document',
+            source: { type: 'base64', media_type: 'application/pdf', data: input.base64 },
+          },
+          { type: 'text', text: PATIENT_BATCH_PROMPT },
+        ]
+      : [{ type: 'text', text: `${PATIENT_BATCH_PROMPT}\n\n---\n\n${input.text}` }];
 
   const responseText = await sendRequest(
-    {
-      model: EXTRACTION_MODEL,
-      max_tokens: 1024,
-      messages: [{ role: 'user', content: `${EXAM_REQUEST_PROMPT}\n\n---\n\n${context}` }],
-    },
+    { model: EXTRACTION_MODEL, max_tokens: 8192, messages: [{ role: 'user', content }] },
     apiKey,
   );
 
@@ -348,20 +355,27 @@ export async function extractExamRequest(
   } catch (err) {
     throw new ClaudeAPIError(
       'extraction_failed',
-      `Failed to parse exam request JSON: ${(err as Error).message}`,
+      `Failed to parse patient batch JSON: ${(err as Error).message}`,
+    );
+  }
+
+  if (!Array.isArray(parsed)) {
+    throw new ClaudeAPIError(
+      'extraction_failed',
+      'Claude returned a patient batch that was not a JSON array.',
     );
   }
 
   try {
-    validateExamRequestExtraction(parsed);
+    for (const item of parsed) validateExamRequestExtraction(item);
   } catch (err) {
     throw new ClaudeAPIError(
       'extraction_failed',
-      `Claude returned an unexpected exam request format: ${(err as Error).message}`,
+      `Claude returned an unexpected patient format: ${(err as Error).message}`,
     );
   }
 
-  return { result: parsed, rawJSON: jsonString };
+  return { results: parsed as ExamRequestExtraction[], rawJSON: jsonString };
 }
 
 /**
@@ -385,6 +399,7 @@ function validateExamRequestExtraction(value: unknown): asserts value is ExamReq
     'requested_date',
     'requested_time',
     'reason',
+    'notes',
   ] as const;
 
   for (const field of stringFields) {
@@ -421,34 +436,49 @@ function validateExamRequestExtraction(value: unknown): asserts value is ExamReq
   }
 }
 
-const EXAM_REQUEST_PROMPT = `You are helping an Ontario optician business (it fits and dispenses eyewear, and books eye exams with partner optometrists) triage incoming email.
+const PATIENT_BATCH_PROMPT = `You are helping an Ontario optician business (it fits and dispenses eyewear, and books eye exams with partner optometrists) process a clinic schedule file.
 
-Read the email below and extract the details of the eye exam request it contains.
+The document below is a Word or spreadsheet export, a printed appointment sheet, or free-form notes. It usually has ONE OR MORE schedule tables (one row per patient) AND separate "Notes" / "Messages" sections that refer back to individual patients by name and room/wing. It may describe ONE patient or MANY.
 
-Return ONLY a JSON object with exactly these keys:
+Extract every patient who has a booked appointment in a schedule table.
+
+Return ONLY a JSON array. Each element is one patient, an object with exactly these keys:
 {
-  "patient_name": "full name of the patient, or null",
-  "email": "patient's email address, or null",
+  "patient_name": "the patient's name only, with trailing markers like * or 'NA' removed, or null",
+  "email": "patient's (or their POA's) email address, or null",
   "phone": "patient's phone number, or null",
   "date_of_birth": "YYYY-MM-DD, or null",
   "health_card_number": "10-digit Ontario health card number, digits only, or null",
   "health_card_version": "2-letter version code, or null",
-  "requested_date": "YYYY-MM-DD of the requested appointment, or null",
+  "requested_date": "YYYY-MM-DD of the appointment, or null",
   "requested_time": "HH:MM in 24-hour time, or null",
-  "reason": "brief reason for the visit, or null",
+  "reason": "brief clinical reason for the visit, or null",
+  "notes": "everything else worth showing the operator (see below), or null",
   "confidence": 0.0
 }
 
 Rules:
-- Use null for anything the email does not state. Never invent or infer a
-  value that is not there — a missing field is expected and fine.
-- The sender is not necessarily the patient. A parent, spouse, or a
-  referring optometrist's office may be writing on someone else's behalf;
-  extract the *patient's* details.
-- Resolve relative dates ("next Tuesday", "the 14th") against the Received
-  date if one is given. If you cannot resolve one confidently, use null.
-- "confidence" is your overall confidence from 0.0 to 1.0 that this email
-  is genuinely an eye exam request and that you read the details correctly.
-  Use a low value if the email is ambiguous, is not an exam request at all,
-  or if key details are unclear.
-- Return the raw JSON object only. No explanation, no markdown fences.`;
+- Return [] if the document lists no booked patients.
+- One element per booked patient (a schedule row with a time). SKIP wait
+  lists, recall lists, and anyone marked declined or cancelled.
+- **Merge the notes.** For each patient, combine their schedule row with
+  any note, message, or comment elsewhere in the file that names them (or
+  their room/wing). Put the combined free text in "notes" — include: fee
+  or private-pay flags ("$140", "private pay $180"), attendance markers
+  (A = attending, NA / N.A = not attending), contact caveats ("wrong
+  phone #", "no email"), clinical context, and the POA name if given.
+- **Notes can correct the row.** If a note says a value in the row is
+  wrong (e.g. "DOB reads July 25 2026, a year error — confirm"), do NOT
+  guess the corrected value: leave that field null and state the problem
+  in "notes".
+- **Ignore any "Status" / "OHIP status" column** (values like "Ok", "407",
+  "$140", "Elig. 12/05/24"). The app re-checks OHIP eligibility itself.
+  You may mention a fee/private-pay signal from it in "notes".
+- Use null for anything the document does not state. Never invent or infer
+  a value that is not there — a missing field is expected and fine.
+- Column headers, labels and layout vary; map them by meaning, not exact
+  name. The appointment date is often in a header line above the table.
+- "confidence" is your 0.0–1.0 confidence that this is genuinely a booked
+  eye-exam patient and that you read its details correctly. Use a low
+  value for a header/total row or unclear key details.
+- Return the raw JSON array only. No explanation, no markdown fences.`;

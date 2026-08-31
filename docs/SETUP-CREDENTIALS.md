@@ -17,8 +17,8 @@ get it.
 | 3 | Wave access token | For invoicing & receipts | Setup, step 3 |
 | 4 | Wave business + accounts | With #3 | Setup, step 3 |
 | 5 | OHIP mode + ministry credentials | For real eligibility checks | Setup, step 4 |
-| 6 | Google OAuth client | For email & calendar | Settings → Google |
-| 7 | Gmail search | For automatic intake | Settings → Exam Requests |
+| 6 | Google OAuth client | For calendar & reminder emails | Settings → Google |
+| 7 | Patient files folder | For automatic intake | Settings → Exam Requests |
 | 8 | Invoice product/account | For invoicing | Settings → Exam Requests |
 | 9 | Business name, timezone, fee | Recommended | Settings → Exam Requests |
 | 10 | Wave OAuth client | Optional alternative to #3 | Settings → Wave |
@@ -39,11 +39,12 @@ There is no reset — nothing syncs to the cloud. Write it down.
 
 ## 2. Claude API key
 
-**Required.** Reads receipts, and reads incoming exam-request emails.
+**Required.** Reads receipts, and reads patient files from the scanned
+folder.
 
 Get it at [console.anthropic.com](https://console.anthropic.com) →
 Settings → API Keys → Create Key. Needs a payment method; extraction costs
-a fraction of a cent per receipt or email.
+a fraction of a cent per receipt or file.
 
 Starts with `sk-ant-`.
 
@@ -124,8 +125,8 @@ Mock mode has fixed test numbers, so you can try each outcome:
 
 ## 6. Google OAuth client
 
-**Required for reading exam requests and sending reminders.** Settings →
-Google.
+**Required for calendar matching and sending reminder emails.** Settings →
+Google. The app does not read your inbox.
 
 1. Go to [console.cloud.google.com](https://console.cloud.google.com) and
    create a project (or reuse one).
@@ -140,26 +141,33 @@ Google.
 > Do the connect step **in a browser on the Mac running the app**. The
 > redirect address is a localhost one and won't resolve from your phone.
 
-The app asks for: read Gmail, send as you, and manage calendar events.
+The app asks for: send email as you, and manage calendar events.
 
 ---
 
-## 7. Gmail search
+## 7. Patient files folder
 
 **Required for automatic intake.** Settings → Exam Requests.
 
-This decides which emails count as exam requests. Nothing is polled while
-it's empty.
+The app scans this folder every minute for `.docx`, `.xlsx`, `.csv`,
+`.pdf`, `.txt` and `.eml` files, reads the patients and appointments out
+of each one, and drafts an approval card per patient. It merges each
+patient's schedule row with any notes elsewhere in the file that name
+them (including corrections). A file is re-read only if its contents
+change. Nothing is scanned while the folder is empty/unset.
 
-A dedicated Gmail label is the most reliable — make a filter in Gmail that
-labels booking requests, then enter:
+The OHIP "Status" column in a schedule is ignored — the app runs its own
+eligibility check. When Google is connected, approving a card also writes
+the appointment to your calendar, and you can change that patient's
+reminder time on the card before approving.
 
-```
-label:exam-requests
-```
+Point it at an absolute path on the Mac — typically a folder that a
+Dropbox, iCloud or Google Drive desktop app keeps synced, so your user can
+drop files in from any device. Use the **Test folder** button to confirm
+the app can see it.
 
-> **Keep it tight.** Every matching email is sent to Claude to read. A
-> broad search means unrelated mail leaves your machine.
+> **Keep it dedicated.** Every supported file in the folder (recursively)
+> is sent to Claude to read. Put only patient/appointment files there.
 
 ---
 

@@ -10,7 +10,8 @@ import * as api from '../../src/shared/api';
 
 function settings(overrides: Partial<Data> = {}): Data {
   return {
-    gmailQuery: 'label:exam-requests',
+    sourceFolder: '/Users/you/patient-files',
+    sourceFolderExists: true,
     minConfidence: 0.6,
     businessName: 'Viewpoint Vision Care',
     businessTimezone: 'America/Toronto',
@@ -27,6 +28,13 @@ beforeEach(() => {
   for (const fn of Object.values(api)) (fn as any).mockReset?.();
   api.getExamSettings.mockResolvedValue(settings());
   api.saveExamSettings.mockResolvedValue({ success: true });
+  api.testExamSourceFolder.mockResolvedValue({
+    ok: true,
+    fileCount: 3,
+    byExtension: { '.xlsx': 2, '.pdf': 1 },
+    sampleNames: ['sept.xlsx', 'oct.xlsx', 'walkins.pdf'],
+    tooLarge: [],
+  });
   api.getWaveInvoiceTargets.mockResolvedValue({
     income: [{ id: 'income-1', name: 'Professional Fees' }],
     products: [{ id: 'prod-1', name: 'Eye Exam', unitPrice: 120 }],
@@ -58,7 +66,7 @@ describe('ExamSettings', () => {
     );
     renderPanel();
 
-    await screen.findByLabelText(/Gmail search/i);
+    await screen.findByLabelText(/Patient files folder/i);
     expect(screen.queryByText(/invoices cannot be created without one/i)).not.toBeInTheDocument();
   });
 
@@ -86,23 +94,32 @@ describe('ExamSettings', () => {
     expect(payload.waveIncomeAccountId).toBe('');
   });
 
-  it('explains that the Gmail search gates everything', async () => {
+  it('explains that the folder gates everything', async () => {
     renderPanel();
-    await screen.findByLabelText(/Gmail search/i);
+    await screen.findByLabelText(/Patient files folder/i);
 
-    expect(screen.getByText(/Nothing is polled while this is empty/i)).toBeInTheDocument();
+    expect(screen.getByText(/Nothing is scanned while this is empty/i)).toBeInTheDocument();
   });
 
   it('saves the edited workflow settings', async () => {
     renderPanel();
 
-    const query = await screen.findByLabelText(/Gmail search/i);
-    await userEvent.clear(query);
-    await userEvent.type(query, 'label:bookings');
+    const folder = await screen.findByLabelText(/Patient files folder/i);
+    await userEvent.clear(folder);
+    await userEvent.type(folder, '/data/bookings');
     await userEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     await waitFor(() => expect(api.saveExamSettings).toHaveBeenCalled());
-    expect(api.saveExamSettings.mock.calls[0][0].gmailQuery).toBe('label:bookings');
+    expect(api.saveExamSettings.mock.calls[0][0].sourceFolder).toBe('/data/bookings');
+  });
+
+  it('tests the folder and reports what it found', async () => {
+    renderPanel();
+
+    await userEvent.click(await screen.findByRole('button', { name: /Test folder/i }));
+
+    await waitFor(() => expect(api.testExamSourceFolder).toHaveBeenCalledWith('/Users/you/patient-files'));
+    expect(await screen.findByText(/Found 3 files/i)).toBeInTheDocument();
   });
 
   it('still renders when Wave cannot be reached', async () => {
@@ -111,14 +128,14 @@ describe('ExamSettings', () => {
 
     expect(await screen.findByText(/Couldn't load your Wave products/i)).toBeInTheDocument();
     // The rest of the panel remains usable.
-    expect(screen.getByLabelText(/Gmail search/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Patient files folder/i)).toBeInTheDocument();
   });
 
   it('surfaces a rejected save', async () => {
     api.saveExamSettings.mockRejectedValue(new Error('Choose either a service product or an income account, not both.'));
     renderPanel();
 
-    await screen.findByLabelText(/Gmail search/i);
+    await screen.findByLabelText(/Patient files folder/i);
     await userEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     // "not both" also appears in the field's own help text, so match the

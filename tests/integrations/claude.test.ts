@@ -3,7 +3,12 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { installFetchMock, jsonResponse, networkFailure } from '../helpers/fetchMock.js';
-import { extractReceipt, validateApiKey, ClaudeAPIError } from '../../server/integrations/claude.js';
+import {
+  extractReceipt,
+  extractPatientBatch,
+  validateApiKey,
+  ClaudeAPIError,
+} from '../../server/integrations/claude.js';
 
 /**
  * Spec (CONVERSION-PLAN.md "Claude API Extraction Service"):
@@ -163,6 +168,57 @@ describe('claude service', () => {
       const { result } = await extractReceipt([file], 'key');
       expect(result.vendor).toBe('V');
       expect(result.total).toBe(1.13);
+    });
+  });
+
+  describe('extractPatientBatch', () => {
+    const patient = (name: string) => ({
+      patient_name: name,
+      email: null,
+      phone: null,
+      date_of_birth: null,
+      health_card_number: null,
+      health_card_version: null,
+      requested_date: null,
+      requested_time: null,
+      reason: null,
+      confidence: 0.9,
+    });
+
+    it('returns one entry per patient from a text file', async () => {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse(200, {
+          content: [{ text: JSON.stringify([patient('Ada Lovelace'), patient('Alan Turing')]) }],
+        }),
+      );
+
+      const { results } = await extractPatientBatch({ kind: 'text', text: 'two patients' }, 'key');
+      expect(results.map((r) => r.patient_name)).toEqual(['Ada Lovelace', 'Alan Turing']);
+    });
+
+    it('sends a PDF as a document content block', async () => {
+      fetchMock.mockResolvedValueOnce(jsonResponse(200, { content: [{ text: '[]' }] }));
+
+      await extractPatientBatch({ kind: 'pdf', base64: 'JVBERi0=' }, 'key');
+
+      const body = JSON.parse((fetchMock.mock.calls[0][1] as any).body);
+      expect(body.messages[0].content[0]).toMatchObject({
+        type: 'document',
+        source: { type: 'base64', media_type: 'application/pdf', data: 'JVBERi0=' },
+      });
+    });
+
+    it('never calls Claude for an empty text file', async () => {
+      const { results } = await extractPatientBatch({ kind: 'text', text: '   ' }, 'key');
+      expect(results).toEqual([]);
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('rejects a response that is not a JSON array', async () => {
+      fetchMock.mockResolvedValueOnce(jsonResponse(200, { content: [{ text: '{"patient_name":"Ada"}' }] }));
+      await expect(
+        extractPatientBatch({ kind: 'text', text: 'x' }, 'key'),
+      ).rejects.toBeInstanceOf(ClaudeAPIError);
     });
   });
 });

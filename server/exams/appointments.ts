@@ -141,6 +141,19 @@ export function upsertFromCalendarEvent(
   });
 }
 
+/**
+ * Records the Google event id after an approved file-sourced appointment
+ * has been written to the calendar. The row is now a mirror of a real
+ * calendar event, so its source becomes `google`.
+ */
+export function setGoogleEventId(appointmentId: string, eventId: string): void {
+  getDb()
+    .prepare(
+      `UPDATE appointments SET google_event_id = ?, source = 'google', updated_at = ? WHERE id = ?`,
+    )
+    .run(eventId, new Date().toISOString(), appointmentId);
+}
+
 export function linkPatient(appointmentId: string, patientId: string): void {
   getDb()
     .prepare(`UPDATE appointments SET patient_id = ?, updated_at = ? WHERE id = ?`)

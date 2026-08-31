@@ -187,6 +187,23 @@ export function draftReminder(
   return getReminder(id)!;
 }
 
+/**
+ * Moves a still-pending reminder to a new send time.
+ *
+ * The card lets the operator override the default lead time per patient.
+ * A reminder that has already sent (or been cancelled) is left alone.
+ */
+export function reschedule(id: string, scheduledFor: string): ReminderRow | undefined {
+  const row = getReminder(id);
+  if (!row || row.status !== 'pending') return undefined;
+
+  getDb()
+    .prepare(`UPDATE reminders SET scheduled_for = ?, updated_at = ? WHERE id = ?`)
+    .run(scheduledFor, new Date().toISOString(), id);
+
+  return getReminder(id);
+}
+
 /** Pending reminders whose send time has arrived. */
 export function listDue(now: Date = new Date()): ReminderRow[] {
   return getDb()

@@ -30,10 +30,11 @@ you can watch the workflow move.
 
 | Real service | Replaced by |
 |---|---|
-| Anthropic (Claude) | Canned extractions — receipts and exam-request emails |
+| Anthropic (Claude) | Canned extractions — receipts and patient files |
 | Wave | In-memory customers, invoices and expenses |
-| Gmail | Three exam-request emails; sent mail is captured, not delivered |
-| Google Calendar | Three appointments matching those emails |
+| Patient files folder | A seeded `patient-files/upcoming-exams.csv` with three patients and a note (the app also reads Word/PDF/etc.) |
+| Gmail | Send only — reminder mail is captured, not delivered |
+| Google Calendar | Three appointments matching those patients |
 | Google OAuth | Auto-approves, so the real connect flow still runs |
 | OHIP | The app's own mock mode, which was always built in |
 
@@ -74,7 +75,8 @@ upcoming and always a reminder due.
    **Approve & Upload**. Within a minute it shows as uploaded — and
    appears under *Receipt expenses* on http://localhost:4000.
 3. **Tap the envelope icon** (top right) → the **exam request inbox**.
-   Three requests, already drafted: patient matched, appointment linked,
+   Tap **Scan folder** — the seeded `upcoming-exams.csv` is read and three
+   requests appear, already drafted: patient matched, appointment linked,
    OHIP checked, invoice drafted, reminder written.
 4. Notice **Grace** and **Alan** show as *not covered* — that's the
    eligibility check doing its job. Every result is tagged `mock`.
@@ -98,7 +100,7 @@ The demo is most useful for the unhappy paths:
 
 - **Dismiss** a request instead of approving — its reminder should be
   cancelled and never send.
-- Clear the **Gmail search** in Settings → polling stops entirely.
+- Clear the **patient files folder** in Settings → scanning stops entirely.
 - Clear the **invoice product/account** → approving still checks
   eligibility and schedules the reminder, but reports that the invoice
   couldn't be created.

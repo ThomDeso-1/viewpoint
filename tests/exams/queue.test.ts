@@ -1,5 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import request from 'supertest';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 import { setupTestApp, type TestContext } from '../helpers/testApp.js';
 import { installFetchMock, jsonResponse } from '../helpers/fetchMock.js';
 
@@ -11,37 +14,9 @@ import { installFetchMock, jsonResponse } from '../helpers/fetchMock.js';
  * nothing reaches a patient or the books until the operator approves.
  */
 
-const b64 = (s: string) => Buffer.from(s).toString('base64url');
-
-function gmailListResponse(ids: string[]) {
-  return jsonResponse(200, { messages: ids.map((id) => ({ id, threadId: `t-${id}` })) });
-}
-
-function gmailMessageResponse(opts: {
-  id: string;
-  from?: string;
-  subject?: string;
-  body: string;
-}) {
+function claudeBatch(patients: Record<string, unknown>[]) {
   return jsonResponse(200, {
-    id: opts.id,
-    threadId: `t-${opts.id}`,
-    internalDate: String(Date.parse('2026-08-20T09:00:00Z')),
-    snippet: opts.body.slice(0, 50),
-    payload: {
-      headers: [
-        { name: 'From', value: opts.from ?? 'ada@example.com' },
-        { name: 'Subject', value: opts.subject ?? 'Eye exam request' },
-      ],
-      mimeType: 'text/plain',
-      body: { data: b64(opts.body) },
-    },
-  });
-}
-
-function claudeResponse(extraction: Record<string, unknown>) {
-  return jsonResponse(200, {
-    content: [{ type: 'text', text: JSON.stringify(extraction) }],
+    content: [{ type: 'text', text: JSON.stringify(patients) }],
   });
 }
 
@@ -60,18 +35,22 @@ const FULL_EXTRACTION = {
 
 describe('exams queue', () => {
   let ctx: TestContext;
+  let sourceDir: string;
   let queue: typeof import('../../server/exams/queue.js');
   let examRequests: typeof import('../../server/exams/exam-requests.js');
+  let processedFiles: typeof import('../../server/exams/processed-files.js');
   let patients: typeof import('../../server/exams/patients.js');
   let store: typeof import('../../server/platform/oauth-store.js');
 
   beforeEach(async () => {
+    sourceDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vr-src-'));
     ctx = await setupTestApp({
       CLAUDE_API_KEY: 'test-claude-key',
-      GMAIL_EXAM_REQUEST_QUERY: 'label:exam-requests',
+      EXAM_REQUEST_SOURCE_DIR: sourceDir,
     });
     queue = await import('../../server/exams/queue.js');
     examRequests = await import('../../server/exams/exam-requests.js');
+    processedFiles = await import('../../server/exams/processed-files.js');
     patients = await import('../../server/exams/patients.js');
     store = await import('../../server/platform/oauth-store.js');
 
@@ -84,139 +63,146 @@ describe('exams queue', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     ctx.teardown();
+    fs.rmSync(sourceDir, { recursive: true, force: true });
   });
 
-  describe('Gmail polling', () => {
-    it('creates one request per new message', async () => {
-      const mock = installFetchMock();
-      mock
-        .mockResolvedValueOnce(gmailListResponse(['m1', 'm2']))
-        .mockResolvedValueOnce(gmailMessageResponse({ id: 'm1', body: 'Please book me in.' }))
-        .mockResolvedValueOnce(gmailMessageResponse({ id: 'm2', body: 'Exam please.' }));
+  const writeSource = (name: string, body = 'patient file contents') => {
+    const full = path.join(sourceDir, name);
+    fs.mkdirSync(path.dirname(full), { recursive: true });
+    fs.writeFileSync(full, body);
+    return full;
+  };
 
-      expect(await queue.pollGmail()).toBe(2);
-      expect(examRequests.listByStatus('received')).toHaveLength(2);
+  describe('folder scanning', () => {
+    it('creates one request per patient in a file', async () => {
+      writeSource('bookings.csv');
+      const mock = installFetchMock();
+      mock.mockResolvedValueOnce(
+        claudeBatch([
+          FULL_EXTRACTION,
+          { ...FULL_EXTRACTION, patient_name: 'Grace Hopper', email: 'grace@example.com' },
+        ]),
+      );
+
+      expect(await queue.scanSourceFolder()).toBe(2);
+
+      const rows = examRequests.listByStatus('extracted');
+      expect(rows).toHaveLength(2);
+      expect(rows.map((r) => examRequests.readExtraction(r)?.patient_name).sort()).toEqual([
+        'Ada Lovelace',
+        'Grace Hopper',
+      ]);
+      expect(rows.every((r) => r.source === 'file')).toBe(true);
     });
 
-    it('does not duplicate a message seen on an earlier poll', async () => {
+    it('does not re-read a file whose contents have not changed', async () => {
+      writeSource('bookings.csv');
       const mock = installFetchMock();
-      mock
-        .mockResolvedValueOnce(gmailListResponse(['m1']))
-        .mockResolvedValueOnce(gmailMessageResponse({ id: 'm1', body: 'Book me.' }));
-      await queue.pollGmail();
+      mock.mockResolvedValueOnce(claudeBatch([FULL_EXTRACTION]));
+      expect(await queue.scanSourceFolder()).toBe(1);
 
-      // The poll window overlaps deliberately, so the same id comes back.
-      mock.mockResolvedValueOnce(gmailListResponse(['m1']));
-      expect(await queue.pollGmail()).toBe(0);
-
+      // No new Claude call is queued — a second read would throw.
+      expect(await queue.scanSourceFolder()).toBe(0);
       expect(examRequests.listAll()).toHaveLength(1);
     });
 
-    it('does nothing when no query is configured', async () => {
-      delete process.env.GMAIL_EXAM_REQUEST_QUERY;
+    it('re-reads a file after its contents change', async () => {
+      writeSource('bookings.csv', 'first version');
+      const mock = installFetchMock();
+      mock.mockResolvedValueOnce(claudeBatch([FULL_EXTRACTION]));
+      await queue.scanSourceFolder();
+
+      writeSource('bookings.csv', 'second version, now with two patients');
+      mock.mockResolvedValueOnce(
+        claudeBatch([FULL_EXTRACTION, { ...FULL_EXTRACTION, patient_name: 'Alan Turing' }]),
+      );
+      expect(await queue.scanSourceFolder()).toBe(2);
+      expect(examRequests.listAll()).toHaveLength(3);
+    });
+
+    it('does nothing when no folder is configured', async () => {
+      delete process.env.EXAM_REQUEST_SOURCE_DIR;
       const mock = installFetchMock();
 
-      expect(await queue.pollGmail()).toBe(0);
+      expect(await queue.scanSourceFolder()).toBe(0);
       expect(mock).not.toHaveBeenCalled();
     });
 
-    it('does nothing when Google is not connected', async () => {
-      store.disconnect('google');
+    it('does nothing without a Claude key', async () => {
+      writeSource('bookings.csv');
+      delete process.env.CLAUDE_API_KEY;
       const mock = installFetchMock();
 
-      expect(await queue.pollGmail()).toBe(0);
+      expect(await queue.scanSourceFolder()).toBe(0);
       expect(mock).not.toHaveBeenCalled();
     });
 
-    it('survives a Gmail outage without losing its place', async () => {
-      const mock = installFetchMock();
-      mock.mockResolvedValue(jsonResponse(503, {}));
+    it('survives a bad folder path without throwing', async () => {
+      process.env.EXAM_REQUEST_SOURCE_DIR = path.join(sourceDir, 'does-not-exist');
+      installFetchMock();
 
-      await expect(queue.pollGmail()).resolves.toBe(0);
-    });
-  });
-
-  describe('extraction', () => {
-    async function seedMessage(body = 'Please book an exam.') {
-      const mock = installFetchMock();
-      mock
-        .mockResolvedValueOnce(gmailListResponse(['m1']))
-        .mockResolvedValueOnce(gmailMessageResponse({ id: 'm1', body }));
-      await queue.pollGmail();
-      return mock;
-    }
-
-    it('parses an email into structured details', async () => {
-      const mock = await seedMessage();
-      mock.mockResolvedValueOnce(claudeResponse(FULL_EXTRACTION));
-
-      await queue.extractPending();
-
-      const row = examRequests.listByStatus('extracted')[0];
-      expect(row).toBeDefined();
-      expect(examRequests.readExtraction(row)?.patient_name).toBe('Ada Lovelace');
+      await expect(queue.scanSourceFolder()).resolves.toBe(0);
     });
 
-    it('parks a low-confidence read for review instead of acting on it', async () => {
-      const mock = await seedMessage('Do you sell sunglasses?');
-      mock.mockResolvedValueOnce(claudeResponse({ ...FULL_EXTRACTION, confidence: 0.1 }));
+    it('records a file that fails to parse and backs off instead of retrying every pass', async () => {
+      writeSource('broken.csv');
+      const mock = installFetchMock();
+      mock.mockResolvedValueOnce(jsonResponse(200, { content: [{ type: 'text', text: 'not json' }] }));
 
-      await queue.extractPending();
+      expect(await queue.scanSourceFolder()).toBe(0);
+
+      const record = processedFiles.get('broken.csv')!;
+      expect(record.status).toBe('error');
+      expect(record.retry_count).toBe(1);
+      expect(examRequests.listAll()).toHaveLength(0);
+
+      // Immediately re-scanning does not call Claude again (still backing off).
+      expect(await queue.scanSourceFolder()).toBe(0);
+      expect(mock.mock.calls).toHaveLength(1);
+    });
+
+    it('retries a file after a transient Claude failure', async () => {
+      writeSource('bookings.csv');
+      const mock = installFetchMock();
+      mock.mockResolvedValueOnce(jsonResponse(529, {}));
+      await queue.scanSourceFolder();
+      expect(processedFiles.get('bookings.csv')!.status).toBe('error');
+
+      // Make it due for another attempt.
+      const { getDb } = await import('../../server/db/db.js');
+      getDb()
+        .prepare(`UPDATE processed_source_files SET updated_at = ? WHERE relative_path = ?`)
+        .run(new Date(Date.now() - 60_000).toISOString(), 'bookings.csv');
+
+      mock.mockResolvedValueOnce(claudeBatch([FULL_EXTRACTION]));
+      expect(await queue.scanSourceFolder()).toBe(1);
+      expect(processedFiles.get('bookings.csv')!.status).toBe('ok');
+    });
+
+    it('parks a low-confidence row for review instead of drafting it', async () => {
+      writeSource('bookings.csv');
+      const mock = installFetchMock();
+      mock.mockResolvedValueOnce(claudeBatch([{ ...FULL_EXTRACTION, confidence: 0.1 }]));
+
+      await queue.scanSourceFolder();
 
       const row = examRequests.listAll()[0];
       expect(row.status).toBe('needsAttention');
       expect(row.last_error).toContain('Low confidence');
     });
-
-    it('retries a transient Claude failure', async () => {
-      const mock = await seedMessage();
-      mock.mockResolvedValueOnce(jsonResponse(529, {}));
-
-      await queue.extractPending();
-
-      const row = examRequests.listAll()[0];
-      expect(row.retry_count).toBe(1);
-      expect(row.status).toBe('received'); // still queued
-    });
-
-    it('stops retrying a malformed response', async () => {
-      const mock = await seedMessage();
-      mock.mockResolvedValueOnce(jsonResponse(200, { content: [{ type: 'text', text: 'not json' }] }));
-
-      await queue.extractPending();
-
-      const row = examRequests.listAll()[0];
-      expect(row.status).toBe('needsAttention');
-      expect(row.retry_count).toBe(0);
-    });
-
-    it('does nothing without a Claude key', async () => {
-      await seedMessage();
-      delete process.env.CLAUDE_API_KEY;
-
-      await queue.extractPending();
-
-      expect(examRequests.listByStatus('received')).toHaveLength(1);
-    });
   });
 
   describe('drafting', () => {
     async function seedExtracted(extraction: Record<string, unknown> = FULL_EXTRACTION) {
+      writeSource('bookings.csv');
       const mock = installFetchMock();
-      mock
-        .mockResolvedValueOnce(gmailListResponse(['m1']))
-        .mockResolvedValueOnce(gmailMessageResponse({ id: 'm1', body: 'Book me.' }));
-      await queue.pollGmail();
-
-      mock.mockResolvedValueOnce(claudeResponse(extraction));
-      await queue.extractPending();
-
+      mock.mockResolvedValueOnce(claudeBatch([extraction]));
+      await queue.scanSourceFolder();
       return mock;
     }
 
     it('creates the patient, checks eligibility, and drafts an invoice and reminder', async () => {
       const mock = await seedExtracted();
-      // Calendar lookup for the requested date.
       mock.mockResolvedValueOnce(
         jsonResponse(200, {
           items: [
@@ -245,6 +231,7 @@ describe('exams queue', () => {
       expect(dto.body.eligibility.mode).toBe('mock');
       expect(dto.body.reminder.status).toBe('pending');
       expect(dto.body.invoice.status).toBe('draft');
+      expect(dto.body.source).toBe('file');
     });
 
     it('never contacts Wave while drafting', async () => {
@@ -264,11 +251,9 @@ describe('exams queue', () => {
       await queue.draftPending();
 
       const row = examRequests.listAll()[0];
-      // The extraction blob is encrypted, so the raw row must not reveal
-      // the number even though the extraction contained it.
       expect(JSON.stringify(row)).not.toContain('1111111111');
       expect(row.extracted_json!.startsWith('v1:')).toBe(true);
-      // It is still readable through the decrypting accessor.
+      expect(row.body_snippet!.startsWith('v1:')).toBe(true);
       expect(examRequests.readExtraction(row)!.health_card_number).toBe('1111111111');
       expect(patients.readHealthCard(row.patient_id!, 'test')).toBe('1111111111');
     });
@@ -296,11 +281,11 @@ describe('exams queue', () => {
       await queue.draftPending();
 
       const after = patients.getPatient(existing.id)!;
-      expect(after.phone).toBe('555-EXISTING'); // not overwritten
-      expect(patients.readHealthCard(existing.id, 'test')).toBe('1111111111'); // gap filled
+      expect(after.phone).toBe('555-EXISTING');
+      expect(patients.readHealthCard(existing.id, 'test')).toBe('1111111111');
     });
 
-    it('drafts without an appointment when no calendar event matches', async () => {
+    it('records the appointment from the file when no calendar event matches', async () => {
       const mock = await seedExtracted();
       mock.mockResolvedValueOnce(jsonResponse(200, { items: [] }));
 
@@ -308,7 +293,24 @@ describe('exams queue', () => {
 
       const row = examRequests.listAll()[0];
       expect(row.status).toBe('drafted');
-      expect(row.appointment_id).toBeNull();
+      expect(row.appointment_id).toBeTruthy();
+
+      const appointments = await import('../../server/exams/appointments.js');
+      const appt = appointments.getAppointment(row.appointment_id!)!;
+      expect(appt.source).toBe('file');
+      expect(appt.google_event_id).toBeNull();
+      expect(appt.starts_at.slice(0, 10)).toBe('2026-09-01');
+    });
+
+    it('records a local appointment even when Google is not connected', async () => {
+      store.disconnect('google');
+      await seedExtracted();
+
+      await queue.draftPending();
+
+      const row = examRequests.listAll()[0];
+      expect(row.status).toBe('drafted');
+      expect(row.appointment_id).toBeTruthy();
     });
 
     it('parks a request with no patient name', async () => {
@@ -324,14 +326,10 @@ describe('exams queue', () => {
 
   describe('approval', () => {
     async function seedDrafted() {
+      writeSource('bookings.csv');
       const mock = installFetchMock();
-      mock
-        .mockResolvedValueOnce(gmailListResponse(['m1']))
-        .mockResolvedValueOnce(gmailMessageResponse({ id: 'm1', body: 'Book me.' }));
-      await queue.pollGmail();
-
-      mock.mockResolvedValueOnce(claudeResponse(FULL_EXTRACTION));
-      await queue.extractPending();
+      mock.mockResolvedValueOnce(claudeBatch([FULL_EXTRACTION]));
+      await queue.scanSourceFolder();
 
       mock.mockResolvedValueOnce(
         jsonResponse(200, {
@@ -358,6 +356,33 @@ describe('exams queue', () => {
       expect(result.invoice.error).toContain('Wave is not configured');
     });
 
+    it('writes a file-sourced appointment to Google Calendar on approval', async () => {
+      writeSource('bookings.csv');
+      const mock = installFetchMock();
+      mock.mockResolvedValueOnce(claudeBatch([FULL_EXTRACTION]));
+      await queue.scanSourceFolder();
+
+      // No calendar match, so the appointment came from the file.
+      mock.mockResolvedValueOnce(jsonResponse(200, { items: [] }));
+      await queue.draftPending();
+      const row = examRequests.listAll()[0];
+
+      // Approve: Wave isn't configured (invoice fails) but the calendar
+      // event is still created.
+      mock.mockResolvedValueOnce(jsonResponse(200, { id: 'new-evt-1', status: 'confirmed', start: { dateTime: new Date('2026-09-01T10:00:00').toISOString() } }));
+      await queue.approveExamRequest(row.id);
+
+      const createCall = mock.mock.calls.find(
+        (c) => String(c[0]).includes('/events') && (c[1] as RequestInit)?.method === 'POST',
+      );
+      expect(createCall).toBeTruthy();
+
+      const appointments = await import('../../server/exams/appointments.js');
+      const appt = appointments.getAppointment(examRequests.getExamRequest(row.id)!.appointment_id!)!;
+      expect(appt.google_event_id).toBe('new-evt-1');
+      expect(appt.source).toBe('google');
+    });
+
     it('creates, approves and sends the invoice once approved', async () => {
       process.env.WAVE_ACCESS_TOKEN = 'wave-token';
       process.env.WAVE_BUSINESS_ID = 'biz-1';
@@ -366,15 +391,12 @@ describe('exams queue', () => {
       const { mock, row } = await seedDrafted();
 
       mock
-        // findCustomerByEmail — no existing customer
         .mockResolvedValueOnce(jsonResponse(200, { data: { business: { customers: { pageInfo: { currentPage: 1, totalPages: 1 }, edges: [] } } } }))
-        // customerCreate
         .mockResolvedValueOnce(
           jsonResponse(200, {
             data: { customerCreate: { didSucceed: true, customer: { id: 'cust-1', name: 'Ada', email: 'ada@example.com' } } },
           }),
         )
-        // invoiceCreate
         .mockResolvedValueOnce(
           jsonResponse(200, {
             data: {
@@ -385,11 +407,9 @@ describe('exams queue', () => {
             },
           }),
         )
-        // invoiceApprove
         .mockResolvedValueOnce(
           jsonResponse(200, { data: { invoiceApprove: { didSucceed: true, invoice: { id: 'inv-1' } } } }),
         )
-        // invoiceSend
         .mockResolvedValueOnce(jsonResponse(200, { data: { invoiceSend: { didSucceed: true } } }));
 
       const result = await queue.approveExamRequest(row.id);
@@ -450,20 +470,16 @@ describe('exams queue', () => {
 
       const { mock, row } = await seedDrafted();
 
-      // First commit: Wave is down.
       mock.mockResolvedValueOnce(jsonResponse(500, {}));
       const first = await queue.approveExamRequest(row.id);
       expect(first.invoice.error).toBeTruthy();
-      expect(examRequests.getExamRequest(row.id)!.status).toBe('approved'); // stranded, not failed
+      expect(examRequests.getExamRequest(row.id)!.status).toBe('approved');
 
-      // Make it due for retry.
       const { getDb } = await import('../../server/db/db.js');
       getDb()
         .prepare(`UPDATE exam_requests SET updated_at = ? WHERE id = ?`)
         .run(new Date(Date.now() - 60_000).toISOString(), row.id);
 
-      // Second attempt: Wave is healthy. No invoice was created the first
-      // time, so this creates exactly one.
       mock
         .mockResolvedValueOnce(jsonResponse(200, { data: { business: { customers: { pageInfo: { currentPage: 1, totalPages: 1 }, edges: [] } } } }))
         .mockResolvedValueOnce(jsonResponse(200, { data: { customerCreate: { didSucceed: true, customer: { id: 'c1', name: 'Ada', email: 'ada@example.com' } } } }))
@@ -481,32 +497,18 @@ describe('exams queue', () => {
   });
 
   describe('reminder dispatch', () => {
-    /**
-     * Drives a request to `drafted` for an appointment close enough that
-     * its reminder is already due — reminders are scheduled
-     * REMINDER_LEAD_HOURS (24 by default) before the appointment, so an
-     * appointment less than a day out is due now.
-     */
     async function seedDueReminder() {
-      const soon = new Date(Date.now() + 60 * 60 * 1000); // an hour from now
-      // Both parts must come from the *local* clock: the app reads a
-      // requested date and time as business-local wall time. Taking the date
-      // from toISOString() (UTC) would land on the wrong day whenever the
-      // two disagree, which is most evenings west of Greenwich.
+      const soon = new Date(Date.now() + 60 * 60 * 1000);
       const pad = (n: number) => String(n).padStart(2, '0');
       const day = `${soon.getFullYear()}-${pad(soon.getMonth() + 1)}-${pad(soon.getDate())}`;
       const time = `${pad(soon.getHours())}:${pad(soon.getMinutes())}`;
 
+      writeSource('bookings.csv');
       const mock = installFetchMock();
-      mock
-        .mockResolvedValueOnce(gmailListResponse(['m1']))
-        .mockResolvedValueOnce(gmailMessageResponse({ id: 'm1', body: 'Book me.' }));
-      await queue.pollGmail();
-
       mock.mockResolvedValueOnce(
-        claudeResponse({ ...FULL_EXTRACTION, requested_date: day, requested_time: time }),
+        claudeBatch([{ ...FULL_EXTRACTION, requested_date: day, requested_time: time }]),
       );
-      await queue.extractPending();
+      await queue.scanSourceFolder();
 
       mock.mockResolvedValueOnce(
         jsonResponse(200, {
@@ -531,8 +533,6 @@ describe('exams queue', () => {
     it('sends the reminder once the request has been approved', async () => {
       const { mock, row } = await seedDueReminder();
 
-      // Approval without Wave configured still releases the reminder —
-      // the two halves fail independently.
       await queue.approveExamRequest(row.id);
 
       mock.mockResolvedValueOnce(jsonResponse(200, { id: 'sent-1' }));
@@ -556,8 +556,6 @@ describe('exams queue', () => {
 
       mock.mockResolvedValueOnce(jsonResponse(200, { id: 'sent-1' }));
       expect(await queue.sendDueReminders()).toBe(1);
-
-      // Already sent, so it is no longer due.
       expect(await queue.sendDueReminders()).toBe(0);
     });
 
@@ -579,7 +577,6 @@ describe('exams queue', () => {
       const { mock, row } = await seedDueReminder();
       await queue.approveExamRequest(row.id);
 
-      // 401 is not retryable — reconnecting is the only fix.
       mock.mockResolvedValueOnce(jsonResponse(401, {}));
       expect(await queue.sendDueReminders()).toBe(0);
 
@@ -597,14 +594,10 @@ describe('exams queue', () => {
     });
 
     it('holds back reminders for requests still awaiting approval', async () => {
+      writeSource('bookings.csv');
       const mock = installFetchMock();
-      mock
-        .mockResolvedValueOnce(gmailListResponse(['m1']))
-        .mockResolvedValueOnce(gmailMessageResponse({ id: 'm1', body: 'Book me.' }));
-      await queue.pollGmail();
-
-      mock.mockResolvedValueOnce(claudeResponse({ ...FULL_EXTRACTION, requested_date: '2026-09-01' }));
-      await queue.extractPending();
+      mock.mockResolvedValueOnce(claudeBatch([{ ...FULL_EXTRACTION, requested_date: '2026-09-01' }]));
+      await queue.scanSourceFolder();
 
       mock.mockResolvedValueOnce(
         jsonResponse(200, {
@@ -612,7 +605,6 @@ describe('exams queue', () => {
             {
               id: 'evt-1',
               summary: 'Exam — Ada Lovelace',
-              // Already in the past, so its reminder is due immediately.
               start: { dateTime: new Date('2026-09-01T10:00:00').toISOString() },
               end: { dateTime: new Date('2026-09-01T10:30:00').toISOString() },
               status: 'confirmed',
@@ -626,7 +618,6 @@ describe('exams queue', () => {
       const sent = await queue.sendDueReminders();
 
       expect(sent).toBe(0);
-      // Nothing was sent, so no new Gmail send request went out.
       expect(mock.mock.calls.length).toBe(callsBefore);
     });
   });

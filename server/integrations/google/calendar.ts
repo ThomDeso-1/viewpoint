@@ -2,11 +2,13 @@ import { getAccessToken, GoogleAuthError } from './auth.js';
 import { endpoint } from '../../platform/endpoints.js';
 
 /**
- * Google Calendar: reading the appointment schedule.
+ * Google Calendar: reading the appointment schedule, and writing an event
+ * back for an approved exam request whose appointment came from a scanned
+ * file rather than the calendar.
  *
- * The calendar is the source of truth for when appointments are — this
- * app mirrors it rather than owning it, so the operator keeps booking
- * wherever they already do.
+ * A matched event still stays the source of truth — the operator keeps
+ * booking wherever they already do — so a write only happens when nothing
+ * on the calendar matched.
  */
 
 
@@ -99,6 +101,41 @@ export async function getEvent(eventId: string): Promise<CalendarEvent> {
   const json = await calendarFetch(
     `/calendars/${encodeURIComponent(calendarId())}/events/${encodeURIComponent(eventId)}`,
   );
+  return toEvent(json);
+}
+
+/**
+ * Creates a calendar event for an appointment that came from a scanned
+ * file. No attendees — this mirrors the schedule for the office, it does
+ * not email the patient.
+ */
+export async function createEvent(input: {
+  summary: string;
+  description?: string | null;
+  location?: string | null;
+  /** ISO 8601 instant. */
+  startsAt: string;
+  /** ISO 8601 instant; defaults to 30 minutes after the start. */
+  endsAt?: string | null;
+}): Promise<CalendarEvent> {
+  const start = new Date(input.startsAt);
+  const end = input.endsAt ? new Date(input.endsAt) : new Date(start.getTime() + 30 * 60 * 1000);
+
+  const json = await calendarFetch(
+    `/calendars/${encodeURIComponent(calendarId())}/events`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        summary: input.summary,
+        description: input.description ?? undefined,
+        location: input.location ?? undefined,
+        start: { dateTime: start.toISOString() },
+        end: { dateTime: end.toISOString() },
+      }),
+    },
+  );
+
   return toEvent(json);
 }
 
