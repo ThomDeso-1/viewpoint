@@ -2,28 +2,12 @@ import { getAccessToken, GoogleAuthError } from './auth.js';
 import { endpoint } from '../../platform/endpoints.js';
 
 /**
- * Gmail: reading exam-request emails and sending reminders.
+ * Gmail: sending appointment reminders.
  *
- * Only the three operations the workflow needs — list, get, send.
+ * The app used to read exam-request emails here too; patient files now
+ * come from a scanned folder (`exams/file-source.ts`), so this is
+ * send-only — one operation, from the business's own mailbox.
  */
-
-
-export interface GmailMessageSummary {
-  id: string;
-  threadId: string;
-}
-
-export interface GmailMessage {
-  id: string;
-  threadId: string;
-  from: string | null;
-  to: string | null;
-  subject: string | null;
-  receivedAt: string;
-  snippet: string;
-  /** Decoded plain-text body, falling back to a tag-stripped HTML part. */
-  body: string;
-}
 
 async function gmailFetch(pathAndQuery: string, init: RequestInit = {}): Promise<any> {
   const token = await getAccessToken();
@@ -58,103 +42,11 @@ async function gmailFetch(pathAndQuery: string, init: RequestInit = {}): Promise
   return res.json();
 }
 
-/**
- * Lists message ids matching a Gmail search query.
- *
- * `query` is whatever the user configured in Settings (a label, a sender,
- * a subject filter). `afterEpochSeconds` narrows it to messages newer
- * than the last poll, using Gmail's own `after:` operator.
- */
-export async function listMessages(
-  query: string,
-  afterEpochSeconds?: number,
-  maxResults = 25,
-): Promise<GmailMessageSummary[]> {
-  const q = afterEpochSeconds ? `${query} after:${afterEpochSeconds}` : query;
-
-  const params = new URLSearchParams({ q, maxResults: String(maxResults) });
-  const json = await gmailFetch(`/messages?${params.toString()}`);
-
-  return (json.messages ?? []).map((m: any) => ({ id: m.id, threadId: m.threadId }));
-}
-
-export async function getMessage(id: string): Promise<GmailMessage> {
-  const json = await gmailFetch(`/messages/${encodeURIComponent(id)}?format=full`);
-
-  const headers: { name: string; value: string }[] = json.payload?.headers ?? [];
-  const header = (name: string): string | null =>
-    headers.find((h) => h.name.toLowerCase() === name.toLowerCase())?.value ?? null;
-
-  return {
-    id: json.id,
-    threadId: json.threadId,
-    from: header('From'),
-    to: header('To'),
-    subject: header('Subject'),
-    // internalDate is epoch milliseconds as a string.
-    receivedAt: new Date(Number(json.internalDate ?? Date.now())).toISOString(),
-    snippet: json.snippet ?? '',
-    body: extractBody(json.payload),
-  };
-}
-
-/**
- * Pulls readable text out of Gmail's nested MIME payload.
- *
- * Prefers text/plain anywhere in the tree; falls back to text/html with
- * tags stripped, since plenty of senders only include an HTML part.
- */
-export function extractBody(payload: any): string {
-  if (!payload) return '';
-
-  const plain = findPart(payload, 'text/plain');
-  if (plain) return decodeBase64Url(plain);
-
-  const html = findPart(payload, 'text/html');
-  if (html) return stripHtml(decodeBase64Url(html));
-
-  return '';
-}
-
-function findPart(part: any, mimeType: string): string | null {
-  if (part.mimeType === mimeType && part.body?.data) {
-    return part.body.data;
-  }
-
-  for (const child of part.parts ?? []) {
-    const found = findPart(child, mimeType);
-    if (found) return found;
-  }
-
-  return null;
-}
-
-function decodeBase64Url(data: string): string {
-  return Buffer.from(data.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf-8');
-}
-
-function stripHtml(html: string): string {
-  return html
-    .replace(/<style[\s\S]*?<\/style>/gi, '')
-    .replace(/<script[\s\S]*?<\/script>/gi, '')
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/p>/gi, '\n')
-    .replace(/<[^>]+>/g, '')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-}
-
 export interface SendMessageOptions {
   to: string;
   subject: string;
   body: string;
-  /** Set to reply within the original request's thread. */
+  /** Set to reply within an existing thread. */
   threadId?: string | null;
 }
 

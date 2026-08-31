@@ -75,7 +75,7 @@ describe('OAuth token storage', () => {
     store.saveTokens('google', {
       accessToken: 'secret-token',
       accountLabel: 'doc@example.com',
-      scope: 'gmail.readonly',
+      scope: 'gmail.send',
     });
 
     const status = store.connectionStatus('google');
@@ -176,7 +176,7 @@ describe('Google OAuth routes', () => {
     expect(url.searchParams.get('access_type')).toBe('offline');
     expect(url.searchParams.get('prompt')).toBe('consent');
     expect(url.searchParams.get('state')).toBeTruthy();
-    expect(url.searchParams.get('scope')).toContain('gmail.readonly');
+    expect(url.searchParams.get('scope')).toContain('gmail.send');
     expect(url.searchParams.get('scope')).toContain('calendar.events');
   });
 
@@ -231,7 +231,7 @@ describe('Google OAuth routes', () => {
             access_token: 'new-access',
             refresh_token: 'new-refresh',
             expires_in: 3600,
-            scope: 'gmail.readonly',
+            scope: 'gmail.send',
           }),
         )
         .mockResolvedValueOnce(jsonResponse(200, { email: 'doc@example.com' }));
@@ -279,7 +279,7 @@ describe('Google OAuth routes', () => {
   });
 });
 
-describe('Gmail message parsing', () => {
+describe('Gmail sending', () => {
   let ctx: TestContext;
   let gmail: typeof import('../../server/integrations/google/gmail.js');
 
@@ -290,60 +290,6 @@ describe('Gmail message parsing', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     ctx.teardown();
-  });
-
-  const b64 = (s: string) => Buffer.from(s).toString('base64url');
-
-  it('reads a top-level plain-text body', () => {
-    const body = gmail.extractBody({ mimeType: 'text/plain', body: { data: b64('Hello there') } });
-    expect(body).toBe('Hello there');
-  });
-
-  it('finds the plain-text part inside a multipart message', () => {
-    const body = gmail.extractBody({
-      mimeType: 'multipart/alternative',
-      parts: [
-        { mimeType: 'text/html', body: { data: b64('<p>HTML version</p>') } },
-        { mimeType: 'text/plain', body: { data: b64('Plain version') } },
-      ],
-    });
-    expect(body).toBe('Plain version');
-  });
-
-  it('digs through nested multipart wrappers', () => {
-    const body = gmail.extractBody({
-      mimeType: 'multipart/mixed',
-      parts: [
-        {
-          mimeType: 'multipart/alternative',
-          parts: [{ mimeType: 'text/plain', body: { data: b64('Deeply nested') } }],
-        },
-      ],
-    });
-    expect(body).toBe('Deeply nested');
-  });
-
-  it('falls back to HTML with the tags stripped', () => {
-    const body = gmail.extractBody({
-      mimeType: 'text/html',
-      body: { data: b64('<p>Book me for <b>Tuesday</b></p><br><script>evil()</script>') },
-    });
-    expect(body).toContain('Book me for Tuesday');
-    expect(body).not.toContain('<');
-    expect(body).not.toContain('evil()');
-  });
-
-  it('decodes HTML entities in the fallback', () => {
-    const body = gmail.extractBody({
-      mimeType: 'text/html',
-      body: { data: b64('<p>Jones &amp; Sons &quot;quoted&quot;&nbsp;text</p>') },
-    });
-    expect(body).toContain('Jones & Sons "quoted" text');
-  });
-
-  it('returns empty string for a message with no readable part', () => {
-    expect(gmail.extractBody({ mimeType: 'application/pdf', body: {} })).toBe('');
-    expect(gmail.extractBody(null)).toBe('');
   });
 
   it('builds a well-formed MIME message', () => {
@@ -379,68 +325,22 @@ describe('Gmail message parsing', () => {
       });
     });
 
-    it('narrows the search with Gmail\'s after: operator', async () => {
-      const mock = installFetchMock();
-      mock.mockResolvedValue(jsonResponse(200, { messages: [{ id: 'm1', threadId: 't1' }] }));
-
-      const result = await gmail.listMessages('label:exam-requests', 1700000000);
-
-      expect(result).toEqual([{ id: 'm1', threadId: 't1' }]);
-      const calledUrl = new URL(mock.mock.calls[0][0] as string);
-      expect(calledUrl.searchParams.get('q')).toBe('label:exam-requests after:1700000000');
-    });
-
-    it('returns an empty list when Gmail reports no matches', async () => {
-      const mock = installFetchMock();
-      mock.mockResolvedValue(jsonResponse(200, {}));
-
-      expect(await gmail.listMessages('label:none')).toEqual([]);
-    });
-
-    it('maps headers and body out of a full message', async () => {
-      const mock = installFetchMock();
-      mock.mockResolvedValue(
-        jsonResponse(200, {
-          id: 'm1',
-          threadId: 't1',
-          internalDate: '1700000000000',
-          snippet: 'Booking request',
-          payload: {
-            headers: [
-              { name: 'From', value: 'Ada <ada@example.com>' },
-              { name: 'Subject', value: 'Eye exam' },
-            ],
-            mimeType: 'text/plain',
-            body: { data: b64('I would like an exam.') },
-          },
-        }),
-      );
-
-      const msg = await gmail.getMessage('m1');
-      expect(msg.from).toBe('Ada <ada@example.com>');
-      expect(msg.subject).toBe('Eye exam');
-      expect(msg.body).toBe('I would like an exam.');
-      expect(msg.receivedAt).toBe(new Date(1700000000000).toISOString());
-    });
-
-    it('treats a 401 as a broken connection, not a retryable blip', async () => {
+    it('treats a 401 from Gmail as a broken connection, not a retryable blip', async () => {
       const mock = installFetchMock();
       mock.mockResolvedValue(jsonResponse(401, { error: 'unauthorized' }));
 
-      await expect(gmail.listMessages('x')).rejects.toMatchObject({
-        code: 'not_connected',
-        isRetryable: false,
-      });
+      await expect(
+        gmail.sendMessage({ to: 'a@b.com', subject: 'x', body: 'y' }),
+      ).rejects.toMatchObject({ code: 'not_connected', isRetryable: false });
     });
 
-    it('treats a 500 as retryable', async () => {
+    it('treats a 500 from Gmail as retryable', async () => {
       const mock = installFetchMock();
       mock.mockResolvedValue(jsonResponse(503, {}));
 
-      await expect(gmail.listMessages('x')).rejects.toMatchObject({
-        code: 'server_error',
-        isRetryable: true,
-      });
+      await expect(
+        gmail.sendMessage({ to: 'a@b.com', subject: 'x', body: 'y' }),
+      ).rejects.toMatchObject({ code: 'server_error', isRetryable: true });
     });
 
     it('sends a message and returns its id', async () => {

@@ -7,14 +7,13 @@ import {
   WAVE_PRODUCTS,
   WAVE_SALES_TAXES,
   appointmentFor,
-  emailBody,
   extractionFor,
   type DemoPerson,
 } from './fixtures.js';
 
 /**
  * A local stand-in for every external service the app talks to:
- * Anthropic, Wave, Google OAuth, Gmail, and Google Calendar.
+ * Anthropic, Wave, Google OAuth, Gmail send, and Google Calendar.
  *
  * The app's own clients are unmodified — they make the same requests
  * they would in production and parse the same response shapes. Only the
@@ -76,6 +75,7 @@ app.post('/anthropic/v1/messages', (req: Request, res: Response) => {
       ? content.filter((c: any) => c.type === 'text').map((c: any) => c.text).join('\n')
       : '';
   const hasImage = Array.isArray(content) && content.some((c: any) => c.type === 'image');
+  const hasDocument = Array.isArray(content) && content.some((c: any) => c.type === 'document');
 
   // The key-validation ping.
   if (asText.trim() === 'Say OK.') {
@@ -108,13 +108,14 @@ app.post('/anthropic/v1/messages', (req: Request, res: Response) => {
     });
   }
 
-  // An exam-request email. Identify who it is from the text so the
-  // extraction matches the message the app actually fetched.
-  const person = PEOPLE.find((p) => asText.includes(p.name)) ?? PEOPLE[0];
-  log('claude', `exam request extraction → ${person.name}`);
+  // A patient files scan. The whole file went to Claude, so return every
+  // person whose name appears in it (or all of them for a text-free PDF).
+  const named = PEOPLE.filter((p) => asText.includes(p.name));
+  const found = named.length > 0 ? named : hasDocument ? PEOPLE : [PEOPLE[0]];
+  log('claude', `patient batch extraction → ${found.length} patient(s)`);
 
   return res.json({
-    content: [{ type: 'text', text: JSON.stringify(extractionFor(person)) }],
+    content: [{ type: 'text', text: JSON.stringify(found.map(extractionFor)) }],
   });
 });
 
@@ -327,49 +328,7 @@ app.get('/google/oauth/userinfo', (_req: Request, res: Response) => {
   res.json({ email: 'reception@viewpoint-demo.example.com' });
 });
 
-// ── Gmail ──
-
-function messageIdFor(index: number): string {
-  return `demo-msg-${index + 1}`;
-}
-
-app.get('/gmail/v1/users/me/messages', (req: Request, res: Response) => {
-  log('gmail', `search: ${req.query.q}`);
-  res.json({
-    messages: PEOPLE.map((_, i) => ({ id: messageIdFor(i), threadId: `demo-thread-${i + 1}` })),
-  });
-});
-
-app.get('/gmail/v1/users/me/messages/:id', (req: Request, res: Response) => {
-  const index = PEOPLE.findIndex((_, i) => messageIdFor(i) === req.params.id);
-  if (index === -1) return res.status(404).json({ error: 'No such message' });
-
-  const person = PEOPLE[index];
-  const body = emailBody(person);
-  log('gmail', `fetch message → ${person.name}`);
-
-  res.json({
-    id: req.params.id,
-    threadId: `demo-thread-${index + 1}`,
-    internalDate: String(Date.now() - (index + 1) * 3600_000),
-    snippet: body.slice(0, 80),
-    payload: {
-      headers: [
-        { name: 'From', value: `${person.name} <${person.email}>` },
-        { name: 'To', value: 'reception@viewpoint-demo.example.com' },
-        { name: 'Subject', value: 'Eye exam appointment request' },
-      ],
-      mimeType: 'multipart/alternative',
-      parts: [
-        { mimeType: 'text/plain', body: { data: Buffer.from(body).toString('base64url') } },
-        {
-          mimeType: 'text/html',
-          body: { data: Buffer.from(`<p>${body.replace(/\n/g, '<br>')}</p>`).toString('base64url') },
-        },
-      ],
-    },
-  });
-});
+// ── Gmail (send only — the app no longer reads the inbox) ──
 
 app.post('/gmail/v1/users/me/messages/send', (req: Request, res: Response) => {
   const raw = Buffer.from(String(req.body?.raw ?? ''), 'base64url').toString('utf-8');
@@ -492,7 +451,7 @@ app.get('/', (_req: Request, res: Response) => {
 </style></head>
 <body>
   <h1>Demo services</h1>
-  <p class="sub">Standing in for Anthropic, Wave, Gmail and Google Calendar.
+  <p class="sub">Standing in for Anthropic, Wave, Gmail send and Google Calendar.
      Nothing here leaves your machine. Refreshes every 10s.</p>
 
   <h2>Emails "sent" (${sentEmails.length})</h2>
@@ -510,6 +469,6 @@ app.get('/', (_req: Request, res: Response) => {
 
 app.listen(PORT, () => {
   console.log(`\n  Demo services listening on http://localhost:${PORT}`);
-  console.log('  Standing in for: Anthropic · Wave · Google OAuth · Gmail · Calendar');
+  console.log('  Standing in for: Anthropic · Wave · Google OAuth · Gmail send · Calendar');
   console.log(`  Captured invoices and emails: http://localhost:${PORT}\n`);
 });

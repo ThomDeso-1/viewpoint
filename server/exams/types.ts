@@ -35,8 +35,8 @@ export type ExamRequestStatus =
 
 export type AppointmentStatus = 'scheduled' | 'completed' | 'cancelled';
 
-/** Where an appointment came from — a calendar event, or hand-entered. */
-export type AppointmentSource = 'google' | 'manual';
+/** Where an appointment came from — a calendar event, a scanned file, or hand-entered. */
+export type AppointmentSource = 'google' | 'file' | 'manual';
 
 export type ReminderStatus = 'pending' | 'sent' | 'failed' | 'cancelled';
 
@@ -82,8 +82,24 @@ export interface AppointmentRow {
   updated_at: string;
 }
 
+/** Where an exam request came from. */
+export type ExamRequestSource = 'gmail' | 'file';
+
 export interface ExamRequestRow {
   id: string;
+  /**
+   * The row's stable idempotency key (migration 006). For a file this is
+   * `<content-hash>#<patient-index>`; for a legacy Gmail row it is the
+   * message id.
+   */
+  source_ref: string;
+  source: ExamRequestSource;
+  /** Human label for the card header, e.g. `sept-bookings.xlsx — patient 3`. */
+  source_label: string | null;
+  /**
+   * Retained NOT NULL UNIQUE legacy column — see migration 006. File rows
+   * repeat `source_ref` here; nothing reads it.
+   */
   gmail_message_id: string;
   gmail_thread_id: string | null;
   received_at: string;
@@ -98,6 +114,19 @@ export interface ExamRequestRow {
   last_error: string | null;
   retry_count: number;
   created_at: string;
+  updated_at: string;
+}
+
+/** One row per file the folder scanner has read (migration 006). */
+export interface ProcessedSourceFileRow {
+  relative_path: string;
+  content_hash: string;
+  patients_found: number;
+  status: 'ok' | 'error';
+  last_error: string | null;
+  retry_count: number;
+  first_seen_at: string;
+  processed_at: string;
   updated_at: string;
 }
 
@@ -176,11 +205,11 @@ export interface OAuthTokenRow {
 // ── Extraction shape ──
 
 /**
- * What Claude is asked to pull out of an exam-request email.
+ * What Claude is asked to pull out of one patient in a scanned file.
  *
- * Every field is optional because a real email may simply not mention it;
- * the queue decides what is missing and surfaces it for the operator to
- * fill in rather than guessing.
+ * Every field is optional because a source may simply not state it; the
+ * queue decides what is missing and surfaces it for the operator to fill
+ * in rather than guessing.
  */
 export interface ExamRequestExtraction {
   patient_name: string | null;
@@ -192,6 +221,13 @@ export interface ExamRequestExtraction {
   requested_date: string | null;
   requested_time: string | null;
   reason: string | null;
+  /**
+   * Everything else worth showing the operator, merged from the patient's
+   * schedule row and any notes/messages elsewhere in the file that name
+   * them — including corrections ("DOB is a typo"), fee/private-pay flags,
+   * and contact caveats.
+   */
+  notes: string | null;
   /** 0–1, Claude's own confidence. Low values route to manual review. */
   confidence: number;
 }

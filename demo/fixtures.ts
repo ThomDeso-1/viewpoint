@@ -20,6 +20,8 @@ export interface DemoPerson {
   /** Snap to business hours (09:00 onwards) rather than whatever time it is now. */
   businessHours?: boolean;
   reason: string;
+  /** Merged schedule-row + note text, shown on the card. */
+  notes?: string;
 }
 
 export const PEOPLE: DemoPerson[] = [
@@ -46,6 +48,7 @@ export const PEOPLE: DemoPerson[] = [
     hoursFromNow: 30,
     businessHours: true,
     reason: 'New glasses prescription',
+    notes: 'NA on the schedule — confirm attendance with the POA. Note reads private pay $180.',
   },
   {
     name: 'Alan Turing',
@@ -97,25 +100,28 @@ export function appointmentFor(person: DemoPerson): Date {
   return appointmentTime(person.hoursFromNow, person.businessHours);
 }
 
-export function emailBody(person: DemoPerson): string {
-  const { day, time } = localParts(appointmentFor(person));
-
-  return [
-    `Hi there,`,
-    ``,
-    `I'd like to book an eye exam. Would ${day} at ${time} work?`,
-    ``,
-    `${person.reason}.`,
-    ``,
-    `My details:`,
-    `Name: ${person.name}`,
-    `Date of birth: ${person.dob}`,
-    `Health card: ${person.healthCard} ${person.versionCode}`,
-    `Phone: ${person.phone}`,
-    ``,
-    `Thanks,`,
-    `${person.name}`,
-  ].join('\n');
+/** A spreadsheet-style export the folder scanner reads, one row per patient. */
+export function patientFileCsv(people: DemoPerson[]): string {
+  const header =
+    'Patient,Date of Birth,Health Card,Version,Status,Phone,Email,Appointment Date,Appointment Time,Reason,Notes';
+  const clean = (s: string) => s.replace(/,/g, ';');
+  const rows = people.map((p, i) => {
+    const { day, time } = localParts(appointmentFor(p));
+    return [
+      p.name,
+      p.dob,
+      p.healthCard,
+      p.versionCode,
+      i === 0 ? 'Ok/75' : i === 1 ? '$180' : '407', // an OHIP "Status" the app ignores
+      p.phone,
+      p.email,
+      day,
+      time,
+      clean(p.reason),
+      clean(p.notes ?? ''),
+    ].join(',');
+  });
+  return [header, ...rows].join('\n');
 }
 
 export function extractionFor(person: DemoPerson) {
@@ -131,6 +137,7 @@ export function extractionFor(person: DemoPerson) {
     requested_date: day,
     requested_time: time,
     reason: person.reason,
+    notes: person.notes ?? null,
     confidence: 0.94,
   };
 }

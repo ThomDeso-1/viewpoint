@@ -1,5 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import request from 'supertest';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 import { setupTestApp, type TestContext } from '../helpers/testApp.js';
 import { installFetchMock, jsonResponse } from '../helpers/fetchMock.js';
 
@@ -10,7 +13,6 @@ import { installFetchMock, jsonResponse } from '../helpers/fetchMock.js';
  */
 
 const PASSWORD = 'test-password';
-const b64 = (s: string) => Buffer.from(s).toString('base64url');
 
 const FULL_EXTRACTION = {
   patient_name: 'Ada Lovelace',
@@ -27,15 +29,17 @@ const FULL_EXTRACTION = {
 
 describe('exams API', () => {
   let ctx: TestContext;
+  let sourceDir: string;
   let token: string;
   let queue: typeof import('../../server/exams/queue.js');
   let examRequests: typeof import('../../server/exams/exam-requests.js');
   let patients: typeof import('../../server/exams/patients.js');
 
   beforeEach(async () => {
+    sourceDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vr-src-'));
     ctx = await setupTestApp({
       CLAUDE_API_KEY: 'test-claude-key',
-      GMAIL_EXAM_REQUEST_QUERY: 'label:exam-requests',
+      EXAM_REQUEST_SOURCE_DIR: sourceDir,
     });
 
     await request(ctx.app).post('/api/auth/setup').send({ password: PASSWORD });
@@ -57,34 +61,20 @@ describe('exams API', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     ctx.teardown();
+    fs.rmSync(sourceDir, { recursive: true, force: true });
   });
 
   const auth = () => ({ Authorization: `Bearer ${token}` });
 
   /** Drives a request through to `drafted` with everything mocked. */
   async function seedDrafted() {
-    const mock = installFetchMock();
-    mock
-      .mockResolvedValueOnce(jsonResponse(200, { messages: [{ id: 'm1', threadId: 't1' }] }))
-      .mockResolvedValueOnce(
-        jsonResponse(200, {
-          id: 'm1',
-          threadId: 't1',
-          internalDate: String(Date.parse('2026-08-20T09:00:00Z')),
-          snippet: 'Book me',
-          payload: {
-            headers: [{ name: 'From', value: 'ada@example.com' }],
-            mimeType: 'text/plain',
-            body: { data: b64('Please book an exam.') },
-          },
-        }),
-      );
-    await queue.pollGmail();
+    fs.writeFileSync(path.join(sourceDir, 'bookings.csv'), 'a patient file');
 
+    const mock = installFetchMock();
     mock.mockResolvedValueOnce(
-      jsonResponse(200, { content: [{ type: 'text', text: JSON.stringify(FULL_EXTRACTION) }] }),
+      jsonResponse(200, { content: [{ type: 'text', text: JSON.stringify([FULL_EXTRACTION]) }] }),
     );
-    await queue.extractPending();
+    await queue.scanSourceFolder();
 
     mock.mockResolvedValueOnce(
       jsonResponse(200, {
@@ -230,6 +220,34 @@ describe('exams API', () => {
 
       expect(res.status).toBe(400);
       expect(res.body.error).toMatch(/already been created in Wave/i);
+    });
+  });
+
+  describe('reminder timing', () => {
+    it('reschedules the reminder to a new lead time before approval', async () => {
+      const { row } = await seedDrafted();
+
+      const before = await request(ctx.app).get(`/api/exams/exam-requests/${row.id}`).set(auth());
+      expect(before.body.reminder.editable).toBe(true);
+
+      const res = await request(ctx.app)
+        .put(`/api/exams/exam-requests/${row.id}/reminder`)
+        .set(auth())
+        .send({ leadHours: 72 });
+
+      expect(res.status).toBe(200);
+      expect(res.body.request.reminder.lead_hours).toBe(72);
+    });
+
+    it('rejects an out-of-range lead time', async () => {
+      const { row } = await seedDrafted();
+
+      const res = await request(ctx.app)
+        .put(`/api/exams/exam-requests/${row.id}/reminder`)
+        .set(auth())
+        .send({ leadHours: 99999 });
+
+      expect(res.status).toBe(400);
     });
   });
 
@@ -384,13 +402,50 @@ describe('exams API', () => {
       expect(res.body.error).toMatch(expected);
     });
 
-    it('saves the Gmail query the queue reads', async () => {
+    it('saves the patient files folder the scanner reads', async () => {
+      const { sourceDir: sd } = await import('../../server/exams/file-source.js');
       await request(ctx.app)
         .post('/api/settings/exams')
         .set(auth())
-        .send({ gmailQuery: 'label:bookings' });
+        .send({ sourceFolder: '/data/bookings' });
 
-      expect(queue.gmailQuery()).toBe('label:bookings');
+      expect(sd()).toBe('/data/bookings');
+    });
+
+    it('rejects a relative folder path', async () => {
+      const res = await request(ctx.app)
+        .post('/api/settings/exams')
+        .set(auth())
+        .send({ sourceFolder: 'bookings' });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/absolute path/i);
+    });
+
+    it('tests a folder and reports what it found', async () => {
+      fs.writeFileSync(path.join(sourceDir, 'sept.csv'), 'name,dob');
+      fs.writeFileSync(path.join(sourceDir, 'walkins.pdf'), '%PDF-1.4');
+
+      const res = await request(ctx.app)
+        .post('/api/settings/exams/test-folder')
+        .set(auth())
+        .send({ sourceFolder: sourceDir });
+
+      expect(res.status).toBe(200);
+      expect(res.body.ok).toBe(true);
+      expect(res.body.fileCount).toBe(2);
+      expect(res.body.byExtension['.csv']).toBe(1);
+      expect(res.body.sampleNames).toContain('sept.csv');
+    });
+
+    it('reports a folder that does not exist', async () => {
+      const res = await request(ctx.app)
+        .post('/api/settings/exams/test-folder')
+        .set(auth())
+        .send({ sourceFolder: path.join(sourceDir, 'nope') });
+
+      expect(res.status).toBe(400);
+      expect(res.body.ok).toBe(false);
     });
   });
 
@@ -459,31 +514,32 @@ describe('exams API', () => {
     });
   });
 
-  describe('email source is PHI (P0-1)', () => {
-    it('keeps the raw email out of the exam-request DTO', async () => {
+  describe('source record is PHI (P0-1)', () => {
+    it('keeps the raw source record out of the exam-request DTO', async () => {
       const { row } = await seedDrafted();
 
       const res = await request(ctx.app).get(`/api/exams/exam-requests/${row.id}`).set(auth());
       expect(res.body.has_source).toBe(true);
       expect(res.body).not.toHaveProperty('body_snippet');
-      expect(JSON.stringify(res.body)).not.toContain('Please book an exam');
+      // The full health card number is masked in the DTO's extraction.
+      expect(JSON.stringify(res.body)).not.toContain('1111111111');
     });
 
-    it('stores the retained email slice encrypted, not as plaintext', async () => {
+    it('stores the retained source slice encrypted, not as plaintext', async () => {
       await seedDrafted();
       const stored = examRequests.listAll()[0];
       expect(stored.body_snippet).toMatch(/^v1:/);
-      expect(stored.body_snippet).not.toContain('Please book an exam');
+      expect(stored.body_snippet).not.toContain('1111111111');
     });
 
-    it('serves the body through the /source route and audits the access', async () => {
+    it('serves the record through the /source route and audits the access', async () => {
       const { row } = await seedDrafted();
 
       const res = await request(ctx.app)
         .get(`/api/exams/exam-requests/${row.id}/source`)
         .set(auth());
       expect(res.status).toBe(200);
-      expect(res.body.body).toBe('Please book an exam.');
+      expect(res.body.body).toContain('Ada Lovelace');
 
       const audit = await request(ctx.app).get('/api/exams/audit').set(auth());
       const entry = audit.body.find((e: any) => e.action === 'exam_request.source_read');

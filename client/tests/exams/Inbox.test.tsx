@@ -15,7 +15,8 @@ beforeEach(() => {
   api.getExamRequestCounts.mockResolvedValue({
     counts: {},
     hcvMode: 'mock',
-    gmailQueryConfigured: true,
+    sourceFolderConfigured: true,
+    filesWithErrors: 0,
   });
 });
 
@@ -47,14 +48,15 @@ describe('Inbox', () => {
     expect(screen.getByText(/results are simulated/i)).toBeInTheDocument();
   });
 
-  it('prompts to configure a Gmail search when none is set', async () => {
+  it('prompts to set a patient files folder when none is configured', async () => {
     api.getExamRequestCounts.mockResolvedValue({
       counts: {},
       hcvMode: 'mock',
-      gmailQueryConfigured: false,
+      sourceFolderConfigured: false,
+      filesWithErrors: 0,
     });
     renderInbox();
-    expect(await screen.findByText(/No Gmail search is configured/i)).toBeInTheDocument();
+    expect(await screen.findByText(/No patient files folder is set/i)).toBeInTheDocument();
   });
 
   it('renders the drafted package for a request', async () => {
@@ -76,7 +78,7 @@ describe('Inbox', () => {
     expect(container.textContent).not.toMatch(/\b\d{10}\b/);
   });
 
-  it('fetches the original email only on demand (P0-1)', async () => {
+  it('fetches the source record only on demand (P0-1)', async () => {
     api.getExamRequests.mockResolvedValue([makeExamRequest({ has_source: true })]);
     api.getExamRequestSource.mockResolvedValue({ body: 'Please book Ada an exam.' });
     renderInbox();
@@ -84,18 +86,18 @@ describe('Inbox', () => {
     await screen.findByText('Ada Lovelace');
     expect(api.getExamRequestSource).not.toHaveBeenCalled();
 
-    await userEvent.click(screen.getByRole('button', { name: /show original email/i }));
+    await userEvent.click(screen.getByRole('button', { name: /show source record/i }));
 
     await waitFor(() => expect(api.getExamRequestSource).toHaveBeenCalledWith('req-1'));
     expect(await screen.findByText(/Please book Ada an exam/)).toBeInTheDocument();
   });
 
-  it('hides the email toggle when nothing was retained', async () => {
+  it('hides the source-record toggle when nothing was retained', async () => {
     api.getExamRequests.mockResolvedValue([makeExamRequest({ has_source: false })]);
     renderInbox();
 
     await screen.findByText('Ada Lovelace');
-    expect(screen.queryByRole('button', { name: /original email/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /source record/i })).not.toBeInTheDocument();
   });
 
   it('offers Approve only once a request is drafted', async () => {
@@ -171,12 +173,34 @@ describe('Inbox', () => {
     expect(screen.getByText(/This is a reminder/)).toBeInTheDocument();
   });
 
-  it('checks email on demand', async () => {
-    api.pollExamRequests.mockResolvedValue({ success: true, created: 2 });
+  it('shows merged notes on the card', async () => {
+    api.getExamRequests.mockResolvedValue([
+      makeExamRequest({
+        extraction: { ...makeExamRequest().extraction!, notes: 'Private pay $180 — confirm before clinic.' },
+      }),
+    ]);
     renderInbox();
 
-    await userEvent.click(await screen.findByRole('button', { name: /Check email/i }));
-    await waitFor(() => expect(api.pollExamRequests).toHaveBeenCalled());
+    expect(await screen.findByText(/Private pay \$180/)).toBeInTheDocument();
+  });
+
+  it('overrides the reminder lead time from the card', async () => {
+    api.getExamRequests.mockResolvedValue([makeExamRequest()]);
+    api.updateExamReminder.mockResolvedValue({ success: true, request: makeExamRequest() });
+    renderInbox();
+
+    await screen.findByText('Ada Lovelace');
+    await userEvent.selectOptions(screen.getByLabelText(/Remind/i), '72');
+
+    await waitFor(() => expect(api.updateExamReminder).toHaveBeenCalledWith('req-1', 72));
+  });
+
+  it('scans the folder on demand', async () => {
+    api.scanExamRequests.mockResolvedValue({ success: true, created: 2 });
+    renderInbox();
+
+    await userEvent.click(await screen.findByRole('button', { name: /Scan folder/i }));
+    await waitFor(() => expect(api.scanExamRequests).toHaveBeenCalled());
     expect(await screen.findByText(/Found 2 new requests/i)).toBeInTheDocument();
   });
 

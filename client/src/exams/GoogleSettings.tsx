@@ -56,7 +56,12 @@ export function GoogleSettings() {
 
   return (
     <section className="settings-section">
-      <h2 className="settings-section-title">Google (Gmail &amp; Calendar)</h2>
+      <h2 className="settings-section-title">Google Calendar &amp; reminder emails</h2>
+
+      <p className="settings-help">
+        Used to match a booked appointment to a request and to send reminder emails from your
+        mailbox. The app does not read your inbox.
+      </p>
 
       <div className="settings-row">
         <span className="settings-label">Status</span>

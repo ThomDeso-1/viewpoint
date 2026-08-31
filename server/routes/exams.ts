@@ -4,6 +4,8 @@ import * as patientsService from '../exams/patients.js';
 import * as appointmentsService from '../exams/appointments.js';
 import * as remindersService from '../exams/reminders.js';
 import * as queue from '../exams/queue.js';
+import * as processedFiles from '../exams/processed-files.js';
+import { sourceDir } from '../exams/file-source.js';
 import {
   checkPatientEligibility,
   latestCheckForAppointment,
@@ -71,10 +73,10 @@ function toExamRequestDto(row: ExamRequestRow) {
     id: row.id,
     status: row.status,
     received_at: row.received_at,
-    from_address: row.from_address,
-    subject: row.subject,
-    // The retained slice of the email body is PHI and is not inlined here.
-    // It is fetched on demand through the audited /source route below.
+    source: row.source,
+    source_label: row.source_label,
+    // The retained slice of the source record is PHI and is not inlined
+    // here. It is fetched on demand through the audited /source route below.
     has_source: !!row.body_snippet,
     extraction: examRequests.toExtractionDto(examRequests.readExtraction(row)),
     last_error: row.last_error,
@@ -88,10 +90,21 @@ function toExamRequestDto(row: ExamRequestRow) {
           status: reminder.status,
           channel: reminder.channel,
           scheduled_for: reminder.scheduled_for,
+          // Hours before the appointment this reminder is set to send —
+          // what the card's lead-time control shows and edits.
+          lead_hours: appointment
+            ? Math.round(
+                (new Date(appointment.starts_at).getTime() -
+                  new Date(reminder.scheduled_for).getTime()) /
+                  3_600_000,
+              )
+            : null,
           subject: reminder.subject,
           body: reminder.body,
           sent_at: reminder.sent_at,
           last_error: reminder.last_error,
+          // Only a still-pending reminder can be rescheduled from the card.
+          editable: reminder.status === 'pending',
         }
       : null,
     invoice: invoice
@@ -124,15 +137,15 @@ export function examsRoutes(): Router {
     res.json({
       counts: examRequests.statusCounts(),
       hcvMode: hcvMode(),
-      gmailQueryConfigured: !!queue.gmailQuery(),
+      sourceFolderConfigured: !!sourceDir(),
+      filesWithErrors: processedFiles.countByStatus().error,
     });
   });
 
-  // Each poll can fan out to Gmail + the Claude API for every new message.
+  // Each scan can fan out to the Claude API once per new or changed file.
   router.post('/exam-requests/poll', rateLimited('exam-poll', 10, 60_000), async (_req: Request, res: Response): Promise<void> => {
     try {
-      const created = await queue.pollGmail();
-      await queue.extractPending();
+      const created = await queue.scanSourceFolder();
       await queue.draftPending();
       res.json({ success: true, created });
     } catch (err: any) {
@@ -154,7 +167,7 @@ export function examsRoutes(): Router {
     res.json(toExamRequestDto(row));
   });
 
-  // ── GET /exam-requests/:id/source — the retained slice of the raw email ──
+  // ── GET /exam-requests/:id/source — the retained slice of the source record ──
   // Separate from the DTO because it is PHI: reading it is audited, the
   // same way decrypting a health card number is.
   router.get('/exam-requests/:id/source', (req: Request, res: Response): void => {
@@ -386,6 +399,39 @@ export function examsRoutes(): Router {
       amount: queue.invoiceTotal(items),
       last_error: null,
     });
+
+    res.json({ success: true, request: toExamRequestDto(examRequests.getExamRequest(row.id)!) });
+  });
+
+  // ── PUT /api/exams/exam-requests/:id/reminder — override the send time ──
+  router.put('/exam-requests/:id/reminder', (req: Request, res: Response): void => {
+    const row = examRequests.getExamRequest(req.params.id);
+    if (!row) {
+      res.status(404).json({ error: 'Exam request not found.' });
+      return;
+    }
+    if (!row.appointment_id) {
+      res.status(400).json({ error: 'This request has no appointment to remind about.' });
+      return;
+    }
+
+    const appointment = appointmentsService.getAppointment(row.appointment_id);
+    const reminder = remindersService.findForAppointment(row.appointment_id);
+    if (!appointment || !reminder || reminder.status !== 'pending') {
+      res.status(400).json({ error: 'This reminder can no longer be rescheduled.' });
+      return;
+    }
+
+    const leadHours = Number(req.body?.leadHours);
+    if (!Number.isFinite(leadHours) || leadHours <= 0 || leadHours > 24 * 30) {
+      res.status(400).json({ error: 'Reminder lead time must be between 1 hour and 30 days.' });
+      return;
+    }
+
+    const scheduledFor = new Date(
+      new Date(appointment.starts_at).getTime() - leadHours * 3_600_000,
+    ).toISOString();
+    remindersService.reschedule(reminder.id, scheduledFor);
 
     res.json({ success: true, request: toExamRequestDto(examRequests.getExamRequest(row.id)!) });
   });

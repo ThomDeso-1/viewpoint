@@ -1,18 +1,18 @@
 import { v4 as uuid } from 'uuid';
 import { getDb } from '../db/db.js';
 import type { ExamRequestRow, ExamRequestStatus, ExamRequestExtraction } from './types.js';
-import type { GmailMessage } from '../integrations/google/gmail.js';
 import { encrypt, decrypt } from '../platform/crypto.js';
 import { applyFailure } from '../platform/failure.js';
 import { DEFAULT_MAX_RETRIES } from '../platform/backoff.js';
 
 /**
- * Exam requests — one row per incoming email that looks like a booking.
+ * Exam requests — one row per patient found in a scanned file.
  *
  * This is the spine of the automation queue: each row carries a request
- * from "an email arrived" through extraction, patient matching,
+ * from "a file was read" through extraction, patient matching,
  * eligibility, and a drafted invoice, up to the single point where the
- * operator approves it.
+ * operator approves it. (Legacy rows sourced from Gmail sit in the same
+ * table with `source = 'gmail'`.)
  */
 
 export function getExamRequest(id: string): ExamRequestRow | undefined {
@@ -21,8 +21,8 @@ export function getExamRequest(id: string): ExamRequestRow | undefined {
     | undefined;
 }
 
-export function findByGmailMessageId(messageId: string): ExamRequestRow | undefined {
-  return getDb().prepare(`SELECT * FROM exam_requests WHERE gmail_message_id = ?`).get(messageId) as
+export function findBySourceRef(sourceRef: string): ExamRequestRow | undefined {
+  return getDb().prepare(`SELECT * FROM exam_requests WHERE source_ref = ?`).get(sourceRef) as
     | ExamRequestRow
     | undefined;
 }
@@ -50,18 +50,32 @@ export function listPending(): ExamRequestRow[] {
     .all() as ExamRequestRow[];
 }
 
+export interface SourceRecordInput {
+  /** Stable idempotency key — `<file-content-hash>#<patient-index>`. */
+  sourceRef: string;
+  /** Card header text, e.g. `sept-bookings.xlsx — patient 3`. */
+  sourceLabel: string;
+  /** ISO timestamp — the file's modified time. */
+  receivedAt: string;
+  /** The slice of the file this patient was read from. */
+  rawText: string;
+  /** Claude's extraction for this one patient, already validated. */
+  extractionJson: string;
+}
+
 /**
- * Inserts a request for a Gmail message, or returns the existing one.
+ * Inserts one patient found in a scanned file, or returns the existing row.
  *
- * gmail_message_id is UNIQUE, so re-polling an overlapping time window
- * cannot create duplicates — which matters because the poll window
- * deliberately overlaps to avoid missing anything at the boundary.
+ * `source_ref` is UNIQUE (migration 006), so re-scanning a file that
+ * hasn't changed can only ever find the existing rows. Extraction has
+ * already run by the time the scanner calls this — one Claude request per
+ * file, not per patient — so the row lands straight in `extracted`.
  */
-export function createFromGmailMessage(message: GmailMessage): {
+export function createFromSourceRecord(input: SourceRecordInput): {
   row: ExamRequestRow;
   isNew: boolean;
 } {
-  const existing = findByGmailMessageId(message.id);
+  const existing = findBySourceRef(input.sourceRef);
   if (existing) return { row: existing, isNew: false };
 
   const now = new Date().toISOString();
@@ -70,52 +84,29 @@ export function createFromGmailMessage(message: GmailMessage): {
   getDb()
     .prepare(
       `INSERT INTO exam_requests (
-         id, gmail_message_id, gmail_thread_id, received_at, from_address,
-         subject, body_snippet, status, retry_count, created_at, updated_at
+         id, source, source_ref, source_label, gmail_message_id, received_at,
+         body_snippet, extracted_json, status, retry_count, created_at, updated_at
        ) VALUES (
-         @id, @gmail_message_id, @gmail_thread_id, @received_at, @from_address,
-         @subject, @body_snippet, 'received', 0, @created_at, @updated_at
+         @id, 'file', @source_ref, @source_label, @source_ref, @received_at,
+         @body_snippet, @extracted_json, 'extracted', 0, @created_at, @updated_at
        )`,
     )
     .run({
       id,
-      gmail_message_id: message.id,
-      gmail_thread_id: message.threadId,
-      received_at: message.receivedAt,
-      from_address: message.from,
-      subject: message.subject,
-      // Only a snippet is retained: the full message stays in Gmail, and
-      // this table is already holding enough personal information.
-      //
-      // Encrypted, like extracted_json: a booking email routinely spells
-      // out the health card number, DOB and name in its body, so a
+      source_ref: input.sourceRef,
+      source_label: input.sourceLabel,
+      received_at: input.receivedAt,
+      // Encrypted, like extracted_json: a patient row in a booking file
+      // routinely spells out the health card number, DOB and name, so a
       // plaintext copy here would defeat the encryption in `patients`.
       // Read it back through readBodySnippet().
-      body_snippet: encrypt((message.body || message.snippet).slice(0, 2000)),
+      body_snippet: encrypt(input.rawText.slice(0, 2000)),
+      extracted_json: encrypt(input.extractionJson),
       created_at: now,
       updated_at: now,
     });
 
   return { row: getExamRequest(id)!, isNew: true };
-}
-
-/**
- * Stores Claude's extraction, encrypted.
- *
- * The blob carries a name, date of birth, contact details and often a
- * health card number — the same personal health information the patients
- * table encrypts. Storing it as plaintext here would have left a second,
- * unprotected copy of every card number in the database.
- */
-export function saveExtraction(id: string, rawJson: string): void {
-  getDb()
-    .prepare(
-      `UPDATE exam_requests SET
-         extracted_json = ?, status = 'extracted', last_error = NULL,
-         retry_count = 0, updated_at = ?
-       WHERE id = ?`,
-    )
-    .run(encrypt(rawJson), new Date().toISOString(), id);
 }
 
 export function readExtraction(row: ExamRequestRow): ExamRequestExtraction | null {

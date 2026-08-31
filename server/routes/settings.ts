@@ -14,6 +14,18 @@ import { getWaveToken, isWaveConfigured, authMode } from '../integrations/wave/a
 import { hcvMode, resetHcvClient, loadConfigFromEnv, SoapHcvClient, HcvError } from '../integrations/ohip/index.js';
 import { isDemoMode } from '../platform/endpoints.js';
 import { rateLimited } from '../platform/rate-limit.js';
+import path from 'path';
+import { walkSourceDir, SourceFolderError } from '../exams/file-source.js';
+
+import fs from 'fs';
+
+function folderExists(dir: string): boolean {
+  try {
+    return fs.statSync(dir).isDirectory();
+  } catch {
+    return false;
+  }
+}
 
 const HEALTH_CACHE_MS = 5 * 60 * 1000; // re-check credentials at most every 5 minutes
 let claudeHealthCache: { healthy: boolean; checkedAt: number } | null = null;
@@ -248,8 +260,10 @@ export function settingsRoutes(): Router {
 
   // ── GET /api/settings/exams — exam-request workflow configuration ──
   router.get('/exams', (_req: Request, res: Response): void => {
+    const sourceFolder = process.env.EXAM_REQUEST_SOURCE_DIR || '';
     res.json({
-      gmailQuery: process.env.GMAIL_EXAM_REQUEST_QUERY || '',
+      sourceFolder,
+      sourceFolderExists: sourceFolder ? folderExists(sourceFolder) : false,
       minConfidence: Number(process.env.EXAM_REQUEST_MIN_CONFIDENCE) || 0.6,
       businessName: process.env.BUSINESS_NAME || '',
       businessTimezone: process.env.BUSINESS_TIMEZONE || 'America/Toronto',
@@ -266,7 +280,7 @@ export function settingsRoutes(): Router {
   // ── POST /api/settings/exams ──
   router.post('/exams', (req: Request, res: Response): void => {
     const {
-      gmailQuery,
+      sourceFolder,
       minConfidence,
       businessName,
       businessTimezone,
@@ -298,8 +312,14 @@ export function settingsRoutes(): Router {
       return;
     }
 
+    const folder = sourceFolder === undefined ? undefined : String(sourceFolder).trim();
+    if (folder && !path.isAbsolute(folder)) {
+      res.status(400).json({ error: 'The patient files folder must be an absolute path.' });
+      return;
+    }
+
     const updates: Record<string, string> = {};
-    if (gmailQuery !== undefined) updates.GMAIL_EXAM_REQUEST_QUERY = String(gmailQuery).trim();
+    if (folder !== undefined) updates.EXAM_REQUEST_SOURCE_DIR = folder;
     if (minConfidence !== undefined) updates.EXAM_REQUEST_MIN_CONFIDENCE = String(minConfidence);
     if (businessName !== undefined) updates.BUSINESS_NAME = String(businessName).trim();
     if (businessTimezone !== undefined) updates.BUSINESS_TIMEZONE = String(businessTimezone).trim();
@@ -311,6 +331,41 @@ export function settingsRoutes(): Router {
     updateEnvConfig(updates);
     res.json({ success: true });
   });
+
+  // ── POST /api/settings/exams/test-folder — check a folder before saving it ──
+  router.post(
+    '/exams/test-folder',
+    rateLimited('exam-folder-test', 20, 60_000),
+    (req: Request, res: Response): void => {
+      const folder = String(req.body?.sourceFolder ?? process.env.EXAM_REQUEST_SOURCE_DIR ?? '').trim();
+      if (!folder) {
+        res.status(400).json({ ok: false, error: 'No folder path given.' });
+        return;
+      }
+      if (!path.isAbsolute(folder)) {
+        res.status(400).json({ ok: false, error: 'The folder must be an absolute path.' });
+        return;
+      }
+
+      try {
+        const { files, tooLarge } = walkSourceDir(folder);
+        const byExtension: Record<string, number> = {};
+        for (const f of files) byExtension[f.ext] = (byExtension[f.ext] ?? 0) + 1;
+
+        res.json({
+          ok: true,
+          fileCount: files.length,
+          byExtension,
+          sampleNames: files.slice(0, 10).map((f) => f.relativePath),
+          tooLarge,
+        });
+      } catch (err) {
+        const message =
+          err instanceof SourceFolderError ? err.message : (err as Error).message;
+        res.status(400).json({ ok: false, error: message });
+      }
+    },
+  );
 
   // ── GET /api/settings/ohip — configuration state, never the secrets ──
   router.get('/ohip', (_req: Request, res: Response): void => {

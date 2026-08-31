@@ -4,10 +4,11 @@ import {
   getExamRequests,
   getExamRequestCounts,
   getExamRequestSource,
-  pollExamRequests,
+  scanExamRequests,
   approveExamRequest,
   rejectExamRequest,
   retryExamRequest,
+  updateExamReminder,
   type ExamRequest,
   type ExamRequestCounts,
 } from '../shared/api';
@@ -47,10 +48,10 @@ export function Inbox() {
     load();
   }, []);
 
-  const handlePoll = async () => {
+  const handleScan = async () => {
     setPolling(true);
     try {
-      const { created } = await pollExamRequests();
+      const { created } = await scanExamRequests();
       showToast(
         created > 0 ? `Found ${created} new request${created === 1 ? '' : 's'}.` : 'No new requests.',
         'success',
@@ -119,8 +120,8 @@ export function Inbox() {
       <header className="page-header">
         <h1>Exam requests</h1>
         <div className="header-actions">
-          <button onClick={handlePoll} disabled={polling} className="secondary">
-            {polling ? 'Checking…' : 'Check email'}
+          <button onClick={handleScan} disabled={polling} className="secondary">
+            {polling ? 'Scanning…' : 'Scan folder'}
           </button>
           <Link to="/" className="button-link">
             Receipts
@@ -128,10 +129,17 @@ export function Inbox() {
         </div>
       </header>
 
-      {meta && !meta.gmailQueryConfigured && (
+      {meta && !meta.sourceFolderConfigured && (
         <div className="banner banner-warning">
-          No Gmail search is configured yet, so nothing will arrive automatically.{' '}
+          No patient files folder is set yet, so nothing will arrive automatically.{' '}
           <Link to="/settings">Set one up in Settings.</Link>
+        </div>
+      )}
+
+      {meta && meta.filesWithErrors > 0 && (
+        <div className="banner banner-warning">
+          {meta.filesWithErrors} file{meta.filesWithErrors === 1 ? '' : 's'} in the folder could not
+          be read. Check the access log for details.
         </div>
       )}
 
@@ -199,6 +207,14 @@ function EligibilityLine({ request }: { request: ExamRequest }) {
   );
 }
 
+const REMINDER_LEADS = [
+  { hours: 24, label: '1 day before' },
+  { hours: 48, label: '2 days before' },
+  { hours: 72, label: '3 days before' },
+  { hours: 168, label: '1 week before' },
+  { hours: 336, label: '2 weeks before' },
+];
+
 function ExamRequestCard({
   request,
   busy,
@@ -214,22 +230,32 @@ function ExamRequestCard({
   onRetry: () => void;
   onInvoiceSaved: () => void;
 }) {
-  const [showEmail, setShowEmail] = useState(false);
-  const [emailBody, setEmailBody] = useState<string | null>(null);
-  const [emailError, setEmailError] = useState<string | null>(null);
+  const [showSource, setShowSource] = useState(false);
+  const [sourceText, setSourceText] = useState<string | null>(null);
+  const [sourceError, setSourceError] = useState<string | null>(null);
   const [showReminder, setShowReminder] = useState(false);
+  const { showToast } = useToast();
 
-  // The email body is PHI and access is audited, so it is fetched only
+  async function changeReminderLead(hours: number) {
+    try {
+      await updateExamReminder(request.id, hours);
+      onInvoiceSaved();
+    } catch (err) {
+      showToast((err as Error).message, 'error');
+    }
+  }
+
+  // The source record is PHI and access is audited, so it is fetched only
   // when the operator opens it — not delivered with the card.
-  async function toggleEmail() {
-    const next = !showEmail;
-    setShowEmail(next);
-    if (next && emailBody === null && emailError === null) {
+  async function toggleSource() {
+    const next = !showSource;
+    setShowSource(next);
+    if (next && sourceText === null && sourceError === null) {
       try {
         const { body } = await getExamRequestSource(request.id);
-        setEmailBody(body ?? '');
+        setSourceText(body ?? '');
       } catch (err) {
-        setEmailError((err as Error).message);
+        setSourceError((err as Error).message);
       }
     }
   }
@@ -250,7 +276,7 @@ function ExamRequestCard({
         <div>
           <h2>{request.patient?.full_name ?? extraction?.patient_name ?? 'Unidentified patient'}</h2>
           <p className="muted">
-            {request.from_address} · received {formatDateTime(request.received_at)}
+            {request.source_label ?? 'Imported file'} · added {formatDateTime(request.received_at)}
           </p>
         </div>
         <StatusBadge status={request.status} />
@@ -287,6 +313,13 @@ function ExamRequestCard({
             {(request.patient?.phone ?? extraction?.phone) && ` · ${request.patient?.phone ?? extraction?.phone}`}
           </dd>
         </div>
+
+        {extraction?.notes && (
+          <div>
+            <dt>Notes</dt>
+            <dd style={{ whiteSpace: 'pre-wrap' }}>{extraction.notes}</dd>
+          </div>
+        )}
 
         <div>
           <dt>Invoice</dt>
@@ -330,6 +363,35 @@ function ExamRequestCard({
                 <button className="link-button" onClick={() => setShowReminder((v) => !v)}>
                   {showReminder ? 'Hide' : 'Preview'}
                 </button>
+                {request.reminder.editable && (
+                  <>
+                    {' · '}
+                    <label>
+                      Remind:{' '}
+                      <select
+                        value={
+                          REMINDER_LEADS.some((l) => l.hours === request.reminder!.lead_hours)
+                            ? String(request.reminder!.lead_hours)
+                            : ''
+                        }
+                        onChange={(e) => changeReminderLead(Number(e.target.value))}
+                      >
+                        {!REMINDER_LEADS.some((l) => l.hours === request.reminder!.lead_hours) && (
+                          <option value="">
+                            {request.reminder!.lead_hours != null
+                              ? `${request.reminder!.lead_hours}h before`
+                              : 'custom'}
+                          </option>
+                        )}
+                        {REMINDER_LEADS.map((l) => (
+                          <option key={l.hours} value={l.hours}>
+                            {l.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </>
+                )}
               </>
             ) : (
               '—'
@@ -357,17 +419,17 @@ function ExamRequestCard({
       )}
 
       {request.has_source && (
-        <button className="link-button" onClick={toggleEmail}>
-          {showEmail ? 'Hide original email' : 'Show original email'}
+        <button className="link-button" onClick={toggleSource}>
+          {showSource ? 'Hide source record' : 'Show source record'}
         </button>
       )}
-      {showEmail && (
+      {showSource && (
         <pre className="preview-block">
-          {emailError
-            ? `Could not load the email: ${emailError}`
-            : emailBody === null
+          {sourceError
+            ? `Could not load the source record: ${sourceError}`
+            : sourceText === null
               ? 'Loading…'
-              : emailBody}
+              : sourceText}
         </pre>
       )}
 

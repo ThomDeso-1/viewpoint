@@ -1,30 +1,31 @@
 import { getDb } from '../db/db.js';
 import { v4 as uuid } from 'uuid';
+import fs from 'fs';
 import type { ExamRequestRow, WaveInvoiceRow, InvoiceLineItemDraft } from './types.js';
-import { getConfig, setConfig } from '../db/db.js';
 import * as examRequests from './exam-requests.js';
 import * as patients from './patients.js';
 import * as appointments from './appointments.js';
 import * as reminders from './reminders.js';
-import { listMessages, getMessage } from '../integrations/google/gmail.js';
-import { listEvents, matchEvent } from '../integrations/google/calendar.js';
+import * as processedFiles from './processed-files.js';
+import { sourceDir, walkSourceDir, hashBuffer, readForExtraction } from './file-source.js';
+import { listEvents, matchEvent, createEvent } from '../integrations/google/calendar.js';
 import { isGoogleConnected, GoogleAuthError } from '../integrations/google/auth.js';
-import { extractExamRequest, ClaudeAPIError } from '../integrations/claude.js';
+import { extractPatientBatch, ClaudeAPIError } from '../integrations/claude.js';
 import { checkPatientEligibility } from './eligibility.js';
 import { findOrCreateCustomer, createInvoice, approveInvoice, sendInvoice, WaveAPIError } from '../integrations/wave/index.js';
 import { getWaveToken, isWaveConfigured } from '../integrations/wave/auth.js';
-import { isReadyForRetry } from '../platform/backoff.js';
+import { isReadyForRetry, isExhausted } from '../platform/backoff.js';
 import { makePoller } from '../platform/poller.js';
 import { audit } from '../platform/audit.js';
 
 /**
  * The automation queue.
  *
- * Turns an incoming email into a drafted, reviewable package: patient
- * matched, appointment linked, eligibility checked, invoice drafted,
- * reminder composed. Steps 1–5 run on their own; step 6 — anything a
- * patient or the books actually sees — only ever runs after the operator
- * taps Approve.
+ * Turns a patient found in a scanned file into a drafted, reviewable
+ * package: patient matched, appointment linked, eligibility checked,
+ * invoice drafted, reminder composed. Steps 1–5 run on their own; step
+ * 6 — anything a patient or the books actually sees — only ever runs
+ * after the operator taps Approve.
  *
  * Shares the receipt queue's design rather than introducing a job
  * library: a re-entry guard, a 60s interval, and backoff that is stored
@@ -34,17 +35,7 @@ import { audit } from '../platform/audit.js';
 const POLL_INTERVAL_MS = 60_000;
 const MAX_RETRIES = 5;
 
-/** Re-polled deliberately to cover messages that land near a boundary. */
-const POLL_OVERLAP_MS = 10 * 60 * 1000;
-
-const LAST_POLL_KEY = 'gmail_last_poll_at';
-
 // ── Configuration ──
-
-export function gmailQuery(): string | null {
-  const query = process.env.GMAIL_EXAM_REQUEST_QUERY?.trim();
-  return query || null;
-}
 
 function claudeKey(): string | null {
   return process.env.CLAUDE_API_KEY || null;
@@ -59,84 +50,106 @@ function confidenceThreshold(): number {
 // ── Main pass ──
 
 export async function processQueue(): Promise<void> {
-  await pollGmail();
-  await extractPending();
+  await scanSourceFolder();
   await draftPending();
   await retryApproved();
   await sendDueReminders();
 }
 
-/** Step 1 — pull new exam-request emails into the queue. */
-export async function pollGmail(): Promise<number> {
-  const query = gmailQuery();
-  if (!query || !isGoogleConnected()) return 0;
+/**
+ * Steps 1–2 — read the patient-files folder and turn each new patient
+ * into a `received → extracted` row.
+ *
+ * A file is read once (one Claude request, however many patients it
+ * lists) and then remembered by content hash: an unchanged file is
+ * skipped on the next pass, an edited one is read again. A file that
+ * fails to parse is recorded with a back-off, so a broken file doesn't
+ * burn a Claude call every minute.
+ */
+export async function scanSourceFolder(): Promise<number> {
+  const dir = sourceDir();
+  const key = claudeKey();
+  if (!dir || !key) return 0;
 
-  const lastPoll = getConfig(LAST_POLL_KEY);
-  const since = lastPoll
-    ? Math.floor((new Date(lastPoll).getTime() - POLL_OVERLAP_MS) / 1000)
-    : undefined;
+  let walk: ReturnType<typeof walkSourceDir>;
+  try {
+    walk = walkSourceDir(dir);
+  } catch (err) {
+    console.error('[exams-queue] folder scan failed:', (err as Error).message);
+    return 0;
+  }
 
   let created = 0;
 
-  try {
-    const summaries = await listMessages(query, since);
-
-    for (const summary of summaries) {
-      // Skip the fetch entirely for anything already recorded — the
-      // overlap window means most results are usually already known.
-      if (examRequests.findByGmailMessageId(summary.id)) continue;
-
-      const message = await getMessage(summary.id);
-      const { isNew } = examRequests.createFromGmailMessage(message);
-      if (isNew) created++;
+  for (const file of walk.files) {
+    let hash: string;
+    let buf: Buffer;
+    try {
+      buf = fs.readFileSync(file.absolutePath);
+      hash = hashBuffer(buf);
+    } catch {
+      continue; // vanished or locked mid-scan — try again next pass
     }
 
-    // Only advance the watermark on a clean pass, so a mid-poll failure
-    // cannot skip messages.
-    setConfig(LAST_POLL_KEY, new Date().toISOString());
-  } catch (err) {
-    console.error('[exams-queue] Gmail poll failed:', (err as Error).message);
+    const prior = processedFiles.get(file.relativePath);
+    if (prior && prior.content_hash === hash) {
+      if (prior.status === 'ok') continue;
+      // A file that failed to parse: give up once its retries are spent
+      // (an edit changes the hash and starts it over), otherwise wait out
+      // the backoff.
+      if (isExhausted(prior.retry_count, MAX_RETRIES)) continue;
+      if (!isReadyForRetry(prior)) continue;
+    }
+
+    try {
+      const input = await readForExtraction(file, buf);
+      const { results } = await extractPatientBatch(input, key);
+
+      results.forEach((result, i) => {
+        const { row, isNew } = examRequests.createFromSourceRecord({
+          sourceRef: `${hash}#${i}`,
+          sourceLabel: `${file.relativePath} — patient ${i + 1}`,
+          receivedAt: file.mtime,
+          rawText: JSON.stringify(result, null, 2),
+          extractionJson: JSON.stringify(result),
+        });
+        if (isNew) created++;
+
+        // A low-confidence row usually means a header, a total line, or a
+        // non-patient entry. Park it for the operator instead of drafting
+        // an invoice from a guess.
+        if (result.confidence < confidenceThreshold()) {
+          examRequests.recordFailure(
+            row.id,
+            `Low confidence (${result.confidence.toFixed(2)}) — please review manually.`,
+            false,
+          );
+        }
+      });
+
+      processedFiles.markOk(file.relativePath, hash, results.length);
+      audit({
+        action: 'file_import.scanned',
+        entityType: 'source_file',
+        entityId: file.relativePath,
+        detail: `${results.length} patient(s)`,
+      });
+    } catch (err) {
+      const retryable = err instanceof ClaudeAPIError && err.isRetryable;
+      processedFiles.markError(file.relativePath, hash, (err as Error).message, retryable, MAX_RETRIES);
+      // Deliberately no error text in the audit detail: a JSON parse
+      // failure can echo a slice of Claude's output, which may name a
+      // patient. The full message is kept in processed_source_files.
+      audit({
+        action: 'file_import.failed',
+        entityType: 'source_file',
+        entityId: file.relativePath,
+        detail: err instanceof ClaudeAPIError ? `extraction (${err.code})` : 'could not be read',
+      });
+    }
   }
 
   return created;
-}
-
-/** Step 2 — parse each new email into structured details. */
-export async function extractPending(): Promise<void> {
-  const key = claudeKey();
-  if (!key) return;
-
-  for (const row of examRequests.listByStatus('received')) {
-    if (!isReadyForRetry(row)) continue;
-
-    try {
-      const { result, rawJSON } = await extractExamRequest(
-        {
-          from: row.from_address,
-          subject: row.subject,
-          body: row.body_snippet ?? '',
-          receivedAt: row.received_at,
-        },
-        key,
-      );
-
-      examRequests.saveExtraction(row.id, rawJSON);
-
-      // A low-confidence read usually means the email isn't an exam
-      // request at all. Park it for the operator instead of creating a
-      // patient and an invoice from a guess.
-      if (result.confidence < confidenceThreshold()) {
-        examRequests.recordFailure(
-          row.id,
-          `Low confidence (${result.confidence.toFixed(2)}) — please review manually.`,
-          false,
-        );
-      }
-    } catch (err) {
-      const retryable = err instanceof ClaudeAPIError && err.isRetryable;
-      examRequests.recordFailure(row.id, (err as Error).message, retryable, MAX_RETRIES);
-    }
-  }
 }
 
 /** Steps 3–5 — match, check eligibility, and draft. Nothing is sent. */
@@ -187,6 +200,7 @@ async function draftOne(row: ExamRequestRow): Promise<void> {
   const gaps: Record<string, string | null> = {};
   if (!patient.email && extraction.email) gaps.email = extraction.email;
   if (!patient.phone && extraction.phone) gaps.phone = extraction.phone;
+  if (!patient.notes && extraction.notes) gaps.notes = extraction.notes;
   if (!patient.health_card_enc && extraction.health_card_number) {
     gaps.health_card_number = extraction.health_card_number;
     gaps.health_card_version = extraction.health_card_version;
@@ -199,11 +213,15 @@ async function draftOne(row: ExamRequestRow): Promise<void> {
   const appointment = await resolveAppointment(row, extraction, patient.id);
 
   // ── Eligibility ──
+  // Always a fresh check: the schedule file carries an OHIP "Status"
+  // column, but it is not trusted — `force` bypasses the reuse window so
+  // approval reflects a real check, not what the form said.
   if (patient.health_card_enc || extraction.health_card_number) {
     await checkPatientEligibility({
       patientId: patient.id,
       appointmentId: appointment?.id ?? null,
       dateOfService: appointment?.starts_at?.slice(0, 10) ?? extraction.requested_date ?? undefined,
+      force: true,
     });
   }
 
@@ -225,35 +243,53 @@ async function resolveAppointment(
 ) {
   if (!extraction?.requested_date) return null;
 
-  if (!isGoogleConnected()) return null;
-
-  // The email states a wall-clock time ("Tuesday at 10"), while calendar
-  // events carry absolute instants. Parsing without a zone designator
-  // interprets it in the server's local timezone, which is the business's —
-  // the app runs on a machine in the office. If that ever stops being
-  // true, this is the line that needs an explicit zone conversion.
+  // The file states a wall-clock time, while calendar events carry
+  // absolute instants. Parsing without a zone designator interprets it in
+  // the server's local timezone, which is the business's — the app runs
+  // on a machine in the office. If that ever stops being true, this is
+  // the line that needs an explicit zone conversion.
   const requestedAt = new Date(
     `${extraction.requested_date}T${extraction.requested_time ?? '00:00'}:00`,
   );
   if (Number.isNaN(requestedAt.getTime())) return null;
 
-  // A day either side, so a request naming only a date still matches a
-  // timed event on that day.
-  const from = new Date(requestedAt.getTime() - 24 * 60 * 60 * 1000);
-  const to = new Date(requestedAt.getTime() + 24 * 60 * 60 * 1000);
+  // Prefer an existing calendar event over creating a duplicate.
+  if (isGoogleConnected()) {
+    const from = new Date(requestedAt.getTime() - 24 * 60 * 60 * 1000);
+    const to = new Date(requestedAt.getTime() + 24 * 60 * 60 * 1000);
 
-  const events = await listEvents(from, to);
-  const event = matchEvent(
-    events,
-    { requestedAt, patientName: extraction.patient_name, patientEmail: extraction.email },
-    // A request naming a time can be matched tightly; one naming only a
-    // date has to accept anything that day.
-    extraction.requested_time ? 60 * 60 * 1000 : 12 * 60 * 60 * 1000,
-  );
+    try {
+      const events = await listEvents(from, to);
+      const event = matchEvent(
+        events,
+        { requestedAt, patientName: extraction.patient_name, patientEmail: extraction.email },
+        extraction.requested_time ? 60 * 60 * 1000 : 12 * 60 * 60 * 1000,
+      );
 
-  if (!event) return null;
+      if (event) {
+        const appointment = appointments.upsertFromCalendarEvent(event, patientId);
+        examRequests.linkAppointment(row.id, appointment.id);
+        return appointment;
+      }
+    } catch (err) {
+      // A calendar read failure must not sink the whole draft — fall
+      // through to a local appointment, and the operator can reconcile.
+      console.error('[exams-queue] calendar lookup failed:', (err as Error).message);
+    }
+  }
 
-  const appointment = appointments.upsertFromCalendarEvent(event, patientId);
+  // Nothing on the calendar (or not connected): record the appointment
+  // from the file. If Google is connected, approval writes it back.
+  const existing = row.appointment_id ? appointments.getAppointment(row.appointment_id) : undefined;
+  const appointment =
+    existing ??
+    appointments.createAppointment({
+      patientId,
+      startsAt: requestedAt.toISOString(),
+      title: `Eye exam — ${extraction.patient_name ?? 'patient'}`,
+      source: 'file',
+    });
+
   examRequests.linkAppointment(row.id, appointment.id);
   return appointment;
 }
@@ -347,6 +383,7 @@ export async function approveExamRequest(examRequestId: string): Promise<{
   audit({ action: 'invoice.create', entityType: 'exam_request', entityId: examRequestId });
 
   const invoice = await commitInvoice(row);
+  await writeAppointmentToCalendar(row);
   const reminder = releaseReminder(row);
 
   if (invoice.error === null) {
@@ -522,6 +559,37 @@ export function updateInvoiceRow(id: string, fields: Record<string, unknown>): v
   getDb()
     .prepare(`UPDATE wave_invoices SET ${assignments}, updated_at = @updated_at WHERE id = @id`)
     .run({ ...fields, id, updated_at: new Date().toISOString() });
+}
+
+/**
+ * Mirrors a file-sourced appointment onto Google Calendar on approval.
+ *
+ * Best-effort: a calendar write failing must not strand an otherwise
+ * committed request. An appointment that already carries a
+ * `google_event_id` was matched to a real event and is left alone.
+ */
+async function writeAppointmentToCalendar(row: ExamRequestRow): Promise<void> {
+  if (!row.appointment_id || !isGoogleConnected()) return;
+
+  const appointment = appointments.getAppointment(row.appointment_id);
+  if (!appointment || appointment.google_event_id) return;
+
+  const patient = row.patient_id ? patients.getPatient(row.patient_id) : undefined;
+  const extraction = examRequests.readExtraction(row);
+
+  try {
+    const event = await createEvent({
+      summary: appointment.title ?? `Eye exam — ${patient?.full_name ?? 'patient'}`,
+      description: extraction?.notes ?? undefined,
+      location: appointment.location,
+      startsAt: appointment.starts_at,
+      endsAt: appointment.ends_at,
+    });
+    appointments.setGoogleEventId(appointment.id, event.id);
+    audit({ action: 'appointment.calendar_write', entityType: 'appointment', entityId: appointment.id });
+  } catch (err) {
+    console.error('[exams-queue] calendar write failed:', (err as Error).message);
+  }
 }
 
 /**
