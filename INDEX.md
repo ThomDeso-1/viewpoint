@@ -24,7 +24,7 @@ viewpoint-receipts/
 │
 ├── docs/
 │   ├── AUDIT.md                    known issues, prioritized
-│   ├── GETTING-STARTED.md          non-technical setup — receipts only, needs rewrite
+│   ├── GETTING-STARTED.md          non-technical setup: .pkg install, Tailscale, updates
 │   ├── SETUP-CREDENTIALS.md        every credential, where to get it
 │   ├── DEPLOYMENT.md               hosting, HTTPS, backups
 │   ├── SECURITY.md                 auth model, data at rest, PHI egress
@@ -36,14 +36,24 @@ viewpoint-receipts/
 │   ├── run-server.sh               what the launchd agent runs
 │   ├── lib-node-runtime.sh         sourced by the above; vendors Node 22 if needed
 │   ├── stop-native.sh              unloads the launchd agent
+│   ├── setup-tailscale.command     → scripts/setup-tailscale.sh (permanent HTTPS URL)
+│   ├── tailscale-off.command       → scripts/tailscale-off.sh   (undo the above)
+│   ├── update.command              → scripts/update.sh  (pull latest build; also remote)
+│   ├── uninstall.command           → scripts/uninstall.sh
 │   ├── start.command / .sh  stop.command / .sh   Docker variants
 │   ├── Dockerfile  docker-compose.yml
 │   └── scripts/                    maintenance / CI helpers only
+│       ├── lib-stage.sh            shared clean-tree staging + BUILD_INFO
 │       ├── make-bundle.sh          zips a clean copy for hand-off (run by CI)
+│       ├── make-pkg.sh             unsigned /Applications/ViewpointApp .pkg (CI: macos)
+│       ├── pkg-scripts/postinstall pkg root script: migrate old install, first run
+│       ├── pkg-resources/          distribution.xml + welcome/conclusion html
+│       ├── lib-app.sh              env upsert + server restart helpers
+│       ├── setup-tailscale.sh  tailscale-off.sh  update.sh  uninstall.sh
 │       └── backup.sh               sqlite .backup + Receipts/ → tarball (see audit P2-7)
 │
-├── .github/workflows/bundle.yml    push→main: rebuild bundle, publish `latest` release
-│                                   ⚠ no test/typecheck gate (audit P1-18)
+├── .github/workflows/ci.yml        push→main: verify → bundle (.zip) + pkg (.pkg),
+│                                   both published to the `latest` release
 ├── deploy/  Caddyfile  nginx.conf.example  viewpoint-receipts.service
 │
 ├── server/                         Express + TypeScript, run via tsx (no build step)
@@ -145,7 +155,8 @@ viewpoint-receipts/
 | **Demo mode** | `server/platform/endpoints.ts`, `demo/*` |
 | **The `/api` contract** | `client/src/shared/api.ts` ↔ `server/routes/*.ts` (change both) |
 | **Deploy / hosting** | `Dockerfile`, `docker-compose.yml`, `deploy/*`, `docs/DEPLOYMENT.md` |
-| **Hand-off bundle** | `scripts/make-bundle.sh`, `.github/workflows/bundle.yml` |
+| **Hand-off bundle / installer** | `scripts/{make-bundle,make-pkg}.sh`, `scripts/pkg-*`, `.github/workflows/ci.yml` |
+| **Permanent phone URL / remote admin** | `scripts/setup-tailscale.sh`, `scripts/update.sh`, `docs/GETTING-STARTED.md` |
 
 ---
 
@@ -193,7 +204,10 @@ deliberately left out and should each be their own small commit — see
 - **App launchers stay at the repo root** (`start*.command/.sh`,
   `run-server.sh`, `lib-node-runtime.sh`) — they resolve `APP_DIR` from
   their own location and the launchd plist hardcodes those paths.
-  `scripts/` is for maintenance/CI helpers only.
+  `scripts/` is for maintenance/CI helpers and the *implementations* of
+  the operator `.command` files (`setup-tailscale`, `update`, …), each a
+  one-line `./scripts/<name>.sh` wrapper at the root so the app folder
+  shows only double-click-friendly names.
 - **Tests mirror source.** A new `server/exams/foo.ts` gets
   `tests/exams/foo.test.ts`; a new `client/src/receipts/Bar.tsx` gets
   `client/tests/receipts/Bar.test.tsx`.

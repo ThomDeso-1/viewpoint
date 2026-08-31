@@ -252,11 +252,50 @@ behind the gate.
 
 ## 6. Upgrade & maintenance processes
 
-### Before shipping a bundle / release
+### Shipping a bundle / release
 
-The CI (`.github/workflows/bundle.yml`) currently publishes on every push
-to `main` **with no test gate** (audit P1-18 — fix this first). Until it
-does, before merging to `main`:
+`.github/workflows/ci.yml` gates on `verify` (typecheck + `test:all` +
+build), then on a push to `main` runs two publish jobs against the GitHub
+`latest` release:
+
+- **`bundle`** (ubuntu) — `scripts/make-bundle.sh` → `viewpoint-receipts-bundle.zip`.
+  This is what `scripts/update.sh` / `update.command` download.
+- **`pkg`** (macos, `needs: [verify, bundle]`) — `scripts/make-pkg.sh` →
+  unsigned `ViewpointApp-installer.pkg`. Runs after `bundle` so the two
+  asset uploads don't race.
+
+Both staging paths share `scripts/lib-stage.sh` (`stage_source`), which also
+writes `BUILD_INFO` (`<git sha> <UTC>`) into the tree — `update.sh` prints it.
+
+### The macOS installer + Tailscale + update flow
+
+The non-technical single-Mac path (see `docs/GETTING-STARTED.md`,
+`docs/DEPLOYMENT.md` Option C):
+
+- `scripts/make-pkg.sh` — needs macOS (`pkgbuild`/`productbuild`). Payload is
+  **source only** (no `node_modules`/build), so the `.pkg` is
+  arch-independent; native deps are fetched at first run by
+  `start-native.sh`. Install location `/Applications/ViewpointApp`.
+- `scripts/pkg-scripts/postinstall` — runs as root: if a hand-run install
+  exists (reads `WorkingDirectory` from the old
+  `com.viewpointreceipts.server.plist`), copies its `.env` (incl.
+  `DATA_ENCRYPTION_KEY`) and `data/` over and boots out the old agent;
+  `chown`s the tree to the console user; opens `start-native.command` in
+  Terminal. **Never deletes the old folder.**
+- `scripts/setup-tailscale.sh` (+ `.command`) — `tailscale serve --bg 3000`
+  and upserts `APP_PUBLIC_URL` + `TRUST_PROXY=1` into `.env` via
+  `scripts/lib-app.sh` `env_set` (comment-preserving, like
+  `updateEnvConfig()`). `scripts/tailscale-off.sh` reverts.
+- `scripts/update.sh` (+ `.command`) — downloads the `latest` bundle,
+  `rsync -a --delete --exclude-from=scripts/update-preserve.txt` over the
+  install, `npm install --ignore-scripts` both projects, `npm run build`,
+  restart. Also runnable over Tailscale SSH.
+- The user-facing name is **"Viewpoint"** (manifest, `<title>`, login
+  header, version line, server log). Internal identifiers — repo/package
+  names, `DATA_DIR`, DB file, the `com.viewpointreceipts.server` launchd
+  label — are deliberately unchanged. A full rename is a separate task.
+
+**Before merging changes to any of this to `main`:**
 
 ```bash
 npm run test:all && npm run typecheck:all && npm run build
@@ -325,10 +364,12 @@ first real invoice (`docs/history/upgrade-plan.md` "What's left" #2).
 
 ### Turning on HTTPS (required before real patient data)
 
-`docs/DEPLOYMENT.md` + `deploy/Caddyfile`. The session cookie marks itself
-`Secure` automatically once a request arrives over HTTPS. Also: set
-`TRUST_PROXY=1` only when actually behind a proxy (audit P0-3), and back
-up `DATA_ENCRYPTION_KEY` separately from `data/` (audit P2-7).
+`docs/DEPLOYMENT.md` + `deploy/Caddyfile`, or — for the single-Mac setup —
+just `setup-tailscale.command` (Tailscale Serve, no domain/cert work). The
+session cookie marks itself `Secure` automatically once a request arrives
+over HTTPS. Also: set `TRUST_PROXY=1` only when actually behind a proxy
+(audit P0-3 — Tailscale Serve counts), and back up `DATA_ENCRYPTION_KEY`
+separately from `data/` (audit P2-7).
 
 ### Dependency review cadence
 

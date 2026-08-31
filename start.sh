@@ -13,7 +13,7 @@ fi
 touch .env
 mkdir -p data
 
-echo "Starting Viewpoint Receipts..."
+echo "Starting Viewpoint..."
 docker compose up -d --build
 
 echo

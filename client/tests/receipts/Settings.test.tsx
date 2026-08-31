@@ -86,7 +86,7 @@ describe('Settings', () => {
     api.getWaveHealth.mockResolvedValue({ healthy: false });
     renderSettings();
 
-    await waitFor(() => expect(screen.getByText('Viewpoint Receipts v1.0.0')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Viewpoint v1.0.0')).toBeInTheDocument());
     expect(screen.queryByRole('button', { name: /retry all failed/i })).not.toBeInTheDocument();
   });
 
@@ -124,7 +124,7 @@ describe('Settings', () => {
     api.logout.mockResolvedValue({ success: true });
     renderSettings();
 
-    await waitFor(() => expect(screen.getByText('Viewpoint Receipts v1.0.0')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Viewpoint v1.0.0')).toBeInTheDocument());
     await userEvent.click(screen.getByRole('button', { name: /sign out/i }));
 
     expect(api.logout).toHaveBeenCalled();

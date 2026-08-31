@@ -1,0 +1,12 @@
+# Paths update.sh keeps when rsyncing a new build over the install.
+# rsync --exclude-from format; leading / anchors to the app root.
+/.env
+/data/
+/backups/
+/demo-data/
+/node_modules/
+/client/node_modules/
+/.node-runtime/
+/.node-version-used
+/server.log
+/.git/

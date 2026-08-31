@@ -9,9 +9,9 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['icon-192.png', 'icon-512.png'],
       manifest: {
-        name: 'Viewpoint Receipts',
+        name: 'Viewpoint',
         short_name: 'Viewpoint',
-        description: 'Capture, extract, and upload receipts to Wave accounting.',
+        description: 'Capture receipts and manage exam bookings.',
         theme_color: '#1a2332',
         background_color: '#f5f3ef',
         display: 'standalone',

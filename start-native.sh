@@ -29,7 +29,7 @@ mkdir -p data
 PORT="$(grep -E '^PORT=' .env 2>/dev/null | tail -1 | cut -d= -f2 || true)"
 PORT="${PORT:-3000}"
 
-echo "Setting up Viewpoint Receipts (first run takes a minute or two)..."
+echo "Setting up Viewpoint (first run takes a minute or two)..."
 # --ignore-scripts: every native dependency here (better-sqlite3, esbuild,
 # lightningcss, fsevents) ships a prebuilt binary in its package, so no
 # package needs a compile step. Skipping install scripts avoids invoking
@@ -80,7 +80,7 @@ PLIST
 
 launchctl load -w "$LAUNCH_AGENT_PLIST"
 
-echo "Starting Viewpoint Receipts..."
+echo "Starting Viewpoint..."
 READY=""
 for i in $(seq 1 20); do
   if lsof -nP -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then
@@ -101,8 +101,10 @@ echo
 echo "Started! Open this address in a browser on this computer:"
 echo "  http://localhost:3000"
 echo
-echo "To use it from your iPhone, connect to the same Wi-Fi network and use"
-echo "this computer's network address instead of 'localhost' — see docs/GETTING-STARTED.md."
-echo
 echo "It'll now start itself automatically every time you log in, and"
 echo "restart itself if it ever crashes — you shouldn't need to run this again."
+echo
+echo "NEXT: to use it from your iPhone with a permanent web address that keeps"
+echo "working on any network, double-click 'setup-tailscale.command' — see"
+echo "docs/GETTING-STARTED.md. (Or, for same-Wi-Fi-only access right now, use"
+echo "this computer's network address instead of 'localhost'.)"

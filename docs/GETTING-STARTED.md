@@ -22,27 +22,35 @@ There's nothing to install ahead of time — the app sets up everything it
 needs (including a private copy of Node.js, if your Mac doesn't already
 have a current one) the first time you start it.
 
-## Step 1 — Unzip the app
+## Step 1 — Run the installer
 
-You should have a file called `viewpoint-receipts-bundle.zip`. Unzip it
-somewhere you'll remember — your Desktop or Documents folder is fine. This
-gives you a folder called `viewpoint-receipts`.
+You should have a file called **`ViewpointApp-installer.pkg`** (the latest
+one is always on the project's GitHub "Latest build" release). Double-click
+it and follow the prompts. It installs the app into
+`/Applications/ViewpointApp`.
 
-## Step 2 — Start it
+> **"Apple could not verify…" / "unidentified developer"** — expected, the
+> installer isn't signed. Either **right-click** the `.pkg` → **Open**, or
+> open **System Settings → Privacy & Security**, scroll down, and click
+> **Open Anyway**. Then run it again.
+>
+> If macOS still won't open it: open Terminal and run
+> `sudo installer -pkg ~/Downloads/ViewpointApp-installer.pkg -target /`
+> (it'll ask for your Mac password).
 
-Open the `viewpoint-receipts` folder and double-click
-**`start-native.command`**. A black window will open and show some text —
-that's normal, leave it running. The first time, it'll take a minute or two
-to set itself up (it downloads a few packages and builds the app).
+## Step 2 — Let it finish setting up
 
-When it says "Started!", the app is running.
+At the end of the installer a **Terminal window opens by itself** and
+finishes setup — the first time this takes a minute or two (it downloads a
+few packages and builds the app). Leave it alone until it says
+**"Started!"**, then you can close that window.
 
-> There's also a Docker-based version (`start.command`) if you'd rather run
-> it in a container — see Troubleshooting below.
+If you were already running an earlier copy of the app by hand, the
+installer automatically carries over your password, settings, and all your
+data.
 
-> If macOS warns that the file is from an unidentified developer, that's
-> expected for a script you were sent directly (not from an app store) —
-> right-click it and choose "Open" to run it anyway.
+> There's also a Docker-based version (`start.command` inside the app
+> folder) if you'd rather run it in a container — see Troubleshooting.
 
 ## Step 3 — Open the app and set a password
 
@@ -68,24 +76,48 @@ Right after setting your password, the app will ask for:
 You can hit **"Skip for now"** on either step and add it later from the
 Settings page in the app.
 
-## Step 5 — Add it to your iPhone's home screen
+> If you connect (or later reconnect) **Google** for Calendar/reminders, do
+> it from a browser **on the Mac** at `http://localhost:3000` — Google only
+> allows the sign-in to come back to `localhost`, not the Tailscale
+> address.
 
-Your iPhone needs to be on the **same Wi-Fi network** as the computer.
+## Step 5 — Give it a permanent web address (Tailscale)
 
-1. On the computer, find its network address: System Settings → Wi-Fi →
-   click the (i) next to your network → note the IP address (looks like
-   `192.168.1.42`).
-2. On your iPhone, open **Safari** and go to `http://<that address>:3000` (e.g. `http://192.168.1.42:3000`).
-3. Log in with the password from Step 3.
-4. Tap the Share button (square with an arrow) → **Add to Home Screen**.
+This gives the app one fixed `https://…` address that keeps working from
+**any** network — home, the shop, or cellular — so the iPhone icon never
+breaks. It's a free service called Tailscale that privately links your Mac
+and your phone.
 
-Now there's an app icon on your home screen. Tap it any time to open the
-receipt camera.
+**On the Mac:**
 
-> This works over your home Wi-Fi right away. If you also want to reach it
-> from outside your Wi-Fi (e.g. capturing a receipt while out), or want the
-> full offline-capable installed-app experience, that needs a one-time
-> HTTPS setup — ask Thomas, it's a quick add-on covered in `DEPLOYMENT.md`.
+1. Install the Tailscale app from <https://tailscale.com/download/mac>,
+   open it (menu-bar icon), and **sign in** (a Google/Microsoft/email
+   login — remember which account you use).
+2. One-time, in your browser: go to
+   <https://login.tailscale.com/admin/dns> and turn on both **MagicDNS**
+   and **HTTPS Certificates**.
+3. Open `/Applications/ViewpointApp` in Finder and double-click
+   **`setup-tailscale.command`**. It prints the app's permanent address —
+   something like `https://viewpoints-mac.tailXXXX.ts.net`. Write it down.
+
+**On the iPhone:**
+
+4. Install **Tailscale** from the App Store and sign in to the **same
+   account** as on the Mac.
+5. Open **Safari**, go to the `https://…ts.net` address from step 3, and
+   log in with your password.
+6. Tap the Share button (square with an arrow) → **Add to Home Screen**.
+
+That icon now works whenever the Mac is **awake and online**, on any
+network. (If the Mac is asleep or off, the app is unreachable until it
+wakes — it lives on the Mac.)
+
+> **Just want same-Wi-Fi access for now?** Skip this step. On the Mac,
+> System Settings → Wi-Fi → (i) next to your network → note the IP
+> (e.g. `192.168.1.42`), then on the iPhone open
+> `http://192.168.1.42:3000`. This address changes when the network
+> changes, so the home-screen icon may stop working later — Tailscale
+> above is the permanent fix.
 
 ## Using it day to day
 
@@ -102,37 +134,55 @@ Got a stack of receipts to catch up on? On the main screen, tap
 **"Review All"** to go through them one after another instead of opening
 each one individually.
 
+## Updating
+
+When there's a new version, open `/Applications/ViewpointApp` and
+double-click **`update.command`**. It downloads the latest build, keeps all
+your data and settings, rebuilds, and restarts — takes about a minute.
+
+Thomas can also run this for you remotely (over Tailscale) without you
+doing anything.
+
 ## Stopping / restarting
 
-You generally don't need to do anything — once you've run
-`start-native.command` once, the app starts itself automatically every time
-you log in to the Mac, and restarts itself on its own if it ever crashes.
+You generally don't need to do anything — the app starts itself
+automatically every time you log in to the Mac, and restarts itself on its
+own if it ever crashes.
 
-- To stop it: double-click `stop-native.command`. It'll stay off until you
-  start it again.
-- To start it again: double-click `start-native.command` — it's safe to run
-  any time, and won't lose your password or settings.
+Everything below lives in `/Applications/ViewpointApp` — double-click:
+
+- **`stop-native.command`** — stop it; it stays off until you start it again.
+- **`start-native.command`** — start it again; safe to run any time, never
+  loses your password or settings.
+- **`uninstall.command`** — stop it for good and remove the background
+  service (your data folder is left in place).
 
 ## Troubleshooting
 
-- **It fails partway through, or won't start** → it's safe to just
-  double-click `start-native.command` again. If it still won't start, check
-  `server.log` inside the `viewpoint-receipts` folder for details, or send
-  it to Thomas. As a fallback, the Docker-based version (`start.command` /
-  `stop.command`) still works if you install
+- **The installer won't open** → see the note in Step 1 (right-click →
+  Open, or Privacy & Security → Open Anyway).
+- **It fails partway through, or won't start** → open
+  `/Applications/ViewpointApp` and double-click `start-native.command`
+  again. If it still won't start, check `server.log` in that folder, or
+  send it to Thomas. As a fallback, the Docker-based version
+  (`start.command` / `stop.command`) still works if you install
   [OrbStack](https://orbstack.dev/) or Docker Desktop.
 - **"Something else on this computer is already using port 3000"** → if
   you previously tried the Docker version, quit Docker Desktop (menu bar
   whale icon → "Quit Docker Desktop") and try again.
-- **Can't reach it from your iPhone** → double check the iPhone is on the
-  *same* Wi-Fi network as the computer, and that you're using the
-  computer's IP address (not `localhost`) in Safari.
+- **Can't reach it from your iPhone** → make sure the Mac is awake, and
+  that Tailscale is signed in and **on** (menu-bar icon) on both the Mac
+  and the phone. If you skipped Tailscale, check the iPhone is on the
+  *same* Wi-Fi and you're using the Mac's IP address (not `localhost`).
+- **The phone address stopped working after changing Wi-Fi** → that's the
+  IP-address method. Do Step 5 (Tailscale) for an address that doesn't
+  change.
 - **Forgot your password** → there's no reset button by design (nothing
   syncs to the cloud). Ask Thomas — the password can be cleared directly
   in the database.
 - **Something else looks broken** → send Thomas a screenshot. The app
   keeps its own logs, so most issues can be diagnosed remotely.
 
-Your receipts and data live entirely on this computer, in the
-`viewpoint-receipts/data` folder — nothing is sent anywhere except to
+Your receipts and data live entirely on this Mac, in
+`/Applications/ViewpointApp/data` — nothing is sent anywhere except to
 Claude (to read the receipt) and Wave (to record the expense).

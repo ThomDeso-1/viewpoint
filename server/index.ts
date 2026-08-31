@@ -23,7 +23,7 @@ assertSafeForPhi();
 
 app.listen(PORT, '0.0.0.0', () => {
   warnIfDemoMode();
-  console.log(`Viewpoint Receipts server running on http://0.0.0.0:${PORT}`);
+  console.log(`Viewpoint server running on http://0.0.0.0:${PORT}`);
   console.log(`  Data directory: ${path.resolve(DATA_DIR)}`);
 
   // Both pollers are started here rather than inside createApp() so that

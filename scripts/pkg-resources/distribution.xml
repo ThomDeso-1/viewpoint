@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<installer-gui-script minSpecVersion="2">
+  <title>Viewpoint</title>
+  <welcome file="welcome.html" mime-type="text/html"/>
+  <conclusion file="conclusion.html" mime-type="text/html"/>
+  <options customize="never" require-scripts="true" hostArchitectures="arm64,x86_64"/>
+  <domains enable_localSystem="true"/>
+  <choices-outline>
+    <line choice="default"/>
+  </choices-outline>
+  <choice id="default" title="Viewpoint">
+    <pkg-ref id="com.viewpointreceipts.installer"/>
+  </choice>
+  <pkg-ref id="com.viewpointreceipts.installer" version="0" onConclusion="none">ViewpointApp-component.pkg</pkg-ref>
+</installer-gui-script>

@@ -43,3 +43,24 @@ jobs:
           body: Auto-rebuilt from ${{ github.sha }}
           make_latest: true
           files: viewpoint-receipts-bundle.zip
+
+  pkg:
+    # Unsigned macOS .pkg installer, attached to the same 'latest' release.
+    # Payload is pure source, so a single arm64 runner build serves every Mac.
+    # Runs after `bundle` so the two asset uploads to the release don't race.
+    needs: [verify, bundle]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # make-pkg.sh derives its version from `git rev-list --count`
+
+      - name: Build installer
+        run: ./scripts/make-pkg.sh
+
+      - name: Publish to 'latest' release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          files: ViewpointApp-installer.pkg

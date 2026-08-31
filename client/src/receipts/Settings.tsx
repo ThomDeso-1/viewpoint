@@ -135,7 +135,7 @@ export function Settings() {
         </section>
 
         {/* Version */}
-        <p className="settings-version">Viewpoint Receipts v1.0.0</p>
+        <p className="settings-version">Viewpoint v1.0.0</p>
       </main>
     </div>
   );

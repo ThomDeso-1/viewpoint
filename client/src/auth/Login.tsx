@@ -36,7 +36,7 @@ export function Login({ onComplete }: Props) {
             <circle cx="24" cy="21" r="2.5" stroke="white" strokeWidth="2" />
           </svg>
         </div>
-        <h1>Viewpoint Receipts</h1>
+        <h1>Viewpoint</h1>
         <p className="auth-subtitle">Enter your password to continue</p>
 
         <form onSubmit={handleSubmit}>

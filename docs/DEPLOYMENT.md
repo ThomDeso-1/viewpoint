@@ -59,6 +59,37 @@ sudo systemctl enable --now viewpoint-receipts
 `systemctl status viewpoint-receipts` and `journalctl -u viewpoint-receipts -f`
 for logs.
 
+## Option C: macOS `.pkg` + Tailscale (the single-Mac setup)
+
+This is the path `docs/GETTING-STARTED.md` walks a non-technical operator
+through, and the one CI builds artifacts for.
+
+- **`ViewpointApp-installer.pkg`** — unsigned. Built by `scripts/make-pkg.sh`
+  (locally on any Mac, or by the `pkg` job in `.github/workflows/ci.yml` on
+  `macos-latest`) and attached to the GitHub `latest` release next to the
+  `.zip` bundle. Installs to `/Applications/ViewpointApp`; the payload is
+  pure source, so one build serves both Apple Silicon and Intel. Its
+  `postinstall` (`scripts/pkg-scripts/postinstall`) migrates an existing
+  hand-run install (copies `.env` + `data/`, retires the old launchd agent)
+  and then runs the normal `start-native.sh` first-run in a Terminal
+  window.
+- **Updates** — `update.command` / `scripts/update.sh` pulls the latest
+  `.zip` from the `latest` release, rsyncs it over the install (preserving
+  everything in `scripts/update-preserve.txt` — `data/`, `.env`,
+  `.node-runtime/`, …), reinstalls deps, rebuilds, restarts. Runs remotely
+  too: `ssh <mac>.<tailnet>.ts.net 'bash /Applications/ViewpointApp/scripts/update.sh'`
+  (works while the operator is logged in at the Mac's console — the launchd
+  `kickstart` needs their GUI session).
+- **HTTPS + a stable phone URL** — `setup-tailscale.command` /
+  `scripts/setup-tailscale.sh` runs `tailscale serve --bg 3000` (persists
+  across reboots) and writes `APP_PUBLIC_URL=https://<host>.ts.net` +
+  `TRUST_PROXY=1` into `.env`. Tailscale Serve terminates TLS on the same
+  host and sets `X-Forwarded-Proto`, so this is a legitimate `TRUST_PROXY`
+  use (audit P0-3) and satisfies the PHI start-guard. No reverse proxy of
+  your own, no domain, no cert management. `tailscale-off.command` reverts
+  it. The Mac must be **awake** to be reachable — this is a laptop/Mac-mini
+  deployment, not an always-available one.
+
 ## HTTPS (reverse proxy)
 
 The server listens on plain HTTP on port 3000. iOS Safari requires HTTPS

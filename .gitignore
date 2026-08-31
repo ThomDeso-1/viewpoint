@@ -6,6 +6,8 @@ backups/
 .env
 *.db
 *-bundle.zip
+ViewpointApp-installer.pkg
+/BUILD_INFO
 server.log
 .node-runtime/
 .node-version-used

@@ -1,0 +1,59 @@
+#!/bin/bash
+# Runs as root at the end of `ViewpointApp-installer.pkg`.
+#
+# 1. If the app is already running from a hand-installed copy (the live
+#    case), carry its credentials + data over — including
+#    DATA_ENCRYPTION_KEY in .env, without which the copied database can't
+#    be read — and retire its launchd agent.
+# 2. Hand ownership of the install to the logged-in user so the app (which
+#    runs as that user) can write data/, .env and build output.
+# 3. Kick off the normal first-run setup in a visible Terminal window,
+#    exactly as docs/GETTING-STARTED.md describes. start-native.sh is
+#    idempotent and rewrites the launchd plist to point at the new path.
+set -u
+
+APP_DIR="/Applications/ViewpointApp"
+LABEL="com.viewpointreceipts.server"
+
+CONSOLE_USER="$(stat -f%Su /dev/console 2>/dev/null || true)"
+if [ -z "$CONSOLE_USER" ] || [ "$CONSOLE_USER" = "root" ]; then
+  # No one logged in at the GUI — nothing we can safely do as a user.
+  # The app will set itself up the first time someone runs
+  # start-native.command from /Applications/ViewpointApp.
+  exit 0
+fi
+CONSOLE_UID="$(id -u "$CONSOLE_USER")"
+OLD_PLIST="/Users/$CONSOLE_USER/Library/LaunchAgents/${LABEL}.plist"
+
+run_as_user() {
+  launchctl asuser "$CONSOLE_UID" sudo -u "$CONSOLE_USER" "$@"
+}
+
+# --- 1. migrate an existing hand-run install ------------------------------
+if [ -f "$OLD_PLIST" ]; then
+  OLD_DIR="$(/usr/libexec/PlistBuddy -c 'Print :WorkingDirectory' "$OLD_PLIST" 2>/dev/null || true)"
+  if [ -n "$OLD_DIR" ] && [ "$OLD_DIR" != "$APP_DIR" ] && [ -d "$OLD_DIR" ]; then
+    echo "Migrating existing install from $OLD_DIR"
+    run_as_user launchctl bootout "gui/$CONSOLE_UID/$LABEL" 2>/dev/null || true
+    launchctl asuser "$CONSOLE_UID" launchctl unload -w "$OLD_PLIST" 2>/dev/null || true
+
+    if [ -f "$OLD_DIR/.env" ] && [ ! -f "$APP_DIR/.env" ]; then
+      cp "$OLD_DIR/.env" "$APP_DIR/.env"
+    fi
+    if [ -d "$OLD_DIR/data" ] && [ ! -e "$APP_DIR/data" ]; then
+      cp -R "$OLD_DIR/data" "$APP_DIR/data"
+    fi
+    # Leave the old folder in place — the operator removes it once they've
+    # confirmed the new one works. Nothing here deletes user data.
+  fi
+fi
+
+# --- 2. ownership --------------------------------------------------------
+chown -R "$CONSOLE_USER":staff "$APP_DIR"
+chmod +x "$APP_DIR"/*.command "$APP_DIR"/*.sh "$APP_DIR"/scripts/*.sh 2>/dev/null || true
+[ -f "$APP_DIR/.env" ] && chmod 600 "$APP_DIR/.env"
+
+# --- 3. visible first run ----------------------------------------------
+run_as_user open -a Terminal "$APP_DIR/start-native.command"
+
+exit 0

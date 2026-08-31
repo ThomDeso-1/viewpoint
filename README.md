@@ -5,7 +5,7 @@ review and correct the extraction, and upload the expense to Wave
 accounting. Self-hosted, single-user, installable as a PWA on iPhone.
 
 - **Just want to run it?** → [`docs/GETTING-STARTED.md`](docs/GETTING-STARTED.md)
-  (Docker, non-technical, ~15 minutes).
+  (macOS `.pkg` installer + Tailscale, non-technical, ~15 minutes).
 - **Deploying somewhere reachable from your phone, with HTTPS?** →
   [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 - **Auth model, and what to harden before this stops being single-user?** →
