@@ -18,6 +18,7 @@ get it.
 | 4 | Wave business + accounts | With #3 | Setup, step 3 |
 | 5 | OHIP mode + ministry credentials | For real eligibility checks | Setup, step 4 |
 | 6 | Google OAuth client | For calendar & reminder emails | Settings → Google |
+| 6b | Outlook / Microsoft 365 | Optional alternative to Gmail for reminders | Settings → Outlook |
 | 7 | Patient files folder | For automatic intake | Settings → Exam Requests |
 | 8 | Invoice product/account | For invoicing | Settings → Exam Requests |
 | 9 | Business name, timezone, fee | Recommended | Settings → Exam Requests |
@@ -107,8 +108,10 @@ Mock mode has fixed test numbers, so you can try each outcome:
    openssl pkcs12 -in yourStore.p12 -nocerts -nodes -out ohip-key.pem
    openssl pkcs12 -in yourStore.p12 -clcerts -nokeys -out ohip-cert.pem
    ```
-   Keep both outside the app folder and `chmod 600` them. Enter the
-   absolute paths.
+   In Settings → OHIP, **paste the contents** of each file (or use the file
+   picker). The app stores them under `data/ohip/` — you don't need to keep
+   the files or know where they live. (Absolute paths still work too, via
+   `OHIP_PRIVATE_KEY_PATH` etc.)
 2. **GO Secure username and password** — the account carrying the
    *Health Service HCV* role.
 3. **MOH ID** — your OHIP billing number.
@@ -142,6 +145,31 @@ Google. The app does not read your inbox.
 > redirect address is a localhost one and won't resolve from your phone.
 
 The app asks for: send email as you, and manage calendar events.
+
+---
+
+## 6b. Outlook / Microsoft 365 *(optional — alternative to Gmail for reminders)*
+
+**Only needed if you want reminder emails to send from an Outlook or
+Microsoft 365 mailbox instead of Gmail.** Calendar matching still uses
+Google. Settings → Outlook / Microsoft 365.
+
+1. Go to [portal.azure.com](https://portal.azure.com) → **Azure Active
+   Directory** → **App registrations** → **New registration**.
+2. Set the redirect URI type to **Web** and enter exactly the URI the
+   Settings screen shows — normally
+   `http://localhost:3000/api/microsoft/callback`.
+3. Under **API permissions**, add Microsoft Graph → **Delegated** →
+   `Mail.Send` (and `User.Read`, usually there by default).
+4. Under **Certificates & secrets**, create a **client secret**.
+5. Copy the **Application (client) ID** and the secret value into Settings
+   and save. Leave the tenant field blank unless you need to lock it to one
+   organisation.
+6. Click **Connect Outlook** and grant access, then pick **Outlook** under
+   *Reminder email account*.
+
+> Do the connect step **in a browser on the Mac running the app** — same
+> localhost-redirect reason as Google.
 
 ---
 

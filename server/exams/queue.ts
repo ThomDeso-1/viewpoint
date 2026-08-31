@@ -10,6 +10,7 @@ import * as processedFiles from './processed-files.js';
 import { sourceDir, walkSourceDir, hashBuffer, readForExtraction } from './file-source.js';
 import { listEvents, matchEvent, createEvent } from '../integrations/google/calendar.js';
 import { isGoogleConnected, GoogleAuthError } from '../integrations/google/auth.js';
+import { MicrosoftAuthError } from '../integrations/microsoft/auth.js';
 import { extractPatientBatch, ClaudeAPIError } from '../integrations/claude.js';
 import { checkPatientEligibility } from './eligibility.js';
 import { findOrCreateCustomer, createInvoice, approveInvoice, sendInvoice, WaveAPIError } from '../integrations/wave/index.js';
@@ -657,7 +658,8 @@ export async function sendDueReminders(): Promise<number> {
       await reminders.sendReminder({ reminder, appointment, patient });
       sent++;
     } catch (err) {
-      const retryable = err instanceof GoogleAuthError && err.isRetryable;
+      const retryable =
+        (err instanceof GoogleAuthError || err instanceof MicrosoftAuthError) && err.isRetryable;
       reminders.recordFailure(reminder.id, (err as Error).message, retryable, MAX_RETRIES);
     }
   }

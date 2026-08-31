@@ -13,7 +13,8 @@ import {
 
 /**
  * A local stand-in for every external service the app talks to:
- * Anthropic, Wave, Google OAuth, Gmail send, and Google Calendar.
+ * Anthropic, Wave, Google OAuth, Gmail send, Google Calendar, and
+ * Microsoft OAuth + Graph send (the Outlook alternative).
  *
  * The app's own clients are unmodified — they make the same requests
  * they would in production and parse the same response shapes. Only the
@@ -342,6 +343,48 @@ app.post('/gmail/v1/users/me/messages/send', (req: Request, res: Response) => {
   res.json({ id: `demo-sent-${sentEmails.length}`, threadId: 'demo-thread-sent' });
 });
 
+// ── Microsoft OAuth + Graph (Outlook send alternative) ──
+
+app.get('/microsoft/oauth/authorize', (req: Request, res: Response) => {
+  const redirectUri = String(req.query.redirect_uri ?? '');
+  const state = String(req.query.state ?? '');
+  log('microsoft', 'consent screen (auto-approved)');
+
+  const url = new URL(redirectUri);
+  url.searchParams.set('code', 'demo-ms-auth-code');
+  url.searchParams.set('state', state);
+  res.redirect(url.toString());
+});
+
+app.post('/microsoft/oauth/token', (req: Request, res: Response) => {
+  const grant = req.body?.grant_type;
+  log('microsoft', `token exchange (${grant})`);
+  res.json({
+    access_token: `demo-ms-access-${Date.now()}`,
+    refresh_token: 'demo-ms-refresh-token',
+    expires_in: 3600,
+    scope: 'Mail.Send User.Read offline_access',
+    token_type: 'Bearer',
+  });
+});
+
+app.get('/graph/v1.0/me', (_req: Request, res: Response) => {
+  res.json({ mail: 'reception@viewpoint-demo.example.com', userPrincipalName: 'reception@viewpoint-demo.example.com' });
+});
+
+app.post('/graph/v1.0/me/sendMail', (req: Request, res: Response) => {
+  const message = req.body?.message ?? {};
+  const to = message.toRecipients?.[0]?.emailAddress?.address ?? 'unknown';
+  sentEmails.push({
+    at: new Date().toISOString(),
+    to,
+    subject: message.subject ?? '(no subject)',
+    body: message.body?.content ?? '',
+  });
+  log('graph', `sendMail → ${to}`);
+  res.status(202).end();
+});
+
 // ── Google Calendar ──
 
 app.get('/calendar/v3/calendars/:calendarId/events', (_req: Request, res: Response) => {
@@ -469,6 +512,6 @@ app.get('/', (_req: Request, res: Response) => {
 
 app.listen(PORT, () => {
   console.log(`\n  Demo services listening on http://localhost:${PORT}`);
-  console.log('  Standing in for: Anthropic · Wave · Google OAuth · Gmail send · Calendar');
+  console.log('  Standing in for: Anthropic · Wave · Google OAuth · Gmail send · Calendar · Microsoft Graph');
   console.log(`  Captured invoices and emails: http://localhost:${PORT}\n`);
 });

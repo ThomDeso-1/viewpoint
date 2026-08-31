@@ -33,6 +33,9 @@ describe('demo mode', () => {
     'googleUserinfo',
     'gmailBase',
     'calendarBase',
+    'microsoftAuthorize',
+    'microsoftToken',
+    'graphBase',
   ] as const;
 
   it('is off by default', () => {

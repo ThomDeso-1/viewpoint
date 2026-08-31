@@ -5,6 +5,7 @@ import {
   getQueueStatus,
   retryAllFailed,
   getWaveHealth,
+  setEmailProvider,
   logout,
   type Settings as SettingsData,
   type QueueStatus,
@@ -13,6 +14,7 @@ import { useToast } from '../shared/Toast';
 import { ClaudeSettings } from './ClaudeSettings';
 import { WaveSettings } from './WaveSettings';
 import { GoogleSettings } from '../exams/GoogleSettings';
+import { MicrosoftSettings } from '../exams/MicrosoftSettings';
 import { ExamSettings } from '../exams/ExamSettings';
 import { OhipSettings } from '../exams/OhipSettings';
 
@@ -54,6 +56,17 @@ export function Settings() {
     navigate('/login', { replace: true });
   };
 
+  const handleEmailProvider = async (provider: 'google' | 'microsoft') => {
+    if (!settings || settings.emailProvider === provider) return;
+    try {
+      await setEmailProvider(provider);
+      await loadConnections();
+      showToast(provider === 'microsoft' ? 'Reminders will send from Outlook.' : 'Reminders will send from Gmail.', 'success');
+    } catch (err: any) {
+      showToast(err.message || 'Could not change the email provider.');
+    }
+  };
+
   return (
     <div className="settings-page">
       <header className="review-header">
@@ -67,9 +80,65 @@ export function Settings() {
       </header>
 
       <main className="settings-content">
-        <ClaudeSettings settings={settings} onSaved={loadConnections} />
+        <details className="settings-group" open>
+          <summary className="settings-group-title">Connections</summary>
 
-        <WaveSettings settings={settings} waveHealthy={waveHealthy} onSaved={loadConnections} />
+          <ClaudeSettings settings={settings} onSaved={loadConnections} />
+
+          <WaveSettings settings={settings} waveHealthy={waveHealthy} onSaved={loadConnections} />
+
+          <GoogleSettings />
+          <MicrosoftSettings />
+
+          {/* Which mailbox reminder emails send from */}
+          <section className="settings-section">
+            <h2 className="settings-section-title">Reminder email account</h2>
+            <p className="settings-help">
+              Appointment reminders are sent from this mailbox. Connect the provider above first.
+            </p>
+            <div className="settings-radio-group">
+              <label className="settings-radio">
+                <input
+                  type="radio"
+                  name="email-provider"
+                  checked={settings?.emailProvider === 'google'}
+                  disabled={!settings}
+                  onChange={() => handleEmailProvider('google')}
+                />
+                <span>
+                  Gmail
+                  {settings && !settings.googleConnected && (
+                    <span className="settings-not-set"> — not connected</span>
+                  )}
+                </span>
+              </label>
+              <label className="settings-radio">
+                <input
+                  type="radio"
+                  name="email-provider"
+                  checked={settings?.emailProvider === 'microsoft'}
+                  disabled={!settings}
+                  onChange={() => handleEmailProvider('microsoft')}
+                />
+                <span>
+                  Outlook
+                  {settings && !settings.microsoftConnected && (
+                    <span className="settings-not-set"> — not connected</span>
+                  )}
+                </span>
+              </label>
+            </div>
+          </section>
+        </details>
+
+        <details className="settings-group" open>
+          <summary className="settings-group-title">Exam workflow</summary>
+          <ExamSettings />
+          <OhipSettings />
+        </details>
+
+        <details className="settings-group" open>
+          <summary className="settings-group-title">App</summary>
 
         {/* Queue */}
         <section className="settings-section">
@@ -111,10 +180,6 @@ export function Settings() {
           )}
         </section>
 
-        <GoogleSettings />
-        <ExamSettings />
-        <OhipSettings />
-
         {/* Privacy */}
         <section className="settings-section">
           <h2 className="settings-section-title">Privacy</h2>
@@ -136,6 +201,7 @@ export function Settings() {
 
         {/* Version */}
         <p className="settings-version">Viewpoint v1.0.0</p>
+        </details>
       </main>
     </div>
   );

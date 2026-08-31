@@ -14,15 +14,16 @@ export function OhipSettings() {
   const [data, setData] = useState<Data | null>(null);
   const [form, setForm] = useState({
     mode: 'mock' as Data['mode'],
-    privateKeyPath: '',
-    certificatePath: '',
-    caCertPath: '',
     username: '',
     mohId: '',
     endpoint: '',
   });
   const [password, setPassword] = useState('');
   const [conformanceKey, setConformanceKey] = useState('');
+  // PEM contents typed or read from a picked file; sent only when non-empty.
+  const [privateKeyPem, setPrivateKeyPem] = useState('');
+  const [certificatePem, setCertificatePem] = useState('');
+  const [caCertPem, setCaCertPem] = useState('');
   const [testCard, setTestCard] = useState('');
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -35,9 +36,6 @@ export function OhipSettings() {
       setData(settings);
       setForm({
         mode: settings.mode,
-        privateKeyPath: settings.privateKeyPath,
-        certificatePath: settings.certificatePath,
-        caCertPath: settings.caCertPath,
         username: settings.username,
         mohId: settings.mohId,
         endpoint: settings.endpoint,
@@ -60,9 +58,15 @@ export function OhipSettings() {
         ...form,
         ...(password ? { password } : {}),
         ...(conformanceKey ? { conformanceKey } : {}),
+        ...(privateKeyPem ? { privateKeyPem } : {}),
+        ...(certificatePem ? { certificatePem } : {}),
+        ...(caCertPem ? { caCertPem } : {}),
       });
       setPassword('');
       setConformanceKey('');
+      setPrivateKeyPem('');
+      setCertificatePem('');
+      setCaCertPem('');
       showToast('OHIP settings saved.', 'success');
       await load();
     } catch (err) {
@@ -148,49 +152,38 @@ export function OhipSettings() {
           {expanded && (
             <div className="settings-instructions">
               <p>
-                Node cannot read a <code>.p12</code> keystore directly, so convert yours to PEM once
-                and point the fields below at the results:
+                Node cannot read a <code>.p12</code> keystore directly, so convert yours to PEM once,
+                then paste the two files below (or pick them with the file button):
               </p>
               <pre className="preview-block">{`openssl pkcs12 -in yourStore.p12 -nocerts -nodes \\
   -out ohip-key.pem
 openssl pkcs12 -in yourStore.p12 -clcerts -nokeys \\
   -out ohip-cert.pem`}</pre>
               <p>
-                Keep both files outside the app folder, readable only by you (
-                <code>chmod 600</code>). Enter absolute paths.
+                The contents are stored on the server (private key <code>chmod 600</code>) — you
+                don't need to keep the files or know where they live.
               </p>
             </div>
           )}
 
-          <label className="wizard-field-label">
-            Private key path
-            <input
-              className="auth-input"
-              value={form.privateKeyPath}
-              onChange={(e) => setForm({ ...form, privateKeyPath: e.target.value })}
-              placeholder="/Users/you/ohip/ohip-key.pem"
-            />
-          </label>
-
-          <label className="wizard-field-label">
-            Certificate path
-            <input
-              className="auth-input"
-              value={form.certificatePath}
-              onChange={(e) => setForm({ ...form, certificatePath: e.target.value })}
-              placeholder="/Users/you/ohip/ohip-cert.pem"
-            />
-          </label>
-
-          <label className="wizard-field-label">
-            CA bundle path (optional)
-            <input
-              className="auth-input"
-              value={form.caCertPath}
-              onChange={(e) => setForm({ ...form, caCertPath: e.target.value })}
-              placeholder="/Users/you/ohip/cacert.pem"
-            />
-          </label>
+          <PemField
+            label="Private key"
+            stored={!!data?.hasPrivateKey}
+            value={privateKeyPem}
+            onChange={setPrivateKeyPem}
+          />
+          <PemField
+            label="Certificate"
+            stored={!!data?.hasCertificate}
+            value={certificatePem}
+            onChange={setCertificatePem}
+          />
+          <PemField
+            label="CA bundle (optional)"
+            stored={!!data?.hasCaCert}
+            value={caCertPem}
+            onChange={setCaCertPem}
+          />
 
           <label className="wizard-field-label">
             GO Secure username
@@ -276,5 +269,45 @@ openssl pkcs12 -in yourStore.p12 -clcerts -nokeys \\
         </label>
       )}
     </section>
+  );
+}
+
+/** A PEM: paste the text, or pick a .pem/.crt/.key file that fills it in. */
+function PemField({
+  label,
+  stored,
+  value,
+  onChange,
+}: {
+  label: string;
+  stored: boolean;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div className="wizard-field-label pem-field">
+      <label>
+        {label}
+        <textarea
+          className="auth-input pem-input"
+          rows={3}
+          value={value}
+          spellCheck={false}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={stored ? 'Paste a new PEM to replace the stored one' : '-----BEGIN …-----'}
+        />
+      </label>
+      {stored && !value && <span className="settings-not-set">— stored</span>}
+      <input
+        type="file"
+        aria-label={`${label} file`}
+        accept=".pem,.crt,.cer,.key,.txt"
+        onChange={async (e) => {
+          const file = e.target.files?.[0];
+          if (file) onChange(await file.text());
+          e.target.value = '';
+        }}
+      />
+    </div>
   );
 }

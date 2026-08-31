@@ -135,6 +135,10 @@ export interface Settings {
   waveAnchorAccountId: string;
   waveSalesTaxId: string;
   isOnboarded: boolean;
+  /** Which mailbox reminder emails send from, and each provider's connection state. */
+  emailProvider: 'google' | 'microsoft';
+  googleConnected: boolean;
+  microsoftConnected: boolean;
 }
 
 export function getSettings(): Promise<Settings> {
@@ -521,6 +525,42 @@ export function disconnectGoogle(): Promise<{ success: boolean }> {
   return request('/google/disconnect', { method: 'POST' });
 }
 
+// ── Microsoft connection (Outlook reminder emails) ──
+
+export interface MicrosoftStatus {
+  configured: boolean;
+  connected: boolean;
+  redirectUri: string;
+  accountLabel: string | null;
+  scope: string | null;
+  expiresAt: string | null;
+}
+
+export function getMicrosoftStatus(): Promise<MicrosoftStatus> {
+  return request('/microsoft/status');
+}
+
+export function saveMicrosoftCredentials(body: {
+  clientId: string;
+  clientSecret: string;
+  tenant?: string;
+}): Promise<{ success: boolean; redirectUri: string }> {
+  return request('/microsoft/credentials', { method: 'POST', body: JSON.stringify(body) });
+}
+
+export function disconnectMicrosoft(): Promise<{ success: boolean }> {
+  return request('/microsoft/disconnect', { method: 'POST' });
+}
+
+export function setEmailProvider(
+  provider: 'google' | 'microsoft',
+): Promise<{ success: boolean; provider: string }> {
+  return request('/settings/email-provider', {
+    method: 'POST',
+    body: JSON.stringify({ provider }),
+  });
+}
+
 // ── Invoice line items ──
 
 export interface InvoiceLineItem {
@@ -631,9 +671,12 @@ export interface OhipSettings {
   caCertPath: string;
   username: string;
   mohId: string;
-  /** Secrets are never returned — only whether they are set. */
+  /** Secrets and PEM contents are never returned — only whether they are set. */
   hasPassword: boolean;
   hasConformanceKey: boolean;
+  hasPrivateKey: boolean;
+  hasCertificate: boolean;
+  hasCaCert: boolean;
   endpoint: string;
 }
 
@@ -642,7 +685,14 @@ export function getOhipSettings(): Promise<OhipSettings> {
 }
 
 export function saveOhipSettings(
-  body: Partial<OhipSettings> & { password?: string; conformanceKey?: string },
+  body: Partial<OhipSettings> & {
+    password?: string;
+    conformanceKey?: string;
+    /** PEM contents pasted/uploaded in the app; the server stores them and sets the paths. */
+    privateKeyPem?: string;
+    certificatePem?: string;
+    caCertPem?: string;
+  },
 ): Promise<{ success: boolean; mode: string }> {
   return request('/settings/ohip', { method: 'POST', body: JSON.stringify(body) });
 }

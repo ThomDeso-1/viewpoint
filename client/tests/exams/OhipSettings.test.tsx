@@ -14,6 +14,9 @@ function settings(overrides: Partial<Data> = {}): Data {
     privateKeyPath: '',
     certificatePath: '',
     caCertPath: '',
+    hasPrivateKey: false,
+    hasCertificate: false,
+    hasCaCert: false,
     username: '',
     mohId: '',
     hasPassword: false,
@@ -55,7 +58,7 @@ describe('OhipSettings', () => {
     renderPanel();
     await screen.findByText('Simulated');
 
-    expect(screen.queryByLabelText(/private key path/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Private key')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /test connection/i })).not.toBeInTheDocument();
   });
 
@@ -65,9 +68,33 @@ describe('OhipSettings', () => {
 
     await userEvent.selectOptions(screen.getByLabelText(/Validation mode/i), 'conformance');
 
-    expect(screen.getByLabelText(/private key path/i)).toBeInTheDocument();
+    expect(screen.getByLabelText('Private key')).toBeInTheDocument();
+    expect(screen.getByLabelText('Private key file')).toBeInTheDocument();
     expect(screen.getByLabelText(/go secure username/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/conformance key/i)).toBeInTheDocument();
+  });
+
+  it('sends a pasted PEM and stores it server-side', async () => {
+    api.getOhipSettings.mockResolvedValue(settings({ mode: 'conformance' }));
+    renderPanel();
+    await screen.findByText('conformance');
+
+    await userEvent.type(screen.getByLabelText('Certificate'), '-----BEGIN CERTIFICATE-----abc');
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(api.saveOhipSettings).toHaveBeenCalled());
+    const payload = api.saveOhipSettings.mock.calls[0][0];
+    expect(payload.certificatePem).toContain('BEGIN CERTIFICATE');
+    expect(payload).not.toHaveProperty('privateKeyPem');
+  });
+
+  it('marks an already-stored PEM without echoing it', async () => {
+    api.getOhipSettings.mockResolvedValue(settings({ mode: 'conformance', hasCertificate: true }));
+    renderPanel();
+    await screen.findByText('conformance');
+
+    expect(screen.getByText('— stored')).toBeInTheDocument();
+    expect(screen.getByLabelText('Certificate')).toHaveValue('');
   });
 
   it('names the key field for the mode chosen', async () => {

@@ -1,7 +1,7 @@
 import { v4 as uuid } from 'uuid';
 import { getDb } from '../db/db.js';
 import type { ReminderRow, ReminderChannelName, AppointmentRow, PatientRow } from './types.js';
-import { sendMessage } from '../integrations/google/gmail.js';
+import { getEmailProvider } from '../integrations/email/index.js';
 import { audit } from '../platform/audit.js';
 import { applyFailure } from '../platform/failure.js';
 import { DEFAULT_MAX_RETRIES } from '../platform/backoff.js';
@@ -9,8 +9,9 @@ import { DEFAULT_MAX_RETRIES } from '../platform/backoff.js';
 /**
  * Appointment reminders.
  *
- * Email via Gmail is the only channel today, but it sits behind a
- * ReminderChannel interface so adding SMS later is a new implementation
+ * Email is the only channel today — sent through whichever provider
+ * `EMAIL_PROVIDER` selects (see `integrations/email/`) — but it sits behind
+ * a ReminderChannel interface so adding SMS later is a new implementation
  * rather than a change to the queue that drives it.
  */
 
@@ -26,7 +27,7 @@ export interface ReminderChannel {
   send(context: ReminderContext): Promise<string>;
 }
 
-export class GmailReminderChannel implements ReminderChannel {
+export class EmailReminderChannel implements ReminderChannel {
   readonly name = 'email' as const;
 
   async send({ reminder, patient }: ReminderContext): Promise<string> {
@@ -34,7 +35,7 @@ export class GmailReminderChannel implements ReminderChannel {
       throw new Error('Patient has no email address on file.');
     }
 
-    return sendMessage({
+    return getEmailProvider().send({
       to: patient.email,
       subject: reminder.subject ?? 'Appointment reminder',
       body: reminder.body ?? '',
@@ -43,7 +44,7 @@ export class GmailReminderChannel implements ReminderChannel {
 }
 
 const channels = new Map<ReminderChannelName, ReminderChannel>([
-  ['email', new GmailReminderChannel()],
+  ['email', new EmailReminderChannel()],
 ]);
 
 export function getChannel(name: ReminderChannelName): ReminderChannel {

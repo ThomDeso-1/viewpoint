@@ -23,6 +23,9 @@ const baseSettings: SettingsData = {
   waveAnchorAccountId: '',
   waveSalesTaxId: '',
   isOnboarded: true,
+  emailProvider: 'google',
+  googleConnected: false,
+  microsoftConnected: false,
 };
 
 function renderPanel(settings: SettingsData | null, onSaved = vi.fn()) {

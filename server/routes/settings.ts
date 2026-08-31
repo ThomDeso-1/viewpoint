@@ -13,6 +13,8 @@ import {
 import { getWaveToken, isWaveConfigured, authMode } from '../integrations/wave/auth.js';
 import { hcvMode, resetHcvClient, loadConfigFromEnv, SoapHcvClient, HcvError } from '../integrations/ohip/index.js';
 import { isDemoMode } from '../platform/endpoints.js';
+import { isConnected } from '../platform/oauth-store.js';
+import { emailProviderName } from '../integrations/email/index.js';
 import { rateLimited } from '../platform/rate-limit.js';
 import path from 'path';
 import { walkSourceDir, SourceFolderError } from '../exams/file-source.js';
@@ -25,6 +27,19 @@ function folderExists(dir: string): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * Persists a PEM the operator pasted/uploaded into DATA_DIR/ohip/ and
+ * returns its absolute path — so OHIP setup needs no Terminal or
+ * filesystem access on the host. Private key is written 0600.
+ */
+function writeOhipPem(name: 'private-key' | 'certificate' | 'ca-cert', contents: string): string {
+  const dir = path.resolve(process.env.DATA_DIR || './data', 'ohip');
+  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+  const file = path.join(dir, `${name}.pem`);
+  fs.writeFileSync(file, contents.trim() + '\n', { mode: 0o600 });
+  return file;
 }
 
 const HEALTH_CACHE_MS = 5 * 60 * 1000; // re-check credentials at most every 5 minutes
@@ -54,7 +69,24 @@ export function settingsRoutes(): Router {
       waveSalesTaxId: process.env.WAVE_SALES_TAX_ID || '',
       isOnboarded: getConfig('onboarded') === 'true',
       demoMode: isDemoMode(),
+      // Which mailbox reminder emails are sent from, and whether each
+      // provider has actually been connected.
+      emailProvider: emailProviderName(),
+      googleConnected: isConnected('google'),
+      microsoftConnected: isConnected('microsoft'),
     });
+  });
+
+  // ── POST /api/settings/email-provider — choose the reminder mailbox ──
+  router.post('/email-provider', (req: Request, res: Response): void => {
+    const { provider } = req.body;
+    if (provider !== 'google' && provider !== 'microsoft') {
+      res.status(400).json({ error: 'Provider must be "google" or "microsoft".' });
+      return;
+    }
+
+    updateEnvConfig({ EMAIL_PROVIDER: provider });
+    res.json({ success: true, provider });
   });
 
   // ── POST /api/settings/validate-claude-key — Test a Claude API key ──
@@ -374,6 +406,11 @@ export function settingsRoutes(): Router {
       privateKeyPath: process.env.OHIP_PRIVATE_KEY_PATH || '',
       certificatePath: process.env.OHIP_CERTIFICATE_PATH || '',
       caCertPath: process.env.OHIP_CA_CERT_PATH || '',
+      // The PEM contents can be pasted into the app now; these say whether
+      // one is stored without ever returning it.
+      hasPrivateKey: !!process.env.OHIP_PRIVATE_KEY_PATH,
+      hasCertificate: !!process.env.OHIP_CERTIFICATE_PATH,
+      hasCaCert: !!process.env.OHIP_CA_CERT_PATH,
       username: process.env.OHIP_USERNAME || '',
       mohId: process.env.OHIP_MOH_ID || '',
       hasPassword: !!process.env.OHIP_PASSWORD,
@@ -389,6 +426,9 @@ export function settingsRoutes(): Router {
       privateKeyPath,
       certificatePath,
       caCertPath,
+      privateKeyPem,
+      certificatePem,
+      caCertPem,
       username,
       password,
       mohId,
@@ -401,11 +441,37 @@ export function settingsRoutes(): Router {
       return;
     }
 
-    const updates: Record<string, string> = {};
+    // PEM contents pasted/uploaded through the app are written into
+    // DATA_DIR/ohip/ so the operator never touches the Mac's filesystem;
+    // hcv-soap.ts still just reads a path.
+    let pemError: string | null = null;
+    const pemPaths: Record<string, string> = {};
+    for (const [field, value, name] of [
+      ['OHIP_PRIVATE_KEY_PATH', privateKeyPem, 'private-key'],
+      ['OHIP_CERTIFICATE_PATH', certificatePem, 'certificate'],
+      ['OHIP_CA_CERT_PATH', caCertPem, 'ca-cert'],
+    ] as const) {
+      if (value === undefined || value === '') continue;
+      const text = String(value);
+      if (!text.includes('-----BEGIN')) {
+        pemError = `The ${name.replace('-', ' ')} does not look like a PEM file.`;
+        break;
+      }
+      pemPaths[field] = writeOhipPem(name, text);
+    }
+    if (pemError) {
+      res.status(400).json({ error: pemError });
+      return;
+    }
+
+    const updates: Record<string, string> = { ...pemPaths };
     if (mode !== undefined) updates.OHIP_HCV_MODE = mode;
-    if (privateKeyPath !== undefined) updates.OHIP_PRIVATE_KEY_PATH = String(privateKeyPath).trim();
-    if (certificatePath !== undefined) updates.OHIP_CERTIFICATE_PATH = String(certificatePath).trim();
-    if (caCertPath !== undefined) updates.OHIP_CA_CERT_PATH = String(caCertPath).trim();
+    if (privateKeyPath !== undefined && pemPaths.OHIP_PRIVATE_KEY_PATH === undefined)
+      updates.OHIP_PRIVATE_KEY_PATH = String(privateKeyPath).trim();
+    if (certificatePath !== undefined && pemPaths.OHIP_CERTIFICATE_PATH === undefined)
+      updates.OHIP_CERTIFICATE_PATH = String(certificatePath).trim();
+    if (caCertPath !== undefined && pemPaths.OHIP_CA_CERT_PATH === undefined)
+      updates.OHIP_CA_CERT_PATH = String(caCertPath).trim();
     if (username !== undefined) updates.OHIP_USERNAME = String(username).trim();
     if (mohId !== undefined) updates.OHIP_MOH_ID = String(mohId).trim();
     if (endpoint !== undefined) updates.OHIP_ENDPOINT = String(endpoint).trim();

@@ -33,6 +33,9 @@ const baseSettings = {
   waveAnchorAccountId: '',
   waveSalesTaxId: '',
   isOnboarded: true,
+  emailProvider: 'google' as const,
+  googleConnected: false,
+  microsoftConnected: false,
 };
 
 /**
@@ -115,6 +118,21 @@ describe('Settings', () => {
 
     await userEvent.click(await screen.findByRole('button', { name: /retry all failed/i }));
     expect(await screen.findByText('Could not retry failed uploads.')).toBeInTheDocument();
+  });
+
+  it('switches the reminder email provider', async () => {
+    api.getSettings
+      .mockResolvedValueOnce({ ...baseSettings, googleConnected: true, microsoftConnected: true })
+      .mockResolvedValue({ ...baseSettings, emailProvider: 'microsoft', googleConnected: true, microsoftConnected: true });
+    api.getQueueStatus.mockResolvedValue({ uploaded: 0, pending: 0, failed: 0, captured: 0 });
+    api.getWaveHealth.mockResolvedValue({ healthy: false });
+    api.setEmailProvider.mockResolvedValue({ success: true, provider: 'microsoft' });
+    renderSettings();
+
+    const outlook = await screen.findByRole('radio', { name: /outlook/i });
+    await userEvent.click(outlook);
+
+    expect(api.setEmailProvider).toHaveBeenCalledWith('microsoft');
   });
 
   it('signs out and navigates to /login', async () => {

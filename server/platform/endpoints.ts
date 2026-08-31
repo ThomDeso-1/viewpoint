@@ -26,6 +26,9 @@ const REAL = {
   googleUserinfo: 'https://www.googleapis.com/oauth2/v2/userinfo',
   gmailBase: 'https://gmail.googleapis.com/gmail/v1/users/me',
   calendarBase: 'https://www.googleapis.com/calendar/v3',
+  microsoftAuthorize: 'https://login.microsoftonline.com/{tenant}/oauth2/v2.0/authorize',
+  microsoftToken: 'https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token',
+  graphBase: 'https://graph.microsoft.com/v1.0',
 } as const;
 
 export type EndpointName = keyof typeof REAL;
@@ -49,6 +52,9 @@ const DEMO_PATHS: Record<EndpointName, string> = {
   googleUserinfo: '/google/oauth/userinfo',
   gmailBase: '/gmail/v1/users/me',
   calendarBase: '/calendar/v3',
+  microsoftAuthorize: '/microsoft/oauth/authorize',
+  microsoftToken: '/microsoft/oauth/token',
+  graphBase: '/graph/v1.0',
 };
 
 /**

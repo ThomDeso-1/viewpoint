@@ -5,9 +5,6 @@ import {
   saveClaudeKey,
   validateWaveToken,
   saveWaveConnection,
-  saveWaveAccounts,
-  getWaveAccounts,
-  getWaveTaxes,
   markOnboarded,
   saveOhipSettings,
 } from '../shared/api';
@@ -22,20 +19,18 @@ interface WaveBusiness {
   isPersonal: boolean;
 }
 
-interface WaveAccount {
-  id: string;
-  name: string;
-}
-
-interface WaveTax {
-  id: string;
-  name: string;
-  rate: number;
-}
-
 type OuterStep = 'claude' | 'wave' | 'ohip';
-type WaveStage = 'token' | 'business' | 'accounts';
+type WaveStage = 'token' | 'business';
 
+/**
+ * First-run wizard. Four screens: password (done before this mounts),
+ * Claude API key, Wave (token → business), then OHIP mode.
+ *
+ * Deliberately short: it only captures what's needed to start working.
+ * The finer Wave setup (expense/anchor accounts, sales tax) and OHIP
+ * ministry credentials are done later in Settings, which has the full
+ * forms — asking for them here was the biggest drop-off point.
+ */
 export function Onboarding({ onComplete }: Props) {
   const navigate = useNavigate();
   const [step, setStep] = useState<OuterStep>('claude');
@@ -51,21 +46,8 @@ export function Onboarding({ onComplete }: Props) {
   const [waveError, setWaveError] = useState('');
   const [waveSubmitting, setWaveSubmitting] = useState(false);
   const [businesses, setBusinesses] = useState<WaveBusiness[]>([]);
-  const [expenseAccounts, setExpenseAccounts] = useState<WaveAccount[]>([]);
-  const [anchorAccounts, setAnchorAccounts] = useState<WaveAccount[]>([]);
-  const [taxes, setTaxes] = useState<WaveTax[]>([]);
-  const [expenseAccountId, setExpenseAccountId] = useState('');
-  const [anchorAccountId, setAnchorAccountId] = useState('');
-  const [salesTaxId, setSalesTaxId] = useState('');
 
   // ── OHIP ──
-  const [ohipMode, setOhipMode] = useState<'mock' | 'conformance' | 'production'>('mock');
-  const [ohipPrivateKeyPath, setOhipPrivateKeyPath] = useState('');
-  const [ohipCertificatePath, setOhipCertificatePath] = useState('');
-  const [ohipUsername, setOhipUsername] = useState('');
-  const [ohipPassword, setOhipPassword] = useState('');
-  const [ohipMohId, setOhipMohId] = useState('');
-  const [ohipKey, setOhipKey] = useState('');
   const [ohipError, setOhipError] = useState('');
   const [ohipSubmitting, setOhipSubmitting] = useState(false);
 
@@ -75,46 +57,17 @@ export function Onboarding({ onComplete }: Props) {
     navigate('/', { replace: true });
   };
 
-  const handleOhipSubmit = async (e: FormEvent) => {
-    e.preventDefault();
+  const finishWithMockOhip = async () => {
     setOhipError('');
     setOhipSubmitting(true);
-
     try {
-      if (ohipMode === 'mock') {
-        await saveOhipSettings({ mode: 'mock' });
-      } else {
-        if (!ohipPrivateKeyPath.trim() || !ohipCertificatePath.trim()) {
-          setOhipError('A private key and certificate are both required for real validation.');
-          return;
-        }
-        await saveOhipSettings({
-          mode: ohipMode,
-          privateKeyPath: ohipPrivateKeyPath.trim(),
-          certificatePath: ohipCertificatePath.trim(),
-          username: ohipUsername.trim(),
-          password: ohipPassword,
-          mohId: ohipMohId.trim(),
-          conformanceKey: ohipKey,
-        });
-      }
+      // Record "mock" explicitly so eligibility results are labelled
+      // simulated rather than silently absent. Real ministry validation is
+      // set up later in Settings → OHIP.
+      await saveOhipSettings({ mode: 'mock' });
       await finish();
     } catch (err: any) {
       setOhipError(err.message || 'Could not save OHIP settings.');
-    } finally {
-      setOhipSubmitting(false);
-    }
-  };
-
-  const handleSkipOhip = async () => {
-    setOhipSubmitting(true);
-    try {
-      // Explicitly mock rather than unset, so eligibility results are
-      // always labelled as simulated instead of silently absent.
-      await saveOhipSettings({ mode: 'mock' });
-      await finish();
-    } catch {
-      await finish();
     } finally {
       setOhipSubmitting(false);
     }
@@ -177,35 +130,9 @@ export function Onboarding({ onComplete }: Props) {
         businessId: business.id,
         businessName: business.name,
       });
-      const [accounts, taxList] = await Promise.all([getWaveAccounts(), getWaveTaxes()]);
-      setExpenseAccounts(accounts.expense);
-      setAnchorAccounts(accounts.anchor);
-      setTaxes(taxList);
-      if (accounts.expense.length === 1) setExpenseAccountId(accounts.expense[0].id);
-      if (accounts.anchor.length === 1) setAnchorAccountId(accounts.anchor[0].id);
-      setWaveStage('accounts');
-    } catch (err: any) {
-      setWaveError(err.message || 'Could not load accounts for that business.');
-    } finally {
-      setWaveSubmitting(false);
-    }
-  };
-
-  const handleAccountsSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    setWaveError('');
-
-    if (!expenseAccountId || !anchorAccountId) {
-      setWaveError('Choose an expense account and an anchor account.');
-      return;
-    }
-
-    setWaveSubmitting(true);
-    try {
-      await saveWaveAccounts({ expenseAccountId, anchorAccountId, salesTaxId });
       setStep('ohip');
     } catch (err: any) {
-      setWaveError(err.message || 'Could not save Wave settings.');
+      setWaveError(err.message || 'Could not save that business.');
     } finally {
       setWaveSubmitting(false);
     }
@@ -317,88 +244,12 @@ export function Onboarding({ onComplete }: Props) {
                 </button>
               ))}
             </div>
+            <p className="settings-help">
+              You'll pick which accounts expenses post to in Settings, once you're in.
+            </p>
             <button
               className="wizard-back"
               onClick={() => setWaveStage('token')}
-              disabled={waveSubmitting}
-            >
-              ← Back
-            </button>
-          </>
-        )}
-
-        {step === 'wave' && waveStage === 'accounts' && (
-          <>
-            <p className="wizard-steps">Step 3 of 4</p>
-            <h1>Wave Accounts</h1>
-            <p className="auth-subtitle">
-              Pick where expenses are recorded and which account they're paid from.
-            </p>
-
-            <form onSubmit={handleAccountsSubmit}>
-              <label className="wizard-field-label" htmlFor="expense-account">
-                Expense account
-              </label>
-              <select
-                id="expense-account"
-                className="wizard-select"
-                value={expenseAccountId}
-                onChange={(e) => setExpenseAccountId(e.target.value)}
-              >
-                <option value="">Select…</option>
-                {expenseAccounts.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.name}
-                  </option>
-                ))}
-              </select>
-
-              <label className="wizard-field-label" htmlFor="anchor-account">
-                Paid from
-              </label>
-              <select
-                id="anchor-account"
-                className="wizard-select"
-                value={anchorAccountId}
-                onChange={(e) => setAnchorAccountId(e.target.value)}
-              >
-                <option value="">Select…</option>
-                {anchorAccounts.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.name}
-                  </option>
-                ))}
-              </select>
-
-              <label className="wizard-field-label" htmlFor="sales-tax">
-                Sales tax (optional)
-              </label>
-              <select
-                id="sales-tax"
-                className="wizard-select"
-                value={salesTaxId}
-                onChange={(e) => setSalesTaxId(e.target.value)}
-              >
-                <option value="">None</option>
-                {taxes.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name} ({(t.rate * 100).toFixed(1)}%)
-                  </option>
-                ))}
-              </select>
-
-              {waveError && <p className="auth-error">{waveError}</p>}
-              <button
-                type="submit"
-                className="auth-button"
-                disabled={waveSubmitting || !expenseAccountId || !anchorAccountId}
-              >
-                {waveSubmitting ? 'Saving…' : 'Continue'}
-              </button>
-            </form>
-            <button
-              className="wizard-back"
-              onClick={() => setWaveStage('business')}
               disabled={waveSubmitting}
             >
               ← Back
@@ -414,108 +265,20 @@ export function Onboarding({ onComplete }: Props) {
               Checks a patient's health card coverage automatically when a request comes in.
             </p>
 
-            <form onSubmit={handleOhipSubmit}>
-              <label className="wizard-field-label" htmlFor="onboard-ohip-mode">
-                Mode
-              </label>
-              <select
-                id="onboard-ohip-mode"
-                className="wizard-select"
-                value={ohipMode}
-                onChange={(e) => setOhipMode(e.target.value as typeof ohipMode)}
-              >
-                <option value="mock">Simulated — try it out first</option>
-                <option value="conformance">Conformance — ministry test environment</option>
-                <option value="production">Production — live ministry service</option>
-              </select>
+            <p className="settings-help">
+              This starts in <strong>simulated</strong> mode — results are clearly labelled mock
+              everywhere they appear. When you have your ministry certificate, key, and GO Secure
+              credentials, switch it on in <strong>Settings → OHIP</strong>, which has the full
+              form and a test button.
+            </p>
 
-              {ohipMode === 'mock' ? (
-                <p className="settings-help">
-                  Eligibility results are simulated and labelled <strong>mock</strong> everywhere
-                  they appear. You can switch this on properly later in Settings.
-                </p>
-              ) : (
-                <>
-                  <p className="settings-help">
-                    Needs your ministry credentials. Convert your keystore to PEM first:
-                    <br />
-                    <code>openssl pkcs12 -in yourStore.p12 -nocerts -nodes -out ohip-key.pem</code>
-                    <br />
-                    <code>openssl pkcs12 -in yourStore.p12 -clcerts -nokeys -out ohip-cert.pem</code>
-                  </p>
-
-                  <label className="wizard-field-label">
-                    Private key path
-                    <input
-                      className="auth-input"
-                      value={ohipPrivateKeyPath}
-                      onChange={(e) => setOhipPrivateKeyPath(e.target.value)}
-                      placeholder="/Users/you/ohip/ohip-key.pem"
-                    />
-                  </label>
-
-                  <label className="wizard-field-label">
-                    Certificate path
-                    <input
-                      className="auth-input"
-                      value={ohipCertificatePath}
-                      onChange={(e) => setOhipCertificatePath(e.target.value)}
-                      placeholder="/Users/you/ohip/ohip-cert.pem"
-                    />
-                  </label>
-
-                  <label className="wizard-field-label">
-                    GO Secure username
-                    <input
-                      className="auth-input"
-                      value={ohipUsername}
-                      onChange={(e) => setOhipUsername(e.target.value)}
-                      autoComplete="off"
-                    />
-                  </label>
-
-                  <label className="wizard-field-label">
-                    GO Secure password
-                    <input
-                      className="auth-input"
-                      type="password"
-                      value={ohipPassword}
-                      onChange={(e) => setOhipPassword(e.target.value)}
-                      autoComplete="off"
-                    />
-                  </label>
-
-                  <label className="wizard-field-label">
-                    MOH ID / billing number
-                    <input
-                      className="auth-input"
-                      value={ohipMohId}
-                      onChange={(e) => setOhipMohId(e.target.value)}
-                      autoComplete="off"
-                    />
-                  </label>
-
-                  <label className="wizard-field-label">
-                    {ohipMode === 'production' ? 'Production key' : 'Conformance key'}
-                    <input
-                      className="auth-input"
-                      type="password"
-                      value={ohipKey}
-                      onChange={(e) => setOhipKey(e.target.value)}
-                      autoComplete="off"
-                    />
-                  </label>
-                </>
-              )}
-
-              {ohipError && <p className="auth-error">{ohipError}</p>}
-              <button type="submit" className="auth-button" disabled={ohipSubmitting}>
-                {ohipSubmitting ? 'Finishing…' : 'Finish Setup'}
-              </button>
-            </form>
-
-            <button className="wizard-skip" onClick={handleSkipOhip} disabled={ohipSubmitting}>
-              Skip for now
+            {ohipError && <p className="auth-error">{ohipError}</p>}
+            <button
+              className="auth-button"
+              onClick={finishWithMockOhip}
+              disabled={ohipSubmitting}
+            >
+              {ohipSubmitting ? 'Finishing…' : 'Finish Setup'}
             </button>
           </>
         )}

@@ -25,6 +25,11 @@
 
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
+
+  /* Widest the primary content column grows on a desktop browser. The app
+     is mobile-first; above the 768px breakpoint each screen centres its
+     content at this width instead of stretching edge to edge. */
+  --content-max: 760px;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -1570,4 +1575,198 @@ img {
 .banner-demo a {
   color: #fff;
   text-decoration: underline;
+}
+
+/* ── OHIP PEM fields ── */
+
+.pem-field input[type='file'] {
+  display: block;
+  margin-top: 6px;
+  font-size: 13px;
+}
+
+.pem-input {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  resize: vertical;
+  min-height: 64px;
+}
+
+/* ── Settings: collapsible groups ── */
+
+.settings-group {
+  border-bottom: 1px solid var(--border);
+}
+
+.settings-group-title {
+  padding: 16px 0 12px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.settings-group-title::-webkit-details-marker {
+  display: none;
+}
+
+.settings-group-title::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg);
+  transition: transform 0.15s;
+}
+
+.settings-group[open] > .settings-group-title::before {
+  transform: rotate(-135deg);
+}
+
+/* ── Finish-setup checklist (home screen) ── */
+
+.setup-checklist {
+  margin: 12px 20px 0;
+  padding: 14px 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.setup-checklist-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.setup-checklist-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.setup-checklist-dismiss {
+  padding: 4px;
+  color: var(--text-tertiary);
+  border-radius: 6px;
+}
+
+.setup-checklist-items {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.setup-checklist-items li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.setup-checklist-check {
+  display: flex;
+  color: var(--text-tertiary);
+}
+
+.setup-checklist-items li.is-done .setup-checklist-check {
+  color: var(--status-uploaded);
+}
+
+.setup-checklist-items li.is-done .setup-checklist-label {
+  text-decoration: line-through;
+  color: var(--text-tertiary);
+}
+
+/* ── Reminder email provider picker (Settings) ── */
+
+.settings-radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.settings-radio {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.settings-radio input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.settings-radio input:disabled {
+  cursor: default;
+}
+
+/* ────────────────────────────────────────
+   Desktop / wide-viewport layout
+
+   The app is mobile-first. From this breakpoint up, each screen centres
+   its content in a column of --content-max instead of stretching across
+   the whole window. Sticky full-width bands keep their background but
+   align their contents with that column.
+   ──────────────────────────────────────── */
+
+@media (min-width: 768px) {
+  .app-header,
+  .review-header,
+  .search-bar,
+  .status-bar {
+    padding-left: max(20px, calc((100% - var(--content-max)) / 2));
+    padding-right: max(20px, calc((100% - var(--content-max)) / 2));
+  }
+
+  /* .search-icon is positioned from the .search-bar edge; keep it beside
+     the input once the bar has a wide gutter. */
+  .search-icon {
+    left: calc(max(20px, calc((100% - var(--content-max)) / 2)) + 12px);
+  }
+
+  .receipt-list,
+  .review-content,
+  .settings-content {
+    max-width: var(--content-max);
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .setup-checklist {
+    max-width: var(--content-max);
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  /* Auth + onboarding: a centred panel rather than loose text mid-window. */
+  .auth-card {
+    max-width: 440px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 40px 36px;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+  }
+
+  /* Pin the capture button to the edge of the centred column, not the far
+     side of a wide window. */
+  .fab-container {
+    right: max(20px, calc((100% - var(--content-max)) / 2 + 20px));
+  }
 }

@@ -47,7 +47,7 @@ export type InvoiceStatus = 'draft' | 'created' | 'approved' | 'sent' | 'failed'
 /** Which HCV backend produced a result — a mock result must never be mistaken for a real one. */
 export type HcvMode = 'mock' | 'conformance' | 'production';
 
-export type OAuthProvider = 'google' | 'wave';
+export type OAuthProvider = 'google' | 'wave' | 'microsoft';
 
 // ── Rows ──
 

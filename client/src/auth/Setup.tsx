@@ -46,7 +46,7 @@ export function Setup({ onComplete }: Props) {
             <circle cx="24" cy="21" r="2.5" stroke="white" strokeWidth="2" />
           </svg>
         </div>
-        <p className="wizard-steps">Step 1 of 3</p>
+        <p className="wizard-steps">Step 1 of 4</p>
         <h1>Welcome to Viewpoint</h1>
         <p className="auth-subtitle">Set a password to protect your receipts</p>
 

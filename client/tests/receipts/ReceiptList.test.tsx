@@ -14,8 +14,16 @@ beforeEach(() => {
   api.listReceipts.mockResolvedValue([]);
   api.getQueueStatus.mockResolvedValue({ uploaded: 0, pending: 0, failed: 0, captured: 0 });
   api.getHealthStatus.mockResolvedValue({ claudeConfigured: false, claudeHealthy: null, waveConfigured: false, waveHealthy: null });
-  // ReceiptList reads this for the demo-mode banner.
-  api.getSettings.mockResolvedValue({ demoMode: false } as any);
+  // ReceiptList reads this for the demo-mode banner. Fully-connected so the
+  // setup checklist stays hidden and doesn't clutter these assertions.
+  api.getSettings.mockResolvedValue({
+    demoMode: false,
+    hasClaudeKey: true,
+    hasWaveToken: true,
+    googleConnected: true,
+    microsoftConnected: false,
+  } as any);
+  api.getExamSettings.mockResolvedValue({ sourceFolder: '/files', invoicingReady: true } as any);
   vi.stubGlobal('confirm', vi.fn(() => true));
 });
 

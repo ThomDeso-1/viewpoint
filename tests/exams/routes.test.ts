@@ -498,6 +498,33 @@ describe('exams API', () => {
       expect(res.status).toBe(400);
     });
 
+    it('stores a pasted PEM under the data dir and points the path at it', async () => {
+      const pem = '-----BEGIN CERTIFICATE-----\nMIIabc\n-----END CERTIFICATE-----';
+      const save = await request(ctx.app)
+        .post('/api/settings/ohip')
+        .set(auth())
+        .send({ mode: 'conformance', certificatePem: pem });
+      expect(save.status).toBe(200);
+
+      const stored = path.join(ctx.dataDir, 'ohip', 'certificate.pem');
+      expect(fs.readFileSync(stored, 'utf-8')).toContain('BEGIN CERTIFICATE');
+      expect((fs.statSync(stored).mode & 0o777)).toBe(0o600);
+      expect(process.env.OHIP_CERTIFICATE_PATH).toBe(stored);
+
+      const res = await request(ctx.app).get('/api/settings/ohip').set(auth());
+      expect(res.body.hasCertificate).toBe(true);
+      expect(JSON.stringify(res.body)).not.toContain('MIIabc');
+    });
+
+    it('rejects text that is not a PEM', async () => {
+      const res = await request(ctx.app)
+        .post('/api/settings/ohip')
+        .set(auth())
+        .send({ mode: 'conformance', privateKeyPem: 'just some text' });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/PEM/i);
+    });
+
     it('refuses to test while in mock mode', async () => {
       const res = await request(ctx.app).post('/api/settings/ohip/test').set(auth()).send({});
       expect(res.status).toBe(400);

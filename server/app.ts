@@ -16,6 +16,7 @@ import { settingsRoutes } from './routes/settings.js';
 import { googleRoutes, googleCallbackRoutes } from './routes/google.js';
 import { examsRoutes } from './routes/exams.js';
 import { waveOAuthRoutes, waveCallbackRoutes } from './routes/wave-oauth.js';
+import { microsoftRoutes, microsoftCallbackRoutes } from './routes/microsoft.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -65,6 +66,7 @@ export function createApp(): Express {
   // parameter instead — see routes/google.ts.
   app.use('/api/google', googleCallbackRoutes());
   app.use('/api/wave', waveCallbackRoutes());
+  app.use('/api/microsoft', microsoftCallbackRoutes());
 
   app.use('/api', authMiddleware);
 
@@ -73,6 +75,7 @@ export function createApp(): Express {
   app.use('/api/google', googleRoutes());
   app.use('/api/exams', examsRoutes());
   app.use('/api/wave', waveOAuthRoutes());
+  app.use('/api/microsoft', microsoftRoutes());
 
   // Unknown /api endpoint → JSON 404, not the SPA shell.
   app.use('/api', apiNotFound);

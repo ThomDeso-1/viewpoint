@@ -12,6 +12,7 @@ import {
   type Settings,
 } from '../shared/api';
 import { AddToHomeScreenTip } from '../shared/AddToHomeScreenTip';
+import { SetupChecklist } from '../receipts/SetupChecklist';
 import { CaptureButton } from '../receipts/CaptureButton';
 import { ReceiptRow } from '../receipts/ReceiptRow';
 import { UploadStatusBar } from '../receipts/UploadStatusBar';
@@ -130,6 +131,9 @@ export function ReceiptList() {
           Wave connection has expired — uploads are paused. Reconnect in Settings.
         </div>
       )}
+
+      {/* Finish-setup checklist — hides itself once done or dismissed */}
+      <SetupChecklist settings={settings} />
 
       {/* Queue status bar */}
       {queue && <UploadStatusBar queue={queue} />}
