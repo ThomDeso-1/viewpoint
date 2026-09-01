@@ -1,8 +1,9 @@
 # Demo mode — run the whole app with no credentials
 
 Everything works: exam requests arrive, get read, get matched to
-appointments, eligibility gets checked, invoices get raised, reminders get
-sent. **None of it touches a real service, and none of it costs anything.**
+appointments, their coverage status is pulled off the schedule, invoices
+get raised, reminders get sent. **None of it touches a real service, and
+none of it costs anything.**
 
 Use this to learn the app and shake out bugs. When you hand it over, your
 user swaps in real credentials and nothing else changes.
@@ -36,7 +37,7 @@ you can watch the workflow move.
 | Gmail | Send only — reminder mail is captured, not delivered |
 | Google Calendar | Three appointments matching those patients |
 | Google OAuth | Auto-approves, so the real connect flow still runs |
-| OHIP | The app's own mock mode, which was always built in |
+| OHIP | Disabled by default (not certified). The schedule file's "Status" column stands in. Set `OHIP_ENABLED=true` to exercise the built-in mock. |
 
 **The app's own code is not mocked.** Only the base URLs move
 (`server/services/endpoints.ts`). The same GraphQL parsing, MIME decoding,
@@ -53,11 +54,11 @@ and a box in the server logs at startup.
 
 Three people email in, chosen so each takes a different path:
 
-| | Health card outcome | Appointment |
+| | Schedule "Status" column | Appointment |
 |---|---|---|
-| **Ada Lovelace** | Valid — covered | Soonest; her reminder is due immediately |
-| **Grace Hopper** | Card expired | Next day |
-| **Alan Turing** | Not eligible for OHIP | Two days out |
+| **Ada Lovelace** | `Eligible` | Soonest; her reminder is due immediately |
+| **Grace Hopper** | `$180 private pay` | Next day |
+| **Alan Turing** | `Not eligible` | Two days out |
 
 Plus two patients already on file — **Katherine Johnson** (has a card) and
 **Mae Jemison** (deliberately has none, so you can see that path) — and
@@ -77,9 +78,11 @@ upcoming and always a reminder due.
 3. **Tap "Exam requests"** in the top-right nav → the **exam request inbox**.
    Tap **Scan folder** (under the heading) — the seeded `upcoming-exams.csv` is read and three
    requests appear, already drafted: patient matched, appointment linked,
-   OHIP checked, invoice drafted, reminder written.
-4. Notice **Grace** and **Alan** show as *not covered* — that's the
-   eligibility check doing its job. Every result is tagged `mock`.
+   coverage read off the schedule, invoice drafted, reminder written.
+4. Each card's **Coverage (schedule)** line reflects that file's "Status"
+   column: Ada *Covered*, Grace *Private pay*, Alan *Not covered* — tagged
+   *(from the schedule)*, because nothing was actually checked with the
+   ministry.
 5. On Ada's card, tap **Edit lines** → add a second line, watch the total
    update, **Save invoice**.
 6. Tap **Preview** on the reminder to read what would be sent.
@@ -88,7 +91,7 @@ upcoming and always a reminder due.
    turns up within a minute (her appointment is inside the reminder
    window).
 8. **Tap "Schedule"** in the top-right nav. Try **Add** for a walk-in, and
-   **Link a patient** on anything unmatched, then **Check OHIP**.
+   **Link a patient** on anything unmatched.
 9. **Settings** (gear, top-left) **→ App & privacy → View access log** →
    every health card read and everything sent, recorded.
 
@@ -101,17 +104,20 @@ The demo is most useful for the unhappy paths:
 - **Dismiss** a request instead of approving — its reminder should be
   cancelled and never send.
 - Clear the **patient files folder** in Settings → scanning stops entirely.
-- Clear the **invoice product/account** → approving still checks
-  eligibility and schedules the reminder, but reports that the invoice
-  couldn't be created.
+- Clear the **invoice product/account** → approving still schedules the
+  reminder, but reports that the invoice couldn't be created.
 - Settings → Google → **Disconnect**, then **Connect** again. The real
   OAuth flow runs; the fake consent screen auto-approves.
-- Edit a patient's health card to `9999999999` and re-check — that's the
-  mock's "service unavailable", so you get a retryable failure.
+- Put an odd value in the CSV's **Status** column (e.g. `407`) and
+  re-scan — the card shows it verbatim with a neutral tag, not a
+  covered/not-covered verdict.
 - Stop the mock server (`Ctrl-C` on that pane) and use the app — you
   should get clear errors, not silent failures or crashes.
 
 ### The mock health card numbers
+
+Only relevant with `OHIP_ENABLED=true` (off by default). When on, these
+fixed numbers drive the built-in mock HCV service:
 
 | Number | Result |
 |---|---|

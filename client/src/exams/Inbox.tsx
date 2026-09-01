@@ -25,7 +25,7 @@ import { InvoiceEditor } from '../exams/InvoiceEditor';
  * tap. Nothing on this screen has been sent yet; Approve is the moment
  * anything reaches a patient or the books.
  */
-export function Inbox() {
+export function Inbox({ ohipEnabled = false }: { ohipEnabled?: boolean }) {
   const [requests, setRequests] = useState<ExamRequest[]>([]);
   const [meta, setMeta] = useState<ExamRequestCounts | null>(null);
   const [loading, setLoading] = useState(true);
@@ -143,7 +143,7 @@ export function Inbox() {
         </div>
       )}
 
-      {meta && meta.hcvMode === 'mock' && (
+      {ohipEnabled && meta && meta.hcvMode === 'mock' && (
         <div className="banner banner-info">
           OHIP checks are running against a <strong>mock</strong> service — results are simulated, not real
           coverage. This switches over once ministry conformance testing is complete.
@@ -158,6 +158,7 @@ export function Inbox() {
             <ExamRequestCard
               key={req.id}
               request={req}
+              ohipEnabled={ohipEnabled}
               busy={busyId === req.id}
               onApprove={() => handleApprove(req.id)}
               onReject={() => handleReject(req.id)}
@@ -208,6 +209,41 @@ function EligibilityLine({ request }: { request: ExamRequest }) {
   );
 }
 
+/**
+ * The schedule file's "Status" column, interpreted. This is advisory — it
+ * is whatever the clinic wrote in the file, not a live eligibility check —
+ * so an unrecognised value shows neutrally with its raw text rather than
+ * being forced into a covered/not-covered verdict.
+ */
+function CoverageStatusLine({ request }: { request: ExamRequest }) {
+  const raw = request.extraction?.coverage_status?.trim();
+  if (!raw) return <span className="muted">Not stated on the schedule</span>;
+
+  const cls =
+    request.coverage_class === 'covered'
+      ? 'eligibility-ok'
+      : request.coverage_class === 'not_covered'
+        ? 'eligibility-bad'
+        : 'eligibility-unknown';
+
+  const prefix =
+    request.coverage_class === 'covered'
+      ? 'Covered'
+      : request.coverage_class === 'not_covered'
+        ? 'Not covered'
+        : request.coverage_class === 'private_pay'
+          ? 'Private pay'
+          : null;
+
+  return (
+    <span className={`eligibility ${cls}`}>
+      {prefix ? `${prefix} — ` : ''}
+      {raw}
+      <span className="muted"> (from the schedule)</span>
+    </span>
+  );
+}
+
 const REMINDER_LEADS = [
   { hours: 24, label: '1 day before' },
   { hours: 48, label: '2 days before' },
@@ -218,6 +254,7 @@ const REMINDER_LEADS = [
 
 function ExamRequestCard({
   request,
+  ohipEnabled,
   busy,
   onApprove,
   onReject,
@@ -225,6 +262,7 @@ function ExamRequestCard({
   onInvoiceSaved,
 }: {
   request: ExamRequest;
+  ohipEnabled: boolean;
   busy: boolean;
   onApprove: () => void;
   onReject: () => void;
@@ -298,9 +336,13 @@ function ExamRequestCard({
         </div>
 
         <div>
-          <dt>OHIP</dt>
+          <dt>{ohipEnabled ? 'OHIP' : 'Coverage (schedule)'}</dt>
           <dd>
-            <EligibilityLine request={request} />
+            {ohipEnabled ? (
+              <EligibilityLine request={request} />
+            ) : (
+              <CoverageStatusLine request={request} />
+            )}
             {extraction?.health_card_masked && (
               <span className="muted"> ({extraction.health_card_masked})</span>
             )}

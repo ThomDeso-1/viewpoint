@@ -147,7 +147,8 @@ viewpoint-receipts/
 | **Patient files folder scan** | `server/exams/{file-source,xlsx,processed-files,queue}.ts`, `server/platform/paths.ts`, `EXAM_REQUEST_SOURCE_DIR`; Settings → Exam Requests |
 | **Google (Calendar + reminder send)** | `server/integrations/google/{auth,gmail,calendar}.ts`, `server/platform/oauth-store.ts`, `server/routes/google.ts`, `client/src/exams/GoogleSettings.tsx` |
 | **OAuth flow plumbing (both providers)** | `server/integrations/oauth/{state-store,callback}.ts` — `state` map + the callback router factory / result page |
-| **OHIP eligibility** | `server/integrations/ohip/*`, `server/exams/eligibility.ts`, `client/src/exams/OhipSettings.tsx` |
+| **OHIP eligibility** *(disabled by default — `OHIP_ENABLED`)* | `server/integrations/ohip/*` (incl. `ohipEnabled()`), `server/exams/eligibility.ts`, `client/src/exams/OhipSettings.tsx` |
+| **Schedule "Status" column** *(the OHIP stand-in while disabled)* | `server/exams/coverage-status.ts` (`classifyCoverageStatus`), `coverage_status` in the extraction, `coverage_class` on the exam-request DTO |
 | **Reminders (+ future SMS)** | `server/exams/reminders.ts` (`ReminderChannel` interface) |
 | **Background queues / retry** | `server/receipts/upload-queue.ts`, `server/exams/queue.ts`, `server/platform/{backoff,poller}.ts` |
 | **Settings screens** | `server/routes/settings.ts`, `client/src/receipts/Settings.tsx`, `client/src/auth/Onboarding.tsx`, `client/src/exams/*Settings.tsx` |

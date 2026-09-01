@@ -11,7 +11,7 @@ import {
   checkTokenHealth,
 } from '../integrations/wave/index.js';
 import { getWaveToken, isWaveConfigured, authMode } from '../integrations/wave/auth.js';
-import { hcvMode, resetHcvClient, loadConfigFromEnv, SoapHcvClient, HcvError } from '../integrations/ohip/index.js';
+import { hcvMode, ohipEnabled, resetHcvClient, loadConfigFromEnv, SoapHcvClient, HcvError } from '../integrations/ohip/index.js';
 import { isDemoMode } from '../platform/endpoints.js';
 import { isConnected } from '../platform/oauth-store.js';
 import { emailProviderName } from '../integrations/email/index.js';
@@ -401,6 +401,10 @@ export function settingsRoutes(): Router {
 
   // ── GET /api/settings/ohip — configuration state, never the secrets ──
   router.get('/ohip', (_req: Request, res: Response): void => {
+    if (!ohipEnabled()) {
+      res.status(403).json({ error: 'OHIP integration is disabled.' });
+      return;
+    }
     res.json({
       mode: hcvMode(),
       privateKeyPath: process.env.OHIP_PRIVATE_KEY_PATH || '',
@@ -421,6 +425,10 @@ export function settingsRoutes(): Router {
 
   // ── POST /api/settings/ohip ──
   router.post('/ohip', (req: Request, res: Response): void => {
+    if (!ohipEnabled()) {
+      res.status(403).json({ error: 'OHIP integration is disabled.' });
+      return;
+    }
     const {
       mode,
       privateKeyPath,
@@ -497,6 +505,10 @@ export function settingsRoutes(): Router {
    * contacting the ministry. With one, it runs a real validation.
    */
   router.post('/ohip/test', rateLimited('ohip-test', 15, 60_000), async (req: Request, res: Response): Promise<void> => {
+    if (!ohipEnabled()) {
+      res.status(403).json({ error: 'OHIP integration is disabled.' });
+      return;
+    }
     if (hcvMode() === 'mock') {
       res.status(400).json({
         error: 'OHIP is in mock mode. Switch to conformance or production to test real credentials.',

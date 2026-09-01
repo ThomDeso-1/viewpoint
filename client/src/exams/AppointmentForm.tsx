@@ -92,7 +92,7 @@ export function AppointmentForm({ patients, onCreated, onCancel }: Props) {
           ))}
         </select>
         <small className="muted">
-          Linking a patient is what allows an OHIP check and a reminder for this appointment.
+          Linking a patient is what allows a reminder for this appointment.
         </small>
       </label>
 

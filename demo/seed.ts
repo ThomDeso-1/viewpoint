@@ -65,7 +65,10 @@ async function main(): Promise<void> {
     // reminder is already due — otherwise you'd wait a day to see one send.
     REMINDER_LEAD_HOURS: '36',
 
-    // Eligibility uses the built-in mock, which labels every result.
+    // OHIP is left disabled (the default) — the ministry integration is not
+    // certified, so the demo shows the schedule file's "Status" column on
+    // each request instead. Set OHIP_ENABLED=true to exercise the mock HCV
+    // path; it labels every result "mock".
     OHIP_HCV_MODE: 'mock',
   });
   console.log('  ✓ settings configured');

@@ -16,7 +16,7 @@ get it.
 | 2 | Claude API key | **Yes** | Setup, step 2 |
 | 3 | Wave access token | For invoicing & receipts | Setup, step 3 |
 | 4 | Wave business + accounts | With #3 | Setup, step 3 |
-| 5 | OHIP mode + ministry credentials | For real eligibility checks | Setup, step 4 |
+| 5 | OHIP mode + ministry credentials | Disabled by default (`OHIP_ENABLED`) | Settings → OHIP, when on |
 | 6 | Google OAuth client | For calendar & reminder emails | Settings → Google |
 | 6b | Outlook / Microsoft 365 | Optional alternative to Gmail for reminders | Settings → Outlook |
 | 7 | Patient files folder | For automatic intake | Settings → Exam Requests |
@@ -24,8 +24,9 @@ get it.
 | 9 | Business name, timezone, fee | Recommended | Settings → Exam Requests |
 | 10 | Wave OAuth client | Optional alternative to #3 | Settings → Wave |
 
-Steps 1–5 are the first-run wizard. Steps 6–9 are done once in Settings
-afterwards, because they need a Google Cloud project.
+Steps 1–4 are the first-run wizard (step 5, OHIP, is skipped while
+`OHIP_ENABLED` is off). Steps 6–9 are done once in Settings afterwards,
+because they need a Google Cloud project.
 
 ---
 
@@ -78,8 +79,16 @@ from your Wave account. You'll pick:
 
 ## 5. OHIP Health Card Validation
 
-Setup step 4. **Skippable** — it defaults to simulated mode, and you can
-switch it on properly later in Settings.
+> **Disabled by default.** The ministry HCV integration is not certified
+> for production, so `OHIP_ENABLED` is `false` and every OHIP surface
+> (this settings panel, the onboarding step, the eligibility tags and
+> "Check OHIP" buttons) is hidden. While it is off, the schedule file's
+> **Status** column is captured and shown on each request instead — see
+> §"Reading the schedule file" below.
+>
+> To bring it back once conformance testing is complete and credentials
+> are issued: set `OHIP_ENABLED=true` in `.env` and restart. Everything
+> below then applies.
 
 ### Mode
 
@@ -184,9 +193,12 @@ patient's schedule row with any notes elsewhere in the file that name
 them (including corrections). A file is re-read only if its contents
 change. Nothing is scanned while the folder is empty/unset.
 
-The OHIP "Status" column in a schedule is ignored — the app runs its own
-eligibility check. When Google is connected, approving a card also writes
-the appointment to your calendar, and you can change that patient's
+The OHIP "Status" column in a schedule is captured verbatim and shown on
+the request (interpreted as covered / not covered / private pay where the
+wording is clear). It is advisory — what the file said, not a live check.
+If `OHIP_ENABLED=true`, the app also runs its own eligibility check and
+shows that alongside. When Google is connected, approving a card also
+writes the appointment to your calendar, and you can change that patient's
 reminder time on the card before approving.
 
 Point it at an absolute path on the Mac — typically a folder that a
@@ -210,8 +222,9 @@ Pick **one**:
 
 Not both — the invoice line would be ambiguous.
 
-Until one is chosen, approving a request will run the eligibility check
-and reminder but report that the invoice couldn't be created.
+Until one is chosen, approving a request will still schedule the reminder
+(and run the eligibility check, if OHIP is enabled) but report that the
+invoice couldn't be created.
 
 ---
 

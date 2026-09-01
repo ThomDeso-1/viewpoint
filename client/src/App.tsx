@@ -54,7 +54,7 @@ export function App() {
         navigate('/onboarding', { replace: true });
       }
     } catch {
-      setAuth({ authenticated: false, needsSetup: false, needsOnboarding: false });
+      setAuth({ authenticated: false, needsSetup: false, needsOnboarding: false, ohipEnabled: false });
     } finally {
       setLoading(false);
     }
@@ -73,6 +73,7 @@ export function App() {
   }
 
   const authed = !!auth?.authenticated;
+  const ohipEnabled = !!auth?.ohipEnabled;
 
   return (
     <Routes>
@@ -91,7 +92,13 @@ export function App() {
       />
       <Route
         path="/onboarding"
-        element={authed ? <Onboarding onComplete={checkAuth} /> : <Navigate to={gateTarget(auth)} replace />}
+        element={
+          authed ? (
+            <Onboarding onComplete={checkAuth} ohipEnabled={ohipEnabled} />
+          ) : (
+            <Navigate to={gateTarget(auth)} replace />
+          )
+        }
       />
       <Route path="/" element={authed ? <ReceiptList /> : <Navigate to={gateTarget(auth)} replace />} />
       <Route
@@ -102,13 +109,22 @@ export function App() {
         path="/review-batch"
         element={authed ? <BatchReview /> : <Navigate to={gateTarget(auth)} replace />}
       />
-      <Route path="/settings" element={authed ? <Settings /> : <Navigate to={gateTarget(auth)} replace />} />
-      <Route path="/inbox" element={authed ? <Inbox /> : <Navigate to={gateTarget(auth)} replace />} />
-      <Route path="/schedule" element={authed ? <Schedule /> : <Navigate to={gateTarget(auth)} replace />} />
+      <Route
+        path="/settings"
+        element={authed ? <Settings ohipEnabled={ohipEnabled} /> : <Navigate to={gateTarget(auth)} replace />}
+      />
+      <Route
+        path="/inbox"
+        element={authed ? <Inbox ohipEnabled={ohipEnabled} /> : <Navigate to={gateTarget(auth)} replace />}
+      />
+      <Route
+        path="/schedule"
+        element={authed ? <Schedule ohipEnabled={ohipEnabled} /> : <Navigate to={gateTarget(auth)} replace />}
+      />
       <Route path="/patients" element={authed ? <Patients /> : <Navigate to={gateTarget(auth)} replace />} />
       <Route
         path="/patients/:id"
-        element={authed ? <PatientDetail /> : <Navigate to={gateTarget(auth)} replace />}
+        element={authed ? <PatientDetail ohipEnabled={ohipEnabled} /> : <Navigate to={gateTarget(auth)} replace />}
       />
       <Route path="/audit" element={authed ? <AuditLog /> : <Navigate to={gateTarget(auth)} replace />} />
       <Route path="*" element={<Navigate to={gateTarget(auth)} replace />} />

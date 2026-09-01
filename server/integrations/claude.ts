@@ -399,6 +399,7 @@ function validateExamRequestExtraction(value: unknown): asserts value is ExamReq
     'requested_date',
     'requested_time',
     'reason',
+    'coverage_status',
     'notes',
   ] as const;
 
@@ -453,6 +454,7 @@ Return ONLY a JSON array. Each element is one patient, an object with exactly th
   "requested_date": "YYYY-MM-DD of the appointment, or null",
   "requested_time": "HH:MM in 24-hour time, or null",
   "reason": "brief clinical reason for the visit, or null",
+  "coverage_status": "verbatim text of the row's Status / OHIP status / eligibility column for this patient (e.g. 'Ok', 'Not eligible', '$180 private pay', 'Elig. 12/05/24'), or null",
   "notes": "everything else worth showing the operator (see below), or null",
   "confidence": 0.0
 }
@@ -471,9 +473,10 @@ Rules:
   wrong (e.g. "DOB reads July 25 2026, a year error — confirm"), do NOT
   guess the corrected value: leave that field null and state the problem
   in "notes".
-- **Ignore any "Status" / "OHIP status" column** (values like "Ok", "407",
-  "$140", "Elig. 12/05/24"). The app re-checks OHIP eligibility itself.
-  You may mention a fee/private-pay signal from it in "notes".
+- **Capture the "Status" / "OHIP status" / eligibility column verbatim** into
+  "coverage_status" (values like "Ok", "407", "$140", "Elig. 12/05/24"). Copy
+  it as written — do not normalise or interpret it. You may also mention a
+  fee/private-pay signal from it in "notes".
 - Use null for anything the document does not state. Never invent or infer
   a value that is not there — a missing field is expected and fine.
 - Column headers, labels and layout vary; map them by meaning, not exact

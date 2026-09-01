@@ -18,7 +18,7 @@ import { MicrosoftSettings } from '../exams/MicrosoftSettings';
 import { ExamSettings } from '../exams/ExamSettings';
 import { OhipSettings } from '../exams/OhipSettings';
 
-export function Settings() {
+export function Settings({ ohipEnabled = false }: { ohipEnabled?: boolean }) {
   const navigate = useNavigate();
   const [settings, setSettings] = useState<SettingsData | null>(null);
   const [queue, setQueue] = useState<QueueStatus | null>(null);
@@ -153,12 +153,14 @@ export function Settings() {
             </span>
             <span className="settings-card-text">
               <span className="settings-card-title">Exam workflow</span>
-              <span className="settings-card-desc">Patient files folder, invoicing defaults, and OHIP checks</span>
+              <span className="settings-card-desc">
+                Patient files folder, invoicing defaults{ohipEnabled ? ', and OHIP checks' : ''}
+              </span>
             </span>
             <span className="settings-card-chevron" aria-hidden="true" />
           </summary>
           <ExamSettings />
-          <OhipSettings />
+          {ohipEnabled && <OhipSettings />}
         </details>
 
         <details className="settings-card">

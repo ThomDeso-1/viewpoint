@@ -34,6 +34,9 @@ export interface AuthStatus {
   authenticated: boolean;
   needsSetup: boolean;
   needsOnboarding: boolean;
+  /** Whether the OHIP HCV integration is switched on. Off by default — every
+   *  OHIP surface stays hidden until the ministry integration is certified. */
+  ohipEnabled: boolean;
 }
 
 export function getAuthStatus(): Promise<AuthStatus> {
@@ -320,10 +323,16 @@ export interface ExamRequestExtraction {
   requested_date: string | null;
   requested_time: string | null;
   reason: string | null;
+  /** Verbatim "Status" / "OHIP status" column from the schedule file, or null.
+   *  Advisory — what the file said, not a live eligibility check. */
+  coverage_status: string | null;
   /** Merged notes for this patient — schedule row plus any notes that name them. */
   notes: string | null;
   confidence: number;
 }
+
+/** How the schedule's coverage_status reads once interpreted (see server/exams/coverage-status.ts). */
+export type CoverageClass = 'covered' | 'not_covered' | 'private_pay' | 'unknown';
 
 export interface ExamRequestReminder {
   id: string;
@@ -366,6 +375,8 @@ export interface ExamRequest {
    *  getExamRequestSource() — it is PHI and access is audited. */
   has_source: boolean;
   extraction: ExamRequestExtraction | null;
+  /** Interpretation of extraction.coverage_status, for colouring the pill. */
+  coverage_class: CoverageClass;
   last_error: string | null;
   retry_count: number;
   patient: Patient | null;

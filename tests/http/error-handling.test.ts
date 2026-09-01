@@ -22,7 +22,9 @@ describe('HTTP tail', () => {
   });
 
   it('turns an unguarded handler error into a 500 JSON, not a hang', async () => {
-    ctx = await setupTestApp();
+    // OHIP on, so check-eligibility runs its handler (and can throw) rather
+    // than short-circuiting on the disabled guard.
+    ctx = await setupTestApp({ OHIP_ENABLED: 'true' });
 
     await request(ctx.app).post('/api/auth/setup').send({ password: 'test-password' });
     const login = await request(ctx.app).post('/api/auth/login').send({ password: 'test-password' });

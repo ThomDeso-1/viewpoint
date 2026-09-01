@@ -222,6 +222,13 @@ export interface ExamRequestExtraction {
   requested_time: string | null;
   reason: string | null;
   /**
+   * Verbatim value of the schedule's "Status" / "OHIP status" / eligibility
+   * column for this patient (e.g. "Ok", "Not eligible", "$180 private pay"),
+   * or null. Advisory only — it is what the file said, never a substitute
+   * for a real eligibility check.
+   */
+  coverage_status: string | null;
+  /**
    * Everything else worth showing the operator, merged from the patient's
    * schedule row and any notes/messages elsewhere in the file that name
    * them — including corrections ("DOB is a typo"), fee/private-pay flags,

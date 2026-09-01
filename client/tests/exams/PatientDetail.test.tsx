@@ -19,12 +19,12 @@ beforeEach(() => {
   api.updatePatient.mockResolvedValue(makePatient());
 });
 
-function renderDetail() {
+function renderDetail({ ohipEnabled = true }: { ohipEnabled?: boolean } = {}) {
   return render(
     <MemoryRouter initialEntries={['/patients/patient-1']}>
       <ToastProvider>
         <Routes>
-          <Route path="/patients/:id" element={<PatientDetail />} />
+          <Route path="/patients/:id" element={<PatientDetail ohipEnabled={ohipEnabled} />} />
         </Routes>
       </ToastProvider>
     </MemoryRouter>,
@@ -99,6 +99,14 @@ describe('PatientDetail', () => {
 
     expect(screen.getByRole('button', { name: /Check OHIP now/i })).toBeDisabled();
     expect(screen.getByText(/No card on file/i)).toBeInTheDocument();
+  });
+
+  it('hides the OHIP check button and history when the integration is disabled', async () => {
+    renderDetail({ ohipEnabled: false });
+    await screen.findByRole('heading', { name: 'Ada Lovelace' });
+
+    expect(screen.queryByRole('button', { name: /Check OHIP now/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'OHIP checks' })).not.toBeInTheDocument();
   });
 
   it('reports a failed check instead of implying coverage', async () => {

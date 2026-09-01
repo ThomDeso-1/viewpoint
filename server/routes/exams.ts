@@ -13,7 +13,8 @@ import {
   checksForPatient,
   toEligibilityDto,
 } from '../exams/eligibility.js';
-import { hcvMode } from '../integrations/ohip/index.js';
+import { hcvMode, ohipEnabled } from '../integrations/ohip/index.js';
+import { classifyCoverageStatus } from '../exams/coverage-status.js';
 import { getDb } from '../db/db.js';
 import { auditRequest, recentAuditEntries, verifyAuditChain } from '../platform/audit.js';
 import { rateLimited } from '../platform/rate-limit.js';
@@ -68,6 +69,7 @@ function toExamRequestDto(row: ExamRequestRow) {
     ? remindersService.findForAppointment(row.appointment_id)
     : undefined;
   const invoice = invoiceForRequest(row.id);
+  const extraction = examRequests.readExtraction(row);
 
   return {
     id: row.id,
@@ -78,7 +80,10 @@ function toExamRequestDto(row: ExamRequestRow) {
     // The retained slice of the source record is PHI and is not inlined
     // here. It is fetched on demand through the audited /source route below.
     has_source: !!row.body_snippet,
-    extraction: examRequests.toExtractionDto(examRequests.readExtraction(row)),
+    extraction: examRequests.toExtractionDto(extraction),
+    // How the schedule's "Status" column reads once interpreted. Advisory
+    // only — it is what the file said, not a live eligibility check.
+    coverage_class: classifyCoverageStatus(extraction?.coverage_status ?? null),
     last_error: row.last_error,
     retry_count: row.retry_count,
     patient: patient ? patientsService.toPatientDto(patient) : null,
@@ -288,6 +293,10 @@ export function examsRoutes(): Router {
   });
 
   router.post('/patients/:id/check-eligibility', rateLimited('eligibility', 30, 5 * 60_000), async (req: Request, res: Response): Promise<void> => {
+    if (!ohipEnabled()) {
+      res.status(403).json({ error: 'OHIP integration is disabled.' });
+      return;
+    }
     if (!patientsService.getPatient(req.params.id)) {
       res.status(404).json({ error: 'Patient not found.' });
       return;
@@ -328,6 +337,10 @@ export function examsRoutes(): Router {
   });
 
   router.post('/appointments/:id/check-eligibility', rateLimited('eligibility', 30, 5 * 60_000), async (req: Request, res: Response): Promise<void> => {
+    if (!ohipEnabled()) {
+      res.status(403).json({ error: 'OHIP integration is disabled.' });
+      return;
+    }
     const appointment = appointmentsService.getAppointment(req.params.id);
     if (!appointment) {
       res.status(404).json({ error: 'Appointment not found.' });

@@ -38,7 +38,7 @@ describe('AppointmentForm', () => {
 
   it('explains why linking a patient matters', () => {
     renderForm();
-    expect(screen.getByText(/allows an OHIP check and a reminder/i)).toBeInTheDocument();
+    expect(screen.getByText(/allows a reminder for this appointment/i)).toBeInTheDocument();
   });
 
   it('creates an appointment with a computed end time', async () => {

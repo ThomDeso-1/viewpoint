@@ -18,6 +18,7 @@ import {
 } from '../platform/sessions.js';
 import { auditRequest } from '../platform/audit.js';
 import { getConfig } from '../db/db.js';
+import { ohipEnabled } from '../integrations/ohip/index.js';
 
 export function authRoutes(): Router {
   const router = Router();
@@ -25,7 +26,7 @@ export function authRoutes(): Router {
   // ── GET /api/auth/status — Is the user logged in? Is a password set? ──
   router.get('/status', (req: Request, res: Response): void => {
     if (!isPasswordSet()) {
-      res.json({ authenticated: false, needsSetup: true, needsOnboarding: false });
+      res.json({ authenticated: false, needsSetup: true, needsOnboarding: false, ohipEnabled: ohipEnabled() });
       return;
     }
 
@@ -35,6 +36,7 @@ export function authRoutes(): Router {
       authenticated,
       needsSetup: false,
       needsOnboarding: authenticated && getConfig('onboarded') !== 'true',
+      ohipEnabled: ohipEnabled(),
     });
   });
 

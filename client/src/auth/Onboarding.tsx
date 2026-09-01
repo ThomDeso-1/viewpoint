@@ -11,6 +11,8 @@ import {
 
 interface Props {
   onComplete: () => void;
+  /** When false (the default), the OHIP step is skipped entirely. */
+  ohipEnabled?: boolean;
 }
 
 interface WaveBusiness {
@@ -31,9 +33,10 @@ type WaveStage = 'token' | 'business';
  * ministry credentials are done later in Settings, which has the full
  * forms — asking for them here was the biggest drop-off point.
  */
-export function Onboarding({ onComplete }: Props) {
+export function Onboarding({ onComplete, ohipEnabled = false }: Props) {
   const navigate = useNavigate();
   const [step, setStep] = useState<OuterStep>('claude');
+  const totalSteps = ohipEnabled ? 4 : 3;
 
   // ── Claude API key ──
   const [claudeKey, setClaudeKey] = useState('');
@@ -55,6 +58,13 @@ export function Onboarding({ onComplete }: Props) {
     await markOnboarded();
     onComplete();
     navigate('/', { replace: true });
+  };
+
+  // After Wave: collect the OHIP mode when the integration is on, otherwise
+  // the wizard is done.
+  const afterWave = () => {
+    if (ohipEnabled) setStep('ohip');
+    else void finish();
   };
 
   const finishWithMockOhip = async () => {
@@ -130,7 +140,7 @@ export function Onboarding({ onComplete }: Props) {
         businessId: business.id,
         businessName: business.name,
       });
-      setStep('ohip');
+      afterWave();
     } catch (err: any) {
       setWaveError(err.message || 'Could not save that business.');
     } finally {
@@ -139,7 +149,7 @@ export function Onboarding({ onComplete }: Props) {
   };
 
   const handleSkipWave = () => {
-    setStep('ohip');
+    afterWave();
   };
 
   return (
@@ -156,7 +166,7 @@ export function Onboarding({ onComplete }: Props) {
 
         {step === 'claude' && (
           <>
-            <p className="wizard-steps">Step 2 of 4</p>
+            <p className="wizard-steps">Step 2 of {totalSteps}</p>
             <h1>Claude API Key</h1>
             <p className="auth-subtitle">
               Used to read vendor, date, and totals off your receipt photos.
@@ -193,7 +203,7 @@ export function Onboarding({ onComplete }: Props) {
 
         {step === 'wave' && waveStage === 'token' && (
           <>
-            <p className="wizard-steps">Step 3 of 4</p>
+            <p className="wizard-steps">Step 3 of {totalSteps}</p>
             <h1>Connect Wave</h1>
             <p className="auth-subtitle">
               Paste your Wave access token to upload approved receipts as expenses.
@@ -226,7 +236,7 @@ export function Onboarding({ onComplete }: Props) {
 
         {step === 'wave' && waveStage === 'business' && (
           <>
-            <p className="wizard-steps">Step 3 of 4</p>
+            <p className="wizard-steps">Step 3 of {totalSteps}</p>
             <h1>Choose a Business</h1>
             <p className="auth-subtitle">Which Wave business should receipts upload to?</p>
 
@@ -259,7 +269,7 @@ export function Onboarding({ onComplete }: Props) {
 
         {step === 'ohip' && (
           <>
-            <p className="wizard-steps">Step 4 of 4</p>
+            <p className="wizard-steps">Step 4 of {totalSteps}</p>
             <h1>OHIP Validation</h1>
             <p className="auth-subtitle">
               Checks a patient's health card coverage automatically when a request comes in.

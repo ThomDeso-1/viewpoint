@@ -13,13 +13,13 @@ import { AppNav } from '../shared/AppNav';
 import { AppointmentForm } from '../exams/AppointmentForm';
 
 /**
- * Upcoming appointments, mirrored from Google Calendar, each showing
- * whether the patient's OHIP coverage has been confirmed.
+ * Upcoming appointments, mirrored from Google Calendar.
  *
- * Checks run automatically as requests come in; the button here is for
- * re-checking a specific appointment on the day.
+ * When the OHIP integration is on, each linked appointment also shows
+ * whether coverage has been confirmed, with a button to re-check on the
+ * day. With OHIP off, those surfaces are hidden.
  */
-export function Schedule() {
+export function Schedule({ ohipEnabled = false }: { ohipEnabled?: boolean }) {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(true);
@@ -135,7 +135,9 @@ export function Schedule() {
 
                   <div className="appointment-meta">
                     {appointment.patient ? (
-                      <EligibilityTag appointment={appointment} />
+                      ohipEnabled ? (
+                        <EligibilityTag appointment={appointment} />
+                      ) : null
                     ) : linkingId === appointment.id ? (
                       <select
                         className="wizard-select"
@@ -162,7 +164,7 @@ export function Schedule() {
                   </div>
                 </div>
 
-                {appointment.patient && (
+                {ohipEnabled && appointment.patient && (
                   <button
                     className="secondary"
                     onClick={() => handleCheck(appointment)}

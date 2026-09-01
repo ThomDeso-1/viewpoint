@@ -30,6 +30,7 @@ const FULL_EXTRACTION = {
   requested_date: '2026-09-01',
   requested_time: '10:00',
   reason: 'Annual eye exam',
+  coverage_status: 'Eligible',
   confidence: 0.95,
 };
 
@@ -202,6 +203,7 @@ describe('exams queue', () => {
     }
 
     it('creates the patient, checks eligibility, and drafts an invoice and reminder', async () => {
+      process.env.OHIP_ENABLED = 'true';
       const mock = await seedExtracted();
       mock.mockResolvedValueOnce(
         jsonResponse(200, {
@@ -232,6 +234,22 @@ describe('exams queue', () => {
       expect(dto.body.reminder.status).toBe('pending');
       expect(dto.body.invoice.status).toBe('draft');
       expect(dto.body.source).toBe('file');
+    });
+
+    it('skips the eligibility check entirely when OHIP is disabled', async () => {
+      // OHIP_ENABLED is unset by default.
+      const mock = await seedExtracted();
+      mock.mockResolvedValueOnce(jsonResponse(200, { items: [] }));
+
+      await queue.draftPending();
+
+      const row = examRequests.listAll()[0];
+      expect(row.status).toBe('drafted');
+
+      const dto = await request(ctx.app).get(`/api/exams/exam-requests/${row.id}`);
+      expect(dto.body.eligibility).toBeNull();
+      // The schedule's Status column is still interpreted for display.
+      expect(dto.body.coverage_class).toBe('covered');
     });
 
     it('never contacts Wave while drafting', async () => {

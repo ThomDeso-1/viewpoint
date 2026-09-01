@@ -23,7 +23,7 @@ type PatientDetailData = Patient & {
  * return it — so the field here writes a new number rather than editing
  * the existing one.
  */
-export function PatientDetail() {
+export function PatientDetail({ ohipEnabled = false }: { ohipEnabled?: boolean }) {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { showToast } = useToast();
@@ -156,7 +156,7 @@ export function PatientDetail() {
           <small className="muted">
             {patient.has_health_card
               ? 'A card is on file. Enter a new number only to replace it.'
-              : 'No card on file. OHIP checks need one.'}
+              : `No card on file.${ohipEnabled ? ' OHIP checks need one.' : ''}`}
           </small>
         </label>
 
@@ -173,9 +173,11 @@ export function PatientDetail() {
           <button className="primary" onClick={handleSave} disabled={saving}>
             {saving ? 'Saving…' : 'Save'}
           </button>
-          <button className="secondary" onClick={handleCheck} disabled={checking || !patient.has_health_card}>
-            {checking ? 'Checking…' : 'Check OHIP now'}
-          </button>
+          {ohipEnabled && (
+            <button className="secondary" onClick={handleCheck} disabled={checking || !patient.has_health_card}>
+              {checking ? 'Checking…' : 'Check OHIP now'}
+            </button>
+          )}
         </div>
       </section>
 
@@ -194,29 +196,31 @@ export function PatientDetail() {
         )}
       </section>
 
-      <section className="card">
-        <h2>OHIP checks</h2>
-        {patient.eligibility_history.length === 0 ? (
-          <p className="muted">No checks run yet.</p>
-        ) : (
-          <ul className="plain-list">
-            {patient.eligibility_history.map((check) => (
-              <li key={check.id}>
-                <span className="muted">{new Date(check.checked_at).toLocaleString('en-CA')}</span>{' '}
-                {check.error ? (
-                  <span className="error-text">failed — {check.error}</span>
-                ) : (
-                  <>
-                    {check.is_eligible ? 'covered' : 'not covered'}
-                    {check.response_code ? ` (${check.response_code})` : ''}
-                  </>
-                )}
-                {check.mode === 'mock' && <span className="tag tag-mock">mock</span>}
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+      {ohipEnabled && (
+        <section className="card">
+          <h2>OHIP checks</h2>
+          {patient.eligibility_history.length === 0 ? (
+            <p className="muted">No checks run yet.</p>
+          ) : (
+            <ul className="plain-list">
+              {patient.eligibility_history.map((check) => (
+                <li key={check.id}>
+                  <span className="muted">{new Date(check.checked_at).toLocaleString('en-CA')}</span>{' '}
+                  {check.error ? (
+                    <span className="error-text">failed — {check.error}</span>
+                  ) : (
+                    <>
+                      {check.is_eligible ? 'covered' : 'not covered'}
+                      {check.response_code ? ` (${check.response_code})` : ''}
+                    </>
+                  )}
+                  {check.mode === 'mock' && <span className="tag tag-mock">mock</span>}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
     </div>
   );
 }

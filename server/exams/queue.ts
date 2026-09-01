@@ -13,6 +13,7 @@ import { isGoogleConnected, GoogleAuthError } from '../integrations/google/auth.
 import { MicrosoftAuthError } from '../integrations/microsoft/auth.js';
 import { extractPatientBatch, ClaudeAPIError } from '../integrations/claude.js';
 import { checkPatientEligibility } from './eligibility.js';
+import { ohipEnabled } from '../integrations/ohip/index.js';
 import { findOrCreateCustomer, createInvoice, approveInvoice, sendInvoice, WaveAPIError } from '../integrations/wave/index.js';
 import { getWaveToken, isWaveConfigured } from '../integrations/wave/auth.js';
 import { isReadyForRetry, isExhausted } from '../platform/backoff.js';
@@ -214,10 +215,12 @@ async function draftOne(row: ExamRequestRow): Promise<void> {
   const appointment = await resolveAppointment(row, extraction, patient.id);
 
   // ── Eligibility ──
-  // Always a fresh check: the schedule file carries an OHIP "Status"
-  // column, but it is not trusted — `force` bypasses the reuse window so
-  // approval reflects a real check, not what the form said.
-  if (patient.health_card_enc || extraction.health_card_number) {
+  // Only when the OHIP integration is switched on. The schedule file's
+  // "Status" column is captured into `extraction.coverage_status` and
+  // shown on the card, but it is advisory — not a live check. When OHIP is
+  // enabled we force a fresh check (bypassing the reuse window) so
+  // approval reflects the ministry, not what the file said.
+  if (ohipEnabled() && (patient.health_card_enc || extraction.health_card_number)) {
     await checkPatientEligibility({
       patientId: patient.id,
       appointmentId: appointment?.id ?? null,

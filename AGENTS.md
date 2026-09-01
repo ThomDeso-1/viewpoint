@@ -21,9 +21,11 @@ database, and one React PWA:
    Excel, CSV, PDF, …) lands in the scanned folder → Claude extracts one
    or more patients, merging each one's schedule row with any notes that
    name them → each patient matched → a calendar event is linked or a
-   local appointment recorded → **OHIP** eligibility is always re-checked
-   (the file's "Status" column is not trusted) → a **Wave** invoice and a
-   **Gmail** reminder are drafted → the operator taps **Approve** once →
+   local appointment recorded → the file's "Status" column is captured and
+   interpreted for display (`server/exams/coverage-status.ts`); if
+   `OHIP_ENABLED=true`, a live **OHIP** eligibility check also runs → a
+   **Wave** invoice and a **Gmail** reminder are drafted → the operator
+   taps **Approve** once →
    the invoice is sent, the calendar event is written, and the reminder
    is scheduled. (Legacy rows imported from Gmail remain in the same
    table with `source = 'gmail'`.)
@@ -341,7 +343,15 @@ npm run test:all && npm run typecheck:all && npm run build
 
 ### OHIP: going from mock → conformance → production
 
-This is the one integration with real-world gates. In order:
+**The integration is disabled by default** (`OHIP_ENABLED` unset/`false`).
+While off, every OHIP surface is hidden, the routes return 403, the queue
+skips the check, and the schedule file's "Status" column is what the
+operator sees. `ohipEnabled()` lives in `server/integrations/ohip/index.ts`
+and is exposed to the client on `GET /api/auth/status`. All the code
+(`server/integrations/ohip/*`, `eligibility.ts`, `OhipSettings.tsx`) stays
+in place — set `OHIP_ENABLED=true` to bring it all back.
+
+This is the one integration with real-world gates. Once re-enabled, in order:
 1. Obtain ministry conformance credentials (GO Secure account with the
    *Health Service HCV* role, conformance key, X.509 keystore).
 2. Convert the `.p12` keystore to PEM (Node can't read PKCS#12) — see

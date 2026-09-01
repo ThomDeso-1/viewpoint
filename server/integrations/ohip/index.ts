@@ -21,6 +21,19 @@ export function hcvMode(): HcvMode {
   return mode === 'conformance' || mode === 'production' ? mode : 'mock';
 }
 
+/**
+ * Whether the OHIP HCV integration is exposed at all.
+ *
+ * Off unless explicitly enabled: the ministry integration is not certified
+ * for production, so every OHIP surface (settings panel, onboarding step,
+ * eligibility tags and checks) stays hidden and the routes refuse until
+ * `OHIP_ENABLED=true` is set — which should only happen once conformance
+ * testing is complete and credentials are issued.
+ */
+export function ohipEnabled(): boolean {
+  return process.env.OHIP_ENABLED === 'true';
+}
+
 let cached: { mode: HcvMode; client: HcvClient } | null = null;
 
 export function getHcvClient(): HcvClient {

@@ -24,6 +24,7 @@ const FULL_EXTRACTION = {
   requested_date: '2026-09-01',
   requested_time: '10:00',
   reason: 'Annual eye exam',
+  coverage_status: 'Eligible',
   confidence: 0.95,
 };
 
@@ -450,6 +451,25 @@ describe('exams API', () => {
   });
 
   describe('OHIP configuration', () => {
+    // These routes are gated on the integration being switched on.
+    beforeEach(() => {
+      process.env.OHIP_ENABLED = 'true';
+    });
+
+    it('every OHIP route refuses with 403 when the integration is disabled', async () => {
+      delete process.env.OHIP_ENABLED;
+
+      for (const call of [
+        request(ctx.app).get('/api/settings/ohip').set(auth()),
+        request(ctx.app).post('/api/settings/ohip').set(auth()).send({ mode: 'conformance' }),
+        request(ctx.app).post('/api/settings/ohip/test').set(auth()).send({}),
+      ]) {
+        const res = await call;
+        expect(res.status).toBe(403);
+        expect(res.body.error).toMatch(/disabled/i);
+      }
+    });
+
     it('defaults to mock and never returns the secrets', async () => {
       const res = await request(ctx.app).get('/api/settings/ohip').set(auth());
 

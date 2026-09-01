@@ -12,9 +12,11 @@ export interface DemoPerson {
   email: string;
   phone: string;
   dob: string;
-  /** One of the mock HCV numbers, so eligibility outcomes vary. */
+  /** One of the mock HCV numbers (only used if OHIP_ENABLED=true). */
   healthCard: string;
   versionCode: string;
+  /** Verbatim "Status" column value for this patient's schedule row. */
+  coverageStatus: string;
   /** Hours from now that this person's appointment sits. */
   hoursFromNow: number;
   /** Snap to business hours (09:00 onwards) rather than whatever time it is now. */
@@ -32,6 +34,7 @@ export const PEOPLE: DemoPerson[] = [
     dob: '1985-12-10',
     healthCard: '1111111111', // valid
     versionCode: 'AB',
+    coverageStatus: 'Eligible',
     // Soonest of the three, so with the demo's 36h reminder lead this
     // one is due the moment it's approved.
     hoursFromNow: 3,
@@ -45,6 +48,7 @@ export const PEOPLE: DemoPerson[] = [
     dob: '1972-04-02',
     healthCard: '2222222222', // expired card
     versionCode: 'CD',
+    coverageStatus: '$180 private pay',
     hoursFromNow: 30,
     businessHours: true,
     reason: 'New glasses prescription',
@@ -57,6 +61,7 @@ export const PEOPLE: DemoPerson[] = [
     dob: '1990-06-23',
     healthCard: '4444444444', // not eligible
     versionCode: 'EF',
+    coverageStatus: 'Not eligible',
     // Far enough out that its reminder is still pending — so the
     // demo shows both a sent and an unsent reminder.
     hoursFromNow: 60,
@@ -105,14 +110,14 @@ export function patientFileCsv(people: DemoPerson[]): string {
   const header =
     'Patient,Date of Birth,Health Card,Version,Status,Phone,Email,Appointment Date,Appointment Time,Reason,Notes';
   const clean = (s: string) => s.replace(/,/g, ';');
-  const rows = people.map((p, i) => {
+  const rows = people.map((p) => {
     const { day, time } = localParts(appointmentFor(p));
     return [
       p.name,
       p.dob,
       p.healthCard,
       p.versionCode,
-      i === 0 ? 'Ok/75' : i === 1 ? '$180' : '407', // an OHIP "Status" the app ignores
+      p.coverageStatus, // the schedule's "Status" column — captured onto the request
       p.phone,
       p.email,
       day,
@@ -137,6 +142,7 @@ export function extractionFor(person: DemoPerson) {
     requested_date: day,
     requested_time: time,
     reason: person.reason,
+    coverage_status: person.coverageStatus,
     notes: person.notes ?? null,
     confidence: 0.94,
   };

@@ -15,11 +15,11 @@ beforeEach(() => {
   api.getPatients.mockResolvedValue([]);
 });
 
-function renderSchedule() {
+function renderSchedule({ ohipEnabled = true }: { ohipEnabled?: boolean } = {}) {
   return render(
     <MemoryRouter>
       <ToastProvider>
-        <Schedule />
+        <Schedule ohipEnabled={ohipEnabled} />
       </ToastProvider>
     </MemoryRouter>,
   );
@@ -88,6 +88,17 @@ describe('Schedule', () => {
 
     await waitFor(() => expect(api.checkAppointmentEligibility).toHaveBeenCalledWith('appt-1'));
     expect(await screen.findByText(/Coverage confirmed/i)).toBeInTheDocument();
+  });
+
+  it('hides every OHIP surface when the integration is disabled', async () => {
+    api.getAppointments.mockResolvedValue([
+      { ...makeAppointment(), patient: makePatient(), eligibility: makeEligibility() },
+    ]);
+    renderSchedule({ ohipEnabled: false });
+
+    expect(await screen.findByText('Ada Lovelace')).toBeInTheDocument();
+    expect(screen.queryByText(/OHIP covered/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Check OHIP/i })).not.toBeInTheDocument();
   });
 
   it('offers no check when no patient is linked', async () => {

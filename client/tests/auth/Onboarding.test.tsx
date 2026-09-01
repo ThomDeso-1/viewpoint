@@ -11,10 +11,10 @@ beforeEach(() => {
   for (const fn of Object.values(api)) fn.mockReset();
 });
 
-function renderWizard(onComplete = vi.fn()) {
+function renderWizard(onComplete = vi.fn(), ohipEnabled = true) {
   render(
     <MemoryRouter>
-      <Onboarding onComplete={onComplete} />
+      <Onboarding onComplete={onComplete} ohipEnabled={ohipEnabled} />
     </MemoryRouter>,
   );
   return onComplete;
@@ -136,6 +136,26 @@ describe('Onboarding: Wave step', () => {
     await screen.findByText(/ohip validation/i);
     expect(api.saveWaveConnection).not.toHaveBeenCalled();
     expect(api.markOnboarded).not.toHaveBeenCalled();
+  });
+});
+
+describe('Onboarding: OHIP disabled (default)', () => {
+  it('skips the OHIP step entirely and finishes after Wave', async () => {
+    const onComplete = vi.fn();
+    api.markOnboarded.mockResolvedValue({ success: true });
+    renderWizard(onComplete, false);
+
+    await userEvent.click(screen.getByRole('button', { name: /skip for now/i }));
+    await screen.findByText(/connect wave/i);
+    // Step count reflects three steps, not four.
+    expect(screen.getByText(/step 3 of 3/i)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /skip for now/i }));
+
+    expect(screen.queryByText(/ohip validation/i)).not.toBeInTheDocument();
+    expect(api.saveOhipSettings).not.toHaveBeenCalled();
+    await vi.waitFor(() => expect(api.markOnboarded).toHaveBeenCalled());
+    expect(onComplete).toHaveBeenCalled();
   });
 });
 

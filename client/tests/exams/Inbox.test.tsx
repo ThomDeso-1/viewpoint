@@ -20,11 +20,11 @@ beforeEach(() => {
   });
 });
 
-function renderInbox() {
+function renderInbox({ ohipEnabled = false }: { ohipEnabled?: boolean } = {}) {
   return render(
     <MemoryRouter>
       <ToastProvider>
-        <Inbox />
+        <Inbox ohipEnabled={ohipEnabled} />
       </ToastProvider>
     </MemoryRouter>,
   );
@@ -42,10 +42,20 @@ describe('Inbox', () => {
   });
 
   it('warns loudly when OHIP results are simulated', async () => {
-    renderInbox();
+    renderInbox({ ohipEnabled: true });
     const banner = await screen.findByText(/mock/i);
     expect(banner).toBeInTheDocument();
     expect(screen.getByText(/results are simulated/i)).toBeInTheDocument();
+  });
+
+  it('shows the schedule coverage status, not a mock banner, when OHIP is off', async () => {
+    api.getExamRequests.mockResolvedValue([makeExamRequest()]);
+    renderInbox();
+
+    await screen.findByText('Ada Lovelace');
+    expect(screen.queryByText(/results are simulated/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/Coverage \(schedule\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/from the schedule/i)).toBeInTheDocument();
   });
 
   it('prompts to set a patient files folder when none is configured', async () => {
