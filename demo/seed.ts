@@ -55,6 +55,12 @@ async function main(): Promise<void> {
     GOOGLE_CLIENT_SECRET: 'demo-google-client-secret',
     GOOGLE_CALENDAR_ID: 'primary',
 
+    // Public client — id only, no secret. The mock server auto-approves
+    // the PKCE consent flow, so "Sign in with Microsoft" still works if you
+    // disconnect and reconnect.
+    MICROSOFT_CLIENT_ID: 'demo-ms-client-id',
+    MICROSOFT_TENANT: 'common',
+
     EXAM_REQUEST_SOURCE_DIR: path.join(path.resolve(dataDir), 'patient-files'),
     EXAM_REQUEST_MIN_CONFIDENCE: '0.6',
     EXAM_FEE_AMOUNT: '120',
@@ -94,6 +100,17 @@ async function main(): Promise<void> {
     accountLabel: 'reception@viewpoint-demo.example.com',
   });
   console.log('  ✓ Google connected (mock)');
+
+  // Microsoft pre-connected too, so the Outlook sign-in shows as done and
+  // the reminder path works with EMAIL_PROVIDER=microsoft.
+  saveTokens('microsoft', {
+    accessToken: 'demo-ms-access-token',
+    refreshToken: 'demo-ms-refresh-token',
+    expiresAt: new Date(Date.now() + 3600_000),
+    scope: 'openid profile Mail.Send User.Read Calendars.ReadWrite offline_access',
+    accountLabel: 'reception@viewpoint-demo.example.com',
+  });
+  console.log('  ✓ Microsoft connected (mock)');
 
   // ── A patient files folder with a sample spreadsheet to scan ──
   const filesDir = path.join(dataDir, 'patient-files');

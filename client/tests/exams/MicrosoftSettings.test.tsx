@@ -36,29 +36,28 @@ function renderPanel() {
 }
 
 describe('MicrosoftSettings', () => {
-  it('shows the redirect URI and a credentials form when not configured', async () => {
+  it('shows the redirect URI and a client-id form when not configured', async () => {
     renderPanel();
     expect(await screen.findByText('http://localhost:3000/api/microsoft/callback')).toBeInTheDocument();
-    expect(screen.getByText('Not connected')).toBeInTheDocument();
+    expect(screen.getByText('Not signed in')).toBeInTheDocument();
+    expect(screen.queryByLabelText(/client secret/i)).not.toBeInTheDocument();
   });
 
-  it('saves credentials', async () => {
+  it('saves a client id without a secret', async () => {
     renderPanel();
     await userEvent.type(await screen.findByLabelText(/Application \(client\) ID/i), 'app-id');
-    await userEvent.type(screen.getByLabelText(/Client secret/i), 'shh');
-    await userEvent.click(screen.getByRole('button', { name: /save credentials/i }));
+    await userEvent.click(screen.getByRole('button', { name: /save/i }));
 
     expect(api.saveMicrosoftCredentials).toHaveBeenCalledWith({
       clientId: 'app-id',
-      clientSecret: 'shh',
       tenant: undefined,
     });
   });
 
-  it('offers Connect once configured, and Disconnect once connected', async () => {
+  it('offers Sign in once configured, and Disconnect once connected', async () => {
     api.getMicrosoftStatus.mockResolvedValue(status({ configured: true }));
     renderPanel();
-    expect(await screen.findByRole('link', { name: /connect outlook/i })).toHaveAttribute(
+    expect(await screen.findByRole('link', { name: /sign in with microsoft/i })).toHaveAttribute(
       'href',
       '/api/microsoft/connect',
     );

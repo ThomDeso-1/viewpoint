@@ -10,7 +10,8 @@ import * as processedFiles from './processed-files.js';
 import { sourceDir, walkSourceDir, hashBuffer, readForExtraction } from './file-source.js';
 import { listEvents, matchEvent, createEvent } from '../integrations/google/calendar.js';
 import { isGoogleConnected, GoogleAuthError } from '../integrations/google/auth.js';
-import { MicrosoftAuthError } from '../integrations/microsoft/auth.js';
+import { isMicrosoftConnected, MicrosoftAuthError } from '../integrations/microsoft/auth.js';
+import { emailProviderName } from '../integrations/email/index.js';
 import { extractPatientBatch, ClaudeAPIError } from '../integrations/claude.js';
 import { checkPatientEligibility } from './eligibility.js';
 import { ohipEnabled } from '../integrations/ohip/index.js';
@@ -636,7 +637,12 @@ export function rejectExamRequest(examRequestId: string): void {
  * patient without review.
  */
 export async function sendDueReminders(): Promise<number> {
-  if (!isGoogleConnected()) return 0;
+  // Gate on the mailbox that will actually send — Gmail or Outlook,
+  // whichever EMAIL_PROVIDER selects. (Before this, an Outlook-only setup
+  // could never send a reminder because the gate only knew about Google.)
+  const ready =
+    emailProviderName() === 'microsoft' ? isMicrosoftConnected() : isGoogleConnected();
+  if (!ready) return 0;
 
   let sent = 0;
 

@@ -359,11 +359,13 @@ app.get('/microsoft/oauth/authorize', (req: Request, res: Response) => {
 app.post('/microsoft/oauth/token', (req: Request, res: Response) => {
   const grant = req.body?.grant_type;
   log('microsoft', `token exchange (${grant})`);
+  // Public client: rotate the refresh token on every exchange, the way
+  // the Microsoft identity platform actually does.
   res.json({
     access_token: `demo-ms-access-${Date.now()}`,
-    refresh_token: 'demo-ms-refresh-token',
+    refresh_token: `demo-ms-refresh-${Date.now()}`,
     expires_in: 3600,
-    scope: 'Mail.Send User.Read offline_access',
+    scope: 'openid profile Mail.Send User.Read Calendars.ReadWrite offline_access',
     token_type: 'Bearer',
   });
 });

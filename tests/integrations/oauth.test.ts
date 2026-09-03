@@ -9,9 +9,10 @@ import {
 import { makeCallbackRouter } from '../../server/integrations/oauth/callback.js';
 
 /**
- * The pieces the Google and Wave OAuth flows now share (audit P2-25).
- * The full flows are still exercised end to end in google.test.ts and
- * wave-oauth.test.ts; this covers the extracted seam directly.
+ * The pieces the Google, Wave and Microsoft OAuth flows now share (audit
+ * P2-25). The full flows are still exercised end to end in google.test.ts,
+ * microsoft.test.ts and wave-oauth.test.ts; this covers the extracted seam
+ * directly.
  */
 
 describe('oauth state store', () => {
@@ -19,20 +20,29 @@ describe('oauth state store', () => {
 
   it('issues a state that consumes exactly once', () => {
     const state = issueState();
-    expect(consumeState(state)).toBe(true);
-    expect(consumeState(state)).toBe(false);
+    expect(consumeState(state)).toBeTruthy();
+    expect(consumeState(state)).toBeNull();
   });
 
   it('rejects a state it never issued, and undefined', () => {
-    expect(consumeState('never-seen')).toBe(false);
-    expect(consumeState(undefined)).toBe(false);
+    expect(consumeState('never-seen')).toBeNull();
+    expect(consumeState(undefined)).toBeNull();
   });
 
   it('keeps issued states independent', () => {
     const a = issueState();
     const b = issueState();
-    expect(consumeState(b)).toBe(true);
-    expect(consumeState(a)).toBe(true);
+    expect(consumeState(b)).toBeTruthy();
+    expect(consumeState(a)).toBeTruthy();
+  });
+
+  it('round-trips the PKCE verifier stashed with a state', () => {
+    const state = issueState({ verifier: 'the-verifier' });
+    expect(consumeState(state)).toEqual({ verifier: 'the-verifier' });
+  });
+
+  it('returns an empty object for a state issued without data', () => {
+    expect(consumeState(issueState())).toEqual({});
   });
 });
 

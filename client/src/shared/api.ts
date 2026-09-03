@@ -536,7 +536,7 @@ export function disconnectGoogle(): Promise<{ success: boolean }> {
   return request('/google/disconnect', { method: 'POST' });
 }
 
-// ── Microsoft connection (Outlook reminder emails) ──
+// ── Microsoft connection (Outlook mail + calendar) ──
 
 export interface MicrosoftStatus {
   configured: boolean;
@@ -551,9 +551,9 @@ export function getMicrosoftStatus(): Promise<MicrosoftStatus> {
   return request('/microsoft/status');
 }
 
+/** Point the app at a different Azure app registration (no secret — public client). */
 export function saveMicrosoftCredentials(body: {
   clientId: string;
-  clientSecret: string;
   tenant?: string;
 }): Promise<{ success: boolean; redirectUri: string }> {
   return request('/microsoft/credentials', { method: 'POST', body: JSON.stringify(body) });

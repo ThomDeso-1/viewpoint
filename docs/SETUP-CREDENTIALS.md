@@ -163,21 +163,26 @@ The app asks for: send email as you, and manage calendar events.
 Microsoft 365 mailbox instead of Gmail.** Calendar matching still uses
 Google. Settings → Outlook / Microsoft 365.
 
-1. Go to [portal.azure.com](https://portal.azure.com) → **Azure Active
-   Directory** → **App registrations** → **New registration**.
-2. Set the redirect URI type to **Web** and enter exactly the URI the
-   Settings screen shows — normally
-   `http://localhost:3000/api/microsoft/callback`.
-3. Under **API permissions**, add Microsoft Graph → **Delegated** →
-   `Mail.Send` (and `User.Read`, usually there by default).
-4. Under **Certificates & secrets**, create a **client secret**.
-5. Copy the **Application (client) ID** and the secret value into Settings
-   and save. Leave the tenant field blank unless you need to lock it to one
-   organisation.
-6. Click **Connect Outlook** and grant access, then pick **Outlook** under
-   *Reminder email account*.
+The app registers as a **public client** — there is no client secret.
+Usually the build already carries an application (client) ID, so you only
+do the sign-in step. To point it at your own registration:
 
-> Do the connect step **in a browser on the Mac running the app** — same
+1. Go to [portal.azure.com](https://portal.azure.com) → **App
+   registrations** → **New registration**.
+2. After registering, open **Authentication** → **Add a platform** →
+   **Mobile and desktop applications**, and add exactly the redirect URI
+   the Settings screen shows — normally
+   `http://localhost:3000/api/microsoft/callback`.
+3. On that same page, set **Allow public client flows** to **Yes**.
+4. Under **API permissions**, add Microsoft Graph → **Delegated** →
+   `Calendars.ReadWrite` and `Mail.Send` (and `User.Read`, usually there
+   by default). Grant admin consent if your tenant requires it.
+5. Copy the **Application (client) ID** into Settings and save. Set the
+   **Directory (tenant) ID** too unless the registration is multi-tenant.
+6. Click **Sign in with Microsoft** and grant access, then pick **Outlook**
+   under *Reminder email account*.
+
+> Do the sign-in step **in a browser on the Mac running the app** — same
 > localhost-redirect reason as Google.
 
 ---

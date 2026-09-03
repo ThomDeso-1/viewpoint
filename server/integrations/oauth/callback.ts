@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { consumeState } from './state-store.js';
+import { consumeState, type StateData } from './state-store.js';
 import { escapeHtml } from '../../platform/escape.js';
 
 /**
@@ -11,17 +11,21 @@ import { escapeHtml } from '../../platform/escape.js';
  * single-use `state` secret protects it instead — which is what state is
  * for — and every other OAuth route stays behind the normal auth gate.
  *
- * Google and Wave differ only in their `buildAuthorizeUrl` / `exchange`
- * and the error class they throw; everything below — state handling, the
- * result page, the status codes — was byte-for-byte identical between the
- * two route files (audit P2-25).
+ * Google, Wave and Microsoft differ only in their `buildAuthorizeUrl` /
+ * `exchange` and the error class they throw; everything below — state
+ * handling, the result page, the status codes — was byte-for-byte
+ * identical between the route files (audit P2-25).
  */
 
 export interface CallbackProvider {
-  /** Display name, e.g. "Google" or "Wave". */
+  /** Display name, e.g. "Google" or "Microsoft". */
   name: string;
-  /** Exchanges the callback's `code` for tokens and stores them. */
-  exchange: (code: string) => Promise<void>;
+  /**
+   * Exchanges the callback's `code` for tokens and stores them. `state`
+   * carries whatever `issueState` stashed — the PKCE `verifier` for the
+   * Microsoft public-client flow; unused by Google and Wave.
+   */
+  exchange: (code: string, state: StateData) => Promise<void>;
   /** Turns a thrown exchange error into a user-facing message. */
   describeError: (err: unknown) => string;
 }
@@ -39,7 +43,8 @@ export function makeCallbackRouter(provider: CallbackProvider): Router {
       return;
     }
 
-    if (!consumeState(typeof state === 'string' ? state : undefined)) {
+    const stateData = consumeState(typeof state === 'string' ? state : undefined);
+    if (!stateData) {
       res
         .status(400)
         .send(page(provider.name, false, 'This sign-in link has expired or was already used. Try again from Settings.'));
@@ -54,7 +59,7 @@ export function makeCallbackRouter(provider: CallbackProvider): Router {
     }
 
     try {
-      await provider.exchange(code);
+      await provider.exchange(code, stateData);
       res.send(page(provider.name, true, `${provider.name} is connected. You can close this tab.`));
     } catch (err) {
       res.status(502).send(page(provider.name, false, provider.describeError(err)));

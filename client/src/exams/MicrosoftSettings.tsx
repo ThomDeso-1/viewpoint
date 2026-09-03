@@ -8,16 +8,19 @@ import {
 import { useToast } from '../shared/Toast';
 
 /**
- * Microsoft / Outlook connection panel for the Settings page.
+ * Microsoft / Outlook sign-in panel for the Settings page.
  *
- * Mirrors GoogleSettings: the consent flow is a full-page redirect, so
- * "Connect" is a plain link. It must be started from a browser on the
- * machine running the server — the redirect URI is a localhost address.
+ * One sign-in grants identity, sending mail, and calendar access. The
+ * flow is a full-page redirect, so "Sign in" is a plain link; it must be
+ * started from a browser on the machine running the server, because the
+ * redirect URI is a localhost address.
+ *
+ * The app ships with its own application (client) ID, so the ID form only
+ * appears when a deployment hasn't been given one.
  */
 export function MicrosoftSettings() {
   const [status, setStatus] = useState<MicrosoftStatus | null>(null);
   const [clientId, setClientId] = useState('');
-  const [clientSecret, setClientSecret] = useState('');
   const [tenant, setTenant] = useState('');
   const [saving, setSaving] = useState(false);
   const { showToast } = useToast();
@@ -37,9 +40,8 @@ export function MicrosoftSettings() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      await saveMicrosoftCredentials({ clientId, clientSecret, tenant: tenant || undefined });
-      setClientSecret('');
-      showToast('Saved. You can connect now.', 'success');
+      await saveMicrosoftCredentials({ clientId: clientId.trim(), tenant: tenant.trim() || undefined });
+      showToast('Saved. You can sign in now.', 'success');
       await load();
     } catch (err) {
       showToast((err as Error).message, 'error');
@@ -63,17 +65,17 @@ export function MicrosoftSettings() {
       <h2 className="settings-section-title">Outlook / Microsoft 365</h2>
 
       <p className="settings-help">
-        An alternative to Gmail for sending appointment reminder emails from your mailbox.
-        Choose which one to use under “Reminder email account” below.
+        Sign in once to send appointment reminders from your mailbox and keep the Schedule in sync
+        with your Outlook calendar. The app never reads your inbox.
       </p>
 
       <div className="settings-row">
         <span className="settings-label">Status</span>
         <span className="settings-value">
           {status?.connected ? (
-            <>Connected{status.accountLabel ? ` — ${status.accountLabel}` : ''}</>
+            <>Signed in{status.accountLabel ? ` — ${status.accountLabel}` : ''}</>
           ) : (
-            <span className="settings-not-set">Not connected</span>
+            <span className="settings-not-set">Not signed in</span>
           )}
         </span>
       </div>
@@ -81,8 +83,10 @@ export function MicrosoftSettings() {
       {!status?.configured && (
         <>
           <p className="muted" style={{ margin: '8px 0' }}>
-            Register an app in Azure (App registrations, type: Web) with the Microsoft Graph
-            <code> Mail.Send</code> permission, and add this redirect URI:
+            Register an app in Azure (App registrations, platform: <em>Mobile &amp; desktop
+            applications</em>), turn on <em>Allow public client flows</em>, add this redirect URI, and
+            grant the Microsoft Graph <code>Calendars.ReadWrite</code> and <code>Mail.Send</code>{' '}
+            delegated permissions. No client secret is needed.
           </p>
           <code className="preview-block">{status?.redirectUri ?? '/api/microsoft/callback'}</code>
 
@@ -96,16 +100,6 @@ export function MicrosoftSettings() {
             />
           </label>
           <label className="wizard-field-label">
-            Client secret
-            <input
-              className="auth-input"
-              type="password"
-              value={clientSecret}
-              onChange={(e) => setClientSecret(e.target.value)}
-              autoComplete="off"
-            />
-          </label>
-          <label className="wizard-field-label">
             Directory (tenant) ID — optional
             <input
               className="auth-input"
@@ -115,12 +109,8 @@ export function MicrosoftSettings() {
               autoComplete="off"
             />
           </label>
-          <button
-            className="btn-primary"
-            onClick={handleSave}
-            disabled={saving || !clientId || !clientSecret}
-          >
-            {saving ? 'Saving…' : 'Save credentials'}
+          <button className="btn-primary" onClick={handleSave} disabled={saving || !clientId.trim()}>
+            {saving ? 'Saving…' : 'Save'}
           </button>
         </>
       )}
@@ -128,7 +118,7 @@ export function MicrosoftSettings() {
       {status?.configured && !status.connected && (
         <>
           <a className="btn-primary" href="/api/microsoft/connect">
-            Connect Outlook
+            Sign in with Microsoft
           </a>
           <p className="muted" style={{ marginTop: 8 }}>
             Do this from a browser on the computer running the app.
@@ -137,9 +127,14 @@ export function MicrosoftSettings() {
       )}
 
       {status?.connected && (
-        <button className="btn-secondary" onClick={handleDisconnect}>
-          Disconnect
-        </button>
+        <div className="request-actions">
+          <a className="btn-secondary" href="/api/microsoft/connect">
+            Reconnect
+          </a>
+          <button className="btn-secondary" onClick={handleDisconnect}>
+            Disconnect
+          </button>
+        </div>
       )}
     </section>
   );
