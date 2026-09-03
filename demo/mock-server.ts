@@ -409,6 +409,137 @@ app.get('/calendar/v3/calendars/:calendarId/events', (_req: Request, res: Respon
   });
 });
 
+// ── Microsoft Graph calendar (Outlook — the Phase 1 calendar backend) ──
+
+interface MsEvent {
+  id: string;
+  '@odata.etag': string;
+  iCalUId: string;
+  subject: string;
+  bodyPreview: string;
+  location: { displayName: string };
+  start: { dateTime: string; timeZone: string };
+  end: { dateTime: string; timeZone: string };
+  isAllDay: boolean;
+  type: string;
+  seriesMasterId: string | null;
+  webLink: string;
+  isCancelled: boolean;
+  showAs: string;
+  attendees: { emailAddress: { address: string } }[];
+}
+
+/** Graph returns an offset-less local wall clock alongside a `timeZone`. */
+function graphSlot(d: Date): { dateTime: string; timeZone: string } {
+  return { dateTime: d.toISOString().replace('Z', ''), timeZone: 'UTC' };
+}
+
+function seedMsEvents(): MsEvent[] {
+  return PEOPLE.map((person: DemoPerson, i: number) => {
+    const start = appointmentFor(person);
+    return {
+      id: `demo-ms-event-${i + 1}`,
+      '@odata.etag': 'W/"1"',
+      iCalUId: `demo-ical-${i + 1}`,
+      subject: `Eye exam — ${person.name}`,
+      bodyPreview: person.reason,
+      location: { displayName: '123 Demo Street, Toronto' },
+      start: graphSlot(start),
+      end: graphSlot(new Date(start.getTime() + 30 * 60_000)),
+      isAllDay: false,
+      type: 'singleInstance',
+      seriesMasterId: null,
+      webLink: `https://outlook.office365.com/calendar/item/demo-ms-event-${i + 1}`,
+      isCancelled: false,
+      showAs: 'busy',
+      attendees: [{ emailAddress: { address: person.email } }],
+    };
+  });
+}
+
+let msEvents: MsEvent[] = seedMsEvents();
+let msEventSeq = msEvents.length;
+
+app.get(
+  ['/graph/v1.0/me/calendarView', '/graph/v1.0/me/calendars/:calendarId/calendarView'],
+  (_req: Request, res: Response) => {
+    log('graph', 'calendarView');
+    res.json({ value: msEvents.filter((e) => !e.isCancelled) });
+  },
+);
+
+app.get(
+  ['/graph/v1.0/me/calendarView/delta', '/graph/v1.0/me/calendars/:calendarId/calendarView/delta'],
+  (req: Request, res: Response) => {
+    const incremental = typeof req.query.$deltatoken === 'string';
+    log('graph', `calendarView/delta (${incremental ? 'incremental' : 'initial'})`);
+
+    const token = `demo-${Date.now()}`;
+    res.json({
+      // An incremental pull has nothing new in the demo — the initial
+      // prime already returned everything.
+      value: incremental ? [] : msEvents,
+      '@odata.deltaLink': `http://localhost:${PORT}/graph/v1.0/me/calendarView/delta?$deltatoken=${token}`,
+    });
+  },
+);
+
+app.post(
+  ['/graph/v1.0/me/events', '/graph/v1.0/me/calendars/:calendarId/events'],
+  (req: Request, res: Response) => {
+    const body = req.body ?? {};
+    msEventSeq++;
+    const id = `demo-ms-event-${msEventSeq}`;
+    const event: MsEvent = {
+      id,
+      '@odata.etag': 'W/"1"',
+      iCalUId: `demo-ical-${msEventSeq}`,
+      subject: body.subject ?? '(no subject)',
+      bodyPreview: body.body?.content ?? '',
+      location: { displayName: body.location?.displayName ?? '' },
+      start: body.start ?? graphSlot(new Date()),
+      end: body.end ?? graphSlot(new Date(Date.now() + 30 * 60_000)),
+      isAllDay: false,
+      type: 'singleInstance',
+      seriesMasterId: null,
+      webLink: `https://outlook.office365.com/calendar/item/${id}`,
+      isCancelled: false,
+      showAs: 'busy',
+      attendees: [],
+    };
+    msEvents.push(event);
+    log('graph', `event created → ${event.subject}`);
+    res.status(201).json(event);
+  },
+);
+
+app.get('/graph/v1.0/me/events/:id', (req: Request, res: Response) => {
+  const event = msEvents.find((e) => e.id === req.params.id);
+  if (!event) {
+    res.status(404).json({ error: { code: 'ErrorItemNotFound' } });
+    return;
+  }
+  res.json(event);
+});
+
+app.patch('/graph/v1.0/me/events/:id', (req: Request, res: Response) => {
+  const event = msEvents.find((e) => e.id === req.params.id);
+  if (!event) {
+    res.status(404).json({ error: { code: 'ErrorItemNotFound' } });
+    return;
+  }
+  Object.assign(event, req.body ?? {});
+  event['@odata.etag'] = `W/"${Number(event['@odata.etag'].replace(/\D/g, '')) + 1}"`;
+  log('graph', `event patched → ${event.subject}`);
+  res.json(event);
+});
+
+app.delete('/graph/v1.0/me/events/:id', (req: Request, res: Response) => {
+  msEvents = msEvents.filter((e) => e.id !== req.params.id);
+  log('graph', `event deleted → ${req.params.id}`);
+  res.status(204).end();
+});
+
 // ── Dashboard ──
 
 app.get('/_demo/state', (_req: Request, res: Response) => {
@@ -420,6 +551,8 @@ app.post('/_demo/reset', (_req: Request, res: Response) => {
   invoices.length = 0;
   expenses.length = 0;
   customers.clear();
+  msEvents = seedMsEvents();
+  msEventSeq = msEvents.length;
   log('demo', 'state reset');
   res.json({ success: true });
 });

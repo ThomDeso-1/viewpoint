@@ -157,11 +157,12 @@ The app asks for: send email as you, and manage calendar events.
 
 ---
 
-## 6b. Outlook / Microsoft 365 *(optional — alternative to Gmail for reminders)*
+## 6b. Outlook / Microsoft 365 *(the calendar backend + optional reminder mailbox)*
 
-**Only needed if you want reminder emails to send from an Outlook or
-Microsoft 365 mailbox instead of Gmail.** Calendar matching still uses
-Google. Settings → Outlook / Microsoft 365.
+**One sign-in covers both:** the Schedule screen mirrors this account's
+Outlook calendar (created / rescheduled / cancelled appointments sync
+both ways), and reminder emails can send from its mailbox instead of
+Gmail. Settings → Outlook / Microsoft 365.
 
 The app registers as a **public client** — there is no client secret.
 Usually the build already carries an application (client) ID, so you only
@@ -179,11 +180,15 @@ do the sign-in step. To point it at your own registration:
    by default). Grant admin consent if your tenant requires it.
 5. Copy the **Application (client) ID** into Settings and save. Set the
    **Directory (tenant) ID** too unless the registration is multi-tenant.
-6. Click **Sign in with Microsoft** and grant access, then pick **Outlook**
-   under *Reminder email account*.
+6. Click **Sign in with Microsoft** and grant access. To send reminders
+   from this mailbox too, pick **Outlook** under *Reminder email account*.
 
 > Do the sign-in step **in a browser on the Mac running the app** — same
 > localhost-redirect reason as Google.
+
+The Schedule mirrors the mailbox's default calendar. To book into a
+shared or secondary calendar instead, set `MICROSOFT_CALENDAR_ID` in
+`.env` to that calendar's id.
 
 ---
 

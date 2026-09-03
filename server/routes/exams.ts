@@ -4,6 +4,7 @@ import * as patientsService from '../exams/patients.js';
 import * as appointmentsService from '../exams/appointments.js';
 import * as remindersService from '../exams/reminders.js';
 import * as queue from '../exams/queue.js';
+import * as calendarSync from '../exams/calendar-sync.js';
 import * as processedFiles from '../exams/processed-files.js';
 import { sourceDir } from '../exams/file-source.js';
 import {
@@ -313,6 +314,29 @@ export function examsRoutes(): Router {
   });
 
   // ── Schedule ──
+
+  // ── GET /api/exams/calendar/status — is the Outlook mirror live, and how fresh? ──
+  router.get('/calendar/status', (_req: Request, res: Response): void => {
+    res.json(calendarSync.calendarSyncStatus());
+  });
+
+  // ── POST /api/exams/calendar/sync — pull Outlook changes now ──
+  router.post(
+    '/calendar/sync',
+    rateLimited('calendar-sync', 10, 60_000),
+    async (_req: Request, res: Response): Promise<void> => {
+      try {
+        const result = await calendarSync.pullCalendar({ force: true });
+        res.json({
+          ok: true,
+          ...calendarSync.calendarSyncStatus(),
+          pulled: result?.pulled ?? 0,
+        });
+      } catch (err) {
+        res.status(502).json({ ok: false, error: (err as Error).message });
+      }
+    },
+  );
 
   router.get('/appointments', (req: Request, res: Response): void => {
     const rows =

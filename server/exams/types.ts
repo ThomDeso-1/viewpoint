@@ -36,7 +36,16 @@ export type ExamRequestStatus =
 export type AppointmentStatus = 'scheduled' | 'completed' | 'cancelled';
 
 /** Where an appointment came from — a calendar event, a scanned file, or hand-entered. */
-export type AppointmentSource = 'google' | 'file' | 'manual';
+export type AppointmentSource = 'google' | 'microsoft' | 'file' | 'manual';
+
+/**
+ * A mirrored appointment's standing against the Outlook calendar.
+ *
+ *   synced        — matches the last-seen Graph event
+ *   pending_push  — a local edit is waiting to go to Graph (Phase 2)
+ *   push_failed   — the last push was rejected and is backing off (Phase 2)
+ */
+export type SyncState = 'synced' | 'pending_push' | 'push_failed';
 
 export type ReminderStatus = 'pending' | 'sent' | 'failed' | 'cancelled';
 
@@ -71,7 +80,21 @@ export interface PatientRow {
 export interface AppointmentRow {
   id: string;
   patient_id: string | null;
+  /** Legacy Google Calendar id (migration 003). No longer read — see migration 007. */
   google_event_id: string | null;
+  /** Graph event id — the idempotency key for delta upserts (migration 007). */
+  ms_event_id: string | null;
+  /** Graph `iCalUId` — stable across a series' occurrences. */
+  ical_uid: string | null;
+  /** `@odata.etag`, sent as `If-Match` on push so an Outlook-side edit is not clobbered. */
+  provider_etag: string | null;
+  /** Deep link to open the event in Outlook. */
+  web_link: string | null;
+  /** 1 for occurrences / series masters — rendered read-only in the app. */
+  is_recurring: number;
+  series_master_id: string | null;
+  last_synced_at: string | null;
+  sync_state: SyncState;
   starts_at: string;
   ends_at: string | null;
   title: string | null;

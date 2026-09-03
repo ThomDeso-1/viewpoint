@@ -57,6 +57,10 @@ describe('exams API', () => {
       accessToken: 'google-token',
       expiresAt: new Date(Date.now() + 3_600_000),
     });
+    store.saveTokens('microsoft', {
+      accessToken: 'ms-token',
+      expiresAt: new Date(Date.now() + 3_600_000),
+    });
   });
 
   afterEach(() => {
@@ -79,13 +83,14 @@ describe('exams API', () => {
 
     mock.mockResolvedValueOnce(
       jsonResponse(200, {
-        items: [
+        value: [
           {
             id: 'evt-1',
-            summary: 'Exam — Ada Lovelace',
-            start: { dateTime: new Date('2026-09-01T10:00:00').toISOString() },
-            end: { dateTime: new Date('2026-09-01T10:30:00').toISOString() },
-            status: 'confirmed',
+            subject: 'Exam — Ada Lovelace',
+            start: { dateTime: new Date('2026-09-01T10:00:00').toISOString(), timeZone: 'UTC' },
+            end: { dateTime: new Date('2026-09-01T10:30:00').toISOString(), timeZone: 'UTC' },
+            type: 'singleInstance',
+            isCancelled: false,
           },
         ],
       }),
@@ -343,6 +348,52 @@ describe('exams API', () => {
         .set(auth())
         .send({ patientId: 'nope' });
       expect(res.status).toBe(400);
+    });
+  });
+
+  describe('calendar sync', () => {
+    const deltaBody = (events: unknown[]) => ({
+      value: events,
+      '@odata.deltaLink':
+        'https://graph.microsoft.com/v1.0/me/calendarView/delta?$deltatoken=t',
+    });
+
+    it('reports sync status', async () => {
+      const res = await request(ctx.app).get('/api/exams/calendar/status').set(auth());
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({ connected: true, calendarId: 'primary', lastSyncedAt: null });
+    });
+
+    it('pulls the Outlook calendar on demand', async () => {
+      const start = new Date(Date.now() + 7 * 86_400_000).toISOString().replace(/\.\d{3}Z$/, '');
+      const mock = installFetchMock();
+      mock.mockResolvedValue(
+        jsonResponse(
+          200,
+          deltaBody([
+            {
+              id: 'evt-sync-1',
+              subject: 'Walk-in',
+              start: { dateTime: start, timeZone: 'UTC' },
+              end: { dateTime: start, timeZone: 'UTC' },
+              type: 'singleInstance',
+              isCancelled: false,
+            },
+          ]),
+        ),
+      );
+
+      const res = await request(ctx.app).post('/api/exams/calendar/sync').set(auth());
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({ ok: true, pulled: 1 });
+      expect(res.body.lastSyncedAt).toBeTruthy();
+
+      const list = await request(ctx.app).get('/api/exams/appointments').set(auth());
+      expect(list.body.some((a: { ms_event_id: string | null }) => a.ms_event_id === 'evt-sync-1')).toBe(true);
+    });
+
+    it('needs a session', async () => {
+      expect((await request(ctx.app).get('/api/exams/calendar/status')).status).toBe(401);
     });
   });
 

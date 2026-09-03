@@ -1,10 +1,10 @@
 import { v4 as uuid } from 'uuid';
 import { getDb } from '../db/db.js';
 import type { AppointmentRow, AppointmentSource, AppointmentStatus } from './types.js';
-import type { CalendarEvent } from '../integrations/google/calendar.js';
+import type { CalendarEvent } from '../integrations/microsoft/calendar.js';
 
 /**
- * Appointments, mirrored from Google Calendar.
+ * Appointments, mirrored from the Outlook / Microsoft 365 calendar.
  *
  * The calendar stays the source of truth for scheduling — the operator
  * keeps booking wherever they already do — and this table exists so the
@@ -18,8 +18,8 @@ export function getAppointment(id: string): AppointmentRow | undefined {
     | undefined;
 }
 
-export function findByGoogleEventId(eventId: string): AppointmentRow | undefined {
-  return getDb().prepare(`SELECT * FROM appointments WHERE google_event_id = ?`).get(eventId) as
+export function findByMsEventId(eventId: string): AppointmentRow | undefined {
+  return getDb().prepare(`SELECT * FROM appointments WHERE ms_event_id = ?`).get(eventId) as
     | AppointmentRow
     | undefined;
 }
@@ -49,7 +49,12 @@ export function listForPatient(patientId: string): AppointmentRow[] {
 
 export interface AppointmentInput {
   patientId?: string | null;
-  googleEventId?: string | null;
+  msEventId?: string | null;
+  icalUid?: string | null;
+  etag?: string | null;
+  webLink?: string | null;
+  isRecurring?: boolean;
+  seriesMasterId?: string | null;
   startsAt: string;
   endsAt?: string | null;
   title?: string | null;
@@ -65,17 +70,25 @@ export function createAppointment(input: AppointmentInput): AppointmentRow {
   getDb()
     .prepare(
       `INSERT INTO appointments (
-         id, patient_id, google_event_id, starts_at, ends_at, title,
-         location, status, source, created_at, updated_at
+         id, patient_id, ms_event_id, ical_uid, provider_etag, web_link,
+         is_recurring, series_master_id, last_synced_at, sync_state,
+         starts_at, ends_at, title, location, status, source, created_at, updated_at
        ) VALUES (
-         @id, @patient_id, @google_event_id, @starts_at, @ends_at, @title,
-         @location, @status, @source, @created_at, @updated_at
+         @id, @patient_id, @ms_event_id, @ical_uid, @provider_etag, @web_link,
+         @is_recurring, @series_master_id, @last_synced_at, 'synced',
+         @starts_at, @ends_at, @title, @location, @status, @source, @created_at, @updated_at
        )`,
     )
     .run({
       id,
       patient_id: input.patientId ?? null,
-      google_event_id: input.googleEventId ?? null,
+      ms_event_id: input.msEventId ?? null,
+      ical_uid: input.icalUid ?? null,
+      provider_etag: input.etag ?? null,
+      web_link: input.webLink ?? null,
+      is_recurring: input.isRecurring ? 1 : 0,
+      series_master_id: input.seriesMasterId ?? null,
+      last_synced_at: input.msEventId ? now : null,
       starts_at: input.startsAt,
       ends_at: input.endsAt ?? null,
       title: input.title ?? null,
@@ -89,19 +102,36 @@ export function createAppointment(input: AppointmentInput): AppointmentRow {
   return getAppointment(id)!;
 }
 
+const RECURRING_TYPES = new Set(['occurrence', 'exception', 'seriesMaster']);
+
 /**
  * Mirrors a calendar event into the appointments table.
  *
- * Keyed on google_event_id (UNIQUE), so re-polling the same event updates
- * the existing row instead of duplicating it — the same idempotency
- * guarantee the receipts path gets from Wave's externalId.
+ * Keyed on ms_event_id (UNIQUE index), so re-polling the same event
+ * updates the existing row instead of duplicating it — the same
+ * idempotency guarantee the receipts path gets from Wave's externalId.
+ * An event cancelled or deleted in Outlook flips the row to `cancelled`
+ * rather than removing it, so anything attached to it survives.
  */
 export function upsertFromCalendarEvent(
   event: CalendarEvent,
   patientId?: string | null,
 ): AppointmentRow {
-  const existing = findByGoogleEventId(event.id);
+  const existing = findByMsEventId(event.id);
   const now = new Date().toISOString();
+
+  if (event.isCancelled) {
+    if (existing && existing.status !== 'cancelled') {
+      getDb()
+        .prepare(
+          `UPDATE appointments SET status = 'cancelled', last_synced_at = ?, updated_at = ? WHERE id = ?`,
+        )
+        .run(now, now, existing.id);
+    }
+    return existing ? getAppointment(existing.id)! : synthesizeCancelled(event, now);
+  }
+
+  const isRecurring = RECURRING_TYPES.has(event.type) ? 1 : 0;
 
   if (existing) {
     getDb()
@@ -111,8 +141,16 @@ export function upsertFromCalendarEvent(
            ends_at = @ends_at,
            title = @title,
            location = @location,
+           ical_uid = @ical_uid,
+           provider_etag = @provider_etag,
+           web_link = @web_link,
+           is_recurring = @is_recurring,
+           series_master_id = @series_master_id,
+           source = 'microsoft',
+           sync_state = 'synced',
+           last_synced_at = @now,
            patient_id = @patient_id,
-           updated_at = @updated_at
+           updated_at = @now
          WHERE id = @id`,
       )
       .run({
@@ -121,10 +159,15 @@ export function upsertFromCalendarEvent(
         ends_at: event.endsAt,
         title: event.summary,
         location: event.location,
+        ical_uid: event.iCalUId,
+        provider_etag: event.etag,
+        web_link: event.webLink,
+        is_recurring: isRecurring,
+        series_master_id: event.seriesMasterId,
         // Never clear an existing link just because this poll didn't
         // resolve one — the operator may have set it by hand.
         patient_id: patientId ?? existing.patient_id,
-        updated_at: now,
+        now,
       });
 
     return getAppointment(existing.id)!;
@@ -132,26 +175,57 @@ export function upsertFromCalendarEvent(
 
   return createAppointment({
     patientId: patientId ?? null,
-    googleEventId: event.id,
+    msEventId: event.id,
+    icalUid: event.iCalUId,
+    etag: event.etag,
+    webLink: event.webLink,
+    isRecurring: isRecurring === 1,
+    seriesMasterId: event.seriesMasterId,
     startsAt: event.startsAt,
     endsAt: event.endsAt,
     title: event.summary,
     location: event.location,
-    source: 'google',
+    source: 'microsoft',
+  });
+}
+
+/** A cancellation for an event we never mirrored — record it so a later reappearance is idempotent. */
+function synthesizeCancelled(event: CalendarEvent, now: string): AppointmentRow {
+  return createAppointment({
+    msEventId: event.id,
+    startsAt: event.startsAt || now,
+    status: 'cancelled',
+    source: 'microsoft',
   });
 }
 
 /**
- * Records the Google event id after an approved file-sourced appointment
- * has been written to the calendar. The row is now a mirror of a real
- * calendar event, so its source becomes `google`.
+ * Records the Graph event id after an approved file-sourced appointment
+ * has been written to Outlook. The row is now a mirror of a real calendar
+ * event, so its source becomes `microsoft`.
  */
-export function setGoogleEventId(appointmentId: string, eventId: string): void {
+export function setMicrosoftEventId(appointmentId: string, event: CalendarEvent): void {
   getDb()
     .prepare(
-      `UPDATE appointments SET google_event_id = ?, source = 'google', updated_at = ? WHERE id = ?`,
+      `UPDATE appointments SET
+         ms_event_id = @ms_event_id,
+         ical_uid = @ical_uid,
+         provider_etag = @provider_etag,
+         web_link = @web_link,
+         source = 'microsoft',
+         sync_state = 'synced',
+         last_synced_at = @now,
+         updated_at = @now
+       WHERE id = @id`,
     )
-    .run(eventId, new Date().toISOString(), appointmentId);
+    .run({
+      id: appointmentId,
+      ms_event_id: event.id,
+      ical_uid: event.iCalUId,
+      provider_etag: event.etag,
+      web_link: event.webLink,
+      now: new Date().toISOString(),
+    });
 }
 
 export function linkPatient(appointmentId: string, patientId: string): void {

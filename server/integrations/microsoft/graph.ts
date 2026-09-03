@@ -1,5 +1,4 @@
-import { getAccessToken, MicrosoftAuthError } from './auth.js';
-import { endpoint } from '../../platform/endpoints.js';
+import { graphFetch } from './client.js';
 import type { SendMessageOptions } from '../google/gmail.js';
 
 /**
@@ -11,40 +10,10 @@ import type { SendMessageOptions } from '../google/gmail.js';
  * (no MIME assembly) and returns `202 Accepted` with an empty body, so
  * there is no provider message id to return; the caller only stores it for
  * reference, so a synthesised marker is enough.
+ *
+ * The shared fetch wrapper (auth header, timeout, status taxonomy) lives
+ * in `client.ts`.
  */
-
-async function graphFetch(path: string, init: RequestInit = {}): Promise<Response> {
-  const token = await getAccessToken();
-
-  let res: Response;
-  try {
-    res = await fetch(`${endpoint('graphBase')}${path}`, {
-      ...init,
-      headers: {
-        ...(init.headers ?? {}),
-        Authorization: `Bearer ${token}`,
-      },
-      signal: AbortSignal.timeout(30_000),
-    });
-  } catch (err) {
-    throw new MicrosoftAuthError('network_error', `Network error: ${(err as Error).message}`);
-  }
-
-  if (res.status === 401) {
-    throw new MicrosoftAuthError('not_connected', 'Microsoft rejected the stored credentials. Reconnect in Settings.');
-  }
-
-  if (res.status === 429 || res.status >= 500) {
-    throw new MicrosoftAuthError('server_error', `Graph API error (${res.status}): ${res.statusText}`);
-  }
-
-  if (!res.ok) {
-    const detail = await res.text().catch(() => res.statusText);
-    throw new MicrosoftAuthError('bad_request', `Graph API error (${res.status}): ${detail}`);
-  }
-
-  return res;
-}
 
 /** Sends a plain-text email. Returns a synthesised reference id. */
 export async function sendMail(opts: SendMessageOptions): Promise<string> {

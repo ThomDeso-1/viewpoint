@@ -303,6 +303,13 @@ export interface Appointment {
   id: string;
   patient_id: string | null;
   google_event_id: string | null;
+  /** Graph event id — set once the appointment is mirrored from / to Outlook. */
+  ms_event_id: string | null;
+  /** Deep link to open the event in Outlook. */
+  web_link: string | null;
+  /** 1 for a recurring occurrence / series master — read-only in the app. */
+  is_recurring: number;
+  sync_state: string;
   starts_at: string;
   ends_at: string | null;
   title: string | null;
@@ -311,6 +318,12 @@ export interface Appointment {
   source: string;
   patient?: Patient | null;
   eligibility?: EligibilityCheck | null;
+}
+
+export interface CalendarSyncStatus {
+  connected: boolean;
+  calendarId: string;
+  lastSyncedAt: string | null;
 }
 
 export interface ExamRequestExtraction {
@@ -500,6 +513,16 @@ export function checkPatientEligibility(
 
 export function getAppointments(): Promise<Appointment[]> {
   return request('/exams/appointments');
+}
+
+export function getCalendarSyncStatus(): Promise<CalendarSyncStatus> {
+  return request('/exams/calendar/status');
+}
+
+export function syncCalendarNow(): Promise<
+  CalendarSyncStatus & { ok: boolean; pulled: number }
+> {
+  return request('/exams/calendar/sync', { method: 'POST' });
 }
 
 export function checkAppointmentEligibility(id: string, force = false): Promise<EligibilityOutcome> {

@@ -34,6 +34,27 @@ const FULL_EXTRACTION = {
   confidence: 0.95,
 };
 
+/** One Outlook / Graph calendar event, shaped for `listEvents` + `matchEvent`. */
+function msEvent(over: Record<string, unknown> = {}) {
+  const start = new Date('2026-09-01T10:00:00');
+  return {
+    id: 'evt-1',
+    '@odata.etag': 'W/"1"',
+    iCalUId: 'ical-1',
+    subject: 'Exam — Ada Lovelace',
+    start: { dateTime: start.toISOString(), timeZone: 'UTC' },
+    end: { dateTime: new Date(start.getTime() + 30 * 60_000).toISOString(), timeZone: 'UTC' },
+    type: 'singleInstance',
+    isCancelled: false,
+    webLink: 'https://outlook/evt-1',
+    attendees: [{ emailAddress: { address: 'ada@example.com' } }],
+    ...over,
+  };
+}
+
+/** The `GET /me/calendarView` response body. */
+const graphCalendar = (events: unknown[]) => jsonResponse(200, { value: events });
+
 describe('exams queue', () => {
   let ctx: TestContext;
   let sourceDir: string;
@@ -57,6 +78,12 @@ describe('exams queue', () => {
 
     store.saveTokens('google', {
       accessToken: 'google-token',
+      expiresAt: new Date(Date.now() + 3_600_000),
+    });
+    // The calendar backend is Outlook from Phase 1 on; the Gmail token
+    // above stays for the reminder-email path (default EMAIL_PROVIDER).
+    store.saveTokens('microsoft', {
+      accessToken: 'ms-token',
       expiresAt: new Date(Date.now() + 3_600_000),
     });
   });
@@ -205,20 +232,7 @@ describe('exams queue', () => {
     it('creates the patient, checks eligibility, and drafts an invoice and reminder', async () => {
       process.env.OHIP_ENABLED = 'true';
       const mock = await seedExtracted();
-      mock.mockResolvedValueOnce(
-        jsonResponse(200, {
-          items: [
-            {
-              id: 'evt-1',
-              summary: 'Exam — Ada Lovelace',
-              start: { dateTime: new Date('2026-09-01T10:00:00').toISOString() },
-              end: { dateTime: new Date('2026-09-01T10:30:00').toISOString() },
-              status: 'confirmed',
-              attendees: [{ email: 'ada@example.com' }],
-            },
-          ],
-        }),
-      );
+      mock.mockResolvedValueOnce(graphCalendar([msEvent()]));
 
       await queue.draftPending();
 
@@ -239,7 +253,7 @@ describe('exams queue', () => {
     it('skips the eligibility check entirely when OHIP is disabled', async () => {
       // OHIP_ENABLED is unset by default.
       const mock = await seedExtracted();
-      mock.mockResolvedValueOnce(jsonResponse(200, { items: [] }));
+      mock.mockResolvedValueOnce(graphCalendar([]));
 
       await queue.draftPending();
 
@@ -254,7 +268,7 @@ describe('exams queue', () => {
 
     it('never contacts Wave while drafting', async () => {
       const mock = await seedExtracted();
-      mock.mockResolvedValueOnce(jsonResponse(200, { items: [] }));
+      mock.mockResolvedValueOnce(graphCalendar([]));
 
       await queue.draftPending();
 
@@ -264,7 +278,7 @@ describe('exams queue', () => {
 
     it('stores the health card encrypted, never in the request row', async () => {
       const mock = await seedExtracted();
-      mock.mockResolvedValueOnce(jsonResponse(200, { items: [] }));
+      mock.mockResolvedValueOnce(graphCalendar([]));
 
       await queue.draftPending();
 
@@ -280,7 +294,7 @@ describe('exams queue', () => {
       const existing = patients.createPatient({ full_name: 'Ada Lovelace', email: 'ada@example.com' });
 
       const mock = await seedExtracted();
-      mock.mockResolvedValueOnce(jsonResponse(200, { items: [] }));
+      mock.mockResolvedValueOnce(graphCalendar([]));
       await queue.draftPending();
 
       expect(patients.listPatients()).toHaveLength(1);
@@ -295,7 +309,7 @@ describe('exams queue', () => {
       });
 
       const mock = await seedExtracted();
-      mock.mockResolvedValueOnce(jsonResponse(200, { items: [] }));
+      mock.mockResolvedValueOnce(graphCalendar([]));
       await queue.draftPending();
 
       const after = patients.getPatient(existing.id)!;
@@ -305,7 +319,7 @@ describe('exams queue', () => {
 
     it('records the appointment from the file when no calendar event matches', async () => {
       const mock = await seedExtracted();
-      mock.mockResolvedValueOnce(jsonResponse(200, { items: [] }));
+      mock.mockResolvedValueOnce(graphCalendar([]));
 
       await queue.draftPending();
 
@@ -320,8 +334,9 @@ describe('exams queue', () => {
       expect(appt.starts_at.slice(0, 10)).toBe('2026-09-01');
     });
 
-    it('records a local appointment even when Google is not connected', async () => {
+    it('records a local appointment even when no calendar is connected', async () => {
       store.disconnect('google');
+      store.disconnect('microsoft');
       await seedExtracted();
 
       await queue.draftPending();
@@ -349,19 +364,7 @@ describe('exams queue', () => {
       mock.mockResolvedValueOnce(claudeBatch([FULL_EXTRACTION]));
       await queue.scanSourceFolder();
 
-      mock.mockResolvedValueOnce(
-        jsonResponse(200, {
-          items: [
-            {
-              id: 'evt-1',
-              summary: 'Exam — Ada Lovelace',
-              start: { dateTime: new Date('2026-09-01T10:00:00').toISOString() },
-              end: { dateTime: new Date('2026-09-01T10:30:00').toISOString() },
-              status: 'confirmed',
-            },
-          ],
-        }),
-      );
+      mock.mockResolvedValueOnce(graphCalendar([msEvent()]));
       await queue.draftPending();
 
       return { mock, row: examRequests.listAll()[0] };
@@ -374,20 +377,27 @@ describe('exams queue', () => {
       expect(result.invoice.error).toContain('Wave is not configured');
     });
 
-    it('writes a file-sourced appointment to Google Calendar on approval', async () => {
+    it('writes a file-sourced appointment to the Outlook calendar on approval', async () => {
       writeSource('bookings.csv');
       const mock = installFetchMock();
       mock.mockResolvedValueOnce(claudeBatch([FULL_EXTRACTION]));
       await queue.scanSourceFolder();
 
       // No calendar match, so the appointment came from the file.
-      mock.mockResolvedValueOnce(jsonResponse(200, { items: [] }));
+      mock.mockResolvedValueOnce(graphCalendar([]));
       await queue.draftPending();
       const row = examRequests.listAll()[0];
 
       // Approve: Wave isn't configured (invoice fails) but the calendar
       // event is still created.
-      mock.mockResolvedValueOnce(jsonResponse(200, { id: 'new-evt-1', status: 'confirmed', start: { dateTime: new Date('2026-09-01T10:00:00').toISOString() } }));
+      mock.mockResolvedValueOnce(
+        jsonResponse(201, {
+          id: 'new-evt-1',
+          '@odata.etag': 'W/"7"',
+          webLink: 'https://outlook/new-evt-1',
+          start: { dateTime: new Date('2026-09-01T10:00:00').toISOString(), timeZone: 'UTC' },
+        }),
+      );
       await queue.approveExamRequest(row.id);
 
       const createCall = mock.mock.calls.find(
@@ -397,8 +407,9 @@ describe('exams queue', () => {
 
       const appointments = await import('../../server/exams/appointments.js');
       const appt = appointments.getAppointment(examRequests.getExamRequest(row.id)!.appointment_id!)!;
-      expect(appt.google_event_id).toBe('new-evt-1');
-      expect(appt.source).toBe('google');
+      expect(appt.ms_event_id).toBe('new-evt-1');
+      expect(appt.provider_etag).toBe('W/"7"');
+      expect(appt.source).toBe('microsoft');
     });
 
     it('creates, approves and sends the invoice once approved', async () => {
@@ -529,17 +540,12 @@ describe('exams queue', () => {
       await queue.scanSourceFolder();
 
       mock.mockResolvedValueOnce(
-        jsonResponse(200, {
-          items: [
-            {
-              id: 'evt-1',
-              summary: 'Exam — Ada Lovelace',
-              start: { dateTime: soon.toISOString() },
-              end: { dateTime: new Date(soon.getTime() + 30 * 60 * 1000).toISOString() },
-              status: 'confirmed',
-            },
-          ],
-        }),
+        graphCalendar([
+          msEvent({
+            start: { dateTime: soon.toISOString(), timeZone: 'UTC' },
+            end: { dateTime: new Date(soon.getTime() + 30 * 60 * 1000).toISOString(), timeZone: 'UTC' },
+          }),
+        ]),
       );
       await queue.draftPending();
 
@@ -617,19 +623,7 @@ describe('exams queue', () => {
       mock.mockResolvedValueOnce(claudeBatch([{ ...FULL_EXTRACTION, requested_date: '2026-09-01' }]));
       await queue.scanSourceFolder();
 
-      mock.mockResolvedValueOnce(
-        jsonResponse(200, {
-          items: [
-            {
-              id: 'evt-1',
-              summary: 'Exam — Ada Lovelace',
-              start: { dateTime: new Date('2026-09-01T10:00:00').toISOString() },
-              end: { dateTime: new Date('2026-09-01T10:30:00').toISOString() },
-              status: 'confirmed',
-            },
-          ],
-        }),
-      );
+      mock.mockResolvedValueOnce(graphCalendar([msEvent()]));
       await queue.draftPending();
 
       const callsBefore = mock.mock.calls.length;

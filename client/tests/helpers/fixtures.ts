@@ -81,13 +81,17 @@ export function makeAppointment(overrides: Partial<Appointment> = {}): Appointme
   return {
     id: 'appt-1',
     patient_id: 'patient-1',
-    google_event_id: 'evt-1',
+    google_event_id: null,
+    ms_event_id: 'evt-1',
+    web_link: 'https://outlook.office365.com/calendar/item/evt-1',
+    is_recurring: 0,
+    sync_state: 'synced',
     starts_at: '2026-09-01T14:00:00.000Z',
     ends_at: '2026-09-01T14:30:00.000Z',
     title: 'Eye exam',
     location: null,
     status: 'scheduled',
-    source: 'google',
+    source: 'microsoft',
     ...overrides,
   };
 }

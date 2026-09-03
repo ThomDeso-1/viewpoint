@@ -13,6 +13,11 @@ beforeEach(() => {
   for (const fn of Object.values(api)) (fn as any).mockReset?.();
   api.getAppointments.mockResolvedValue([]);
   api.getPatients.mockResolvedValue([]);
+  api.getCalendarSyncStatus.mockResolvedValue({
+    connected: true,
+    calendarId: 'primary',
+    lastSyncedAt: new Date().toISOString(),
+  });
 });
 
 function renderSchedule({ ohipEnabled = true }: { ohipEnabled?: boolean } = {}) {
@@ -26,14 +31,43 @@ function renderSchedule({ ohipEnabled = true }: { ohipEnabled?: boolean } = {}) 
 }
 
 /**
- * Spec: the schedule mirrors Google Calendar and shows OHIP status per
- * appointment, so the front desk can see coverage at a glance instead of
- * checking each one by hand.
+ * Spec: the schedule mirrors the Outlook calendar and shows OHIP status
+ * per appointment, so the front desk can see coverage at a glance instead
+ * of checking each one by hand.
  */
 describe('Schedule', () => {
   it('explains the empty state and where appointments come from', async () => {
     renderSchedule();
-    expect(await screen.findByText(/mirror your Google Calendar/i)).toBeInTheDocument();
+    expect(await screen.findByText(/mirror your Outlook calendar/i)).toBeInTheDocument();
+  });
+
+  it('shows how fresh the Outlook mirror is and syncs on demand', async () => {
+    api.syncCalendarNow.mockResolvedValue({
+      ok: true,
+      connected: true,
+      calendarId: 'primary',
+      lastSyncedAt: new Date().toISOString(),
+      pulled: 2,
+    });
+    renderSchedule();
+
+    expect(await screen.findByText(/Synced with Outlook/i)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /Sync now/i }));
+
+    await waitFor(() => expect(api.syncCalendarNow).toHaveBeenCalled());
+    expect(await screen.findByText(/2 change\(s\) from Outlook/i)).toBeInTheDocument();
+  });
+
+  it('points at Settings when Outlook is not connected', async () => {
+    api.getCalendarSyncStatus.mockResolvedValue({
+      connected: false,
+      calendarId: 'primary',
+      lastSyncedAt: null,
+    });
+    renderSchedule();
+
+    expect(await screen.findByText(/Not connected to Outlook/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Sync now/i })).not.toBeInTheDocument();
   });
 
   it('shows coverage status against an appointment', async () => {

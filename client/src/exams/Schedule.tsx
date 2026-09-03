@@ -2,10 +2,13 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   getAppointments,
+  getCalendarSyncStatus,
+  syncCalendarNow,
   checkAppointmentEligibility,
   getPatients,
   linkPatientToAppointment,
   type Appointment,
+  type CalendarSyncStatus,
   type Patient,
 } from '../shared/api';
 import { useToast } from '../shared/Toast';
@@ -13,7 +16,7 @@ import { AppNav } from '../shared/AppNav';
 import { AppointmentForm } from '../exams/AppointmentForm';
 
 /**
- * Upcoming appointments, mirrored from Google Calendar.
+ * Upcoming appointments, mirrored from the Outlook / Microsoft 365 calendar.
  *
  * When the OHIP integration is on, each linked appointment also shows
  * whether coverage has been confirmed, with a button to re-check on the
@@ -22,6 +25,8 @@ import { AppointmentForm } from '../exams/AppointmentForm';
 export function Schedule({ ohipEnabled = false }: { ohipEnabled?: boolean }) {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
+  const [syncStatus, setSyncStatus] = useState<CalendarSyncStatus | null>(null);
+  const [syncing, setSyncing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [checkingId, setCheckingId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
@@ -30,13 +35,35 @@ export function Schedule({ ohipEnabled = false }: { ohipEnabled?: boolean }) {
 
   const load = async () => {
     try {
-      const [rows, patientList] = await Promise.all([getAppointments(), getPatients()]);
+      const [rows, patientList, sync] = await Promise.all([
+        getAppointments(),
+        getPatients(),
+        getCalendarSyncStatus().catch(() => null),
+      ]);
       setAppointments(rows);
       setPatients(patientList);
+      setSyncStatus(sync);
     } catch (err) {
       showToast((err as Error).message, 'error');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSyncNow = async () => {
+    setSyncing(true);
+    try {
+      const result = await syncCalendarNow();
+      setSyncStatus(result);
+      showToast(
+        result.pulled > 0 ? `Synced — ${result.pulled} change(s) from Outlook.` : 'Already up to date.',
+        'success',
+      );
+      await load();
+    } catch (err) {
+      showToast((err as Error).message, 'error');
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -100,6 +127,21 @@ export function Schedule({ ohipEnabled = false }: { ohipEnabled?: boolean }) {
         </div>
       </header>
 
+      <div className="schedule-sync">
+        <span className="muted">
+          {syncStatus?.connected ? (
+            <>Synced with Outlook · {formatSyncAge(syncStatus.lastSyncedAt)}</>
+          ) : (
+            <>Not connected to Outlook — sign in from Settings.</>
+          )}
+        </span>
+        {syncStatus?.connected && (
+          <button className="link-button" onClick={handleSyncNow} disabled={syncing}>
+            {syncing ? 'Syncing…' : 'Sync now'}
+          </button>
+        )}
+      </div>
+
       {adding && (
         <AppointmentForm
           patients={patients}
@@ -113,7 +155,7 @@ export function Schedule({ ohipEnabled = false }: { ohipEnabled?: boolean }) {
 
       {appointments.length === 0 ? (
         <p className="empty-state">
-          No upcoming appointments. These mirror your Google Calendar — connect it in Settings if you
+          No upcoming appointments. These mirror your Outlook calendar — sign in from Settings if you
           haven't yet.
         </p>
       ) : (
@@ -224,4 +266,17 @@ function formatTime(iso: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return '—';
   return date.toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit' });
+}
+
+/** "updated 3 min ago" / "updated just now" / "never synced". */
+function formatSyncAge(iso: string | null): string {
+  if (!iso) return 'never synced';
+  const ms = Date.now() - new Date(iso).getTime();
+  if (Number.isNaN(ms) || ms < 0) return 'updated just now';
+  const minutes = Math.floor(ms / 60_000);
+  if (minutes < 1) return 'updated just now';
+  if (minutes < 60) return `updated ${minutes} min ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `updated ${hours} h ago`;
+  return `updated ${Math.floor(hours / 24)} d ago`;
 }

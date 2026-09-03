@@ -1356,6 +1356,15 @@ img {
 
 /* ── Schedule ── */
 
+.schedule-sync {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
 .schedule-day {
   margin-bottom: 24px;
 }

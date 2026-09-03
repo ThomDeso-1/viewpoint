@@ -8,7 +8,8 @@ import * as appointments from './appointments.js';
 import * as reminders from './reminders.js';
 import * as processedFiles from './processed-files.js';
 import { sourceDir, walkSourceDir, hashBuffer, readForExtraction } from './file-source.js';
-import { listEvents, matchEvent, createEvent } from '../integrations/google/calendar.js';
+import { listEvents, matchEvent, createEvent } from '../integrations/microsoft/calendar.js';
+import { pullCalendar } from './calendar-sync.js';
 import { isGoogleConnected, GoogleAuthError } from '../integrations/google/auth.js';
 import { isMicrosoftConnected, MicrosoftAuthError } from '../integrations/microsoft/auth.js';
 import { emailProviderName } from '../integrations/email/index.js';
@@ -54,6 +55,10 @@ function confidenceThreshold(): number {
 
 export async function processQueue(): Promise<void> {
   await scanSourceFolder();
+  // A calendar-sync failure must not hold up drafting or reminders.
+  await pullCalendar().catch((err) =>
+    console.error('[exams-queue] calendar sync failed:', (err as Error).message),
+  );
   await draftPending();
   await retryApproved();
   await sendDueReminders();
@@ -165,7 +170,8 @@ export async function draftPending(): Promise<void> {
     } catch (err) {
       const retryable =
         (err instanceof WaveAPIError && err.isRetryable) ||
-        (err instanceof GoogleAuthError && err.isRetryable);
+        (err instanceof GoogleAuthError && err.isRetryable) ||
+        (err instanceof MicrosoftAuthError && err.isRetryable);
       examRequests.recordFailure(row.id, (err as Error).message, retryable, MAX_RETRIES);
     }
   }
@@ -259,7 +265,7 @@ async function resolveAppointment(
   if (Number.isNaN(requestedAt.getTime())) return null;
 
   // Prefer an existing calendar event over creating a duplicate.
-  if (isGoogleConnected()) {
+  if (isMicrosoftConnected()) {
     const from = new Date(requestedAt.getTime() - 24 * 60 * 60 * 1000);
     const to = new Date(requestedAt.getTime() + 24 * 60 * 60 * 1000);
 
@@ -284,7 +290,7 @@ async function resolveAppointment(
   }
 
   // Nothing on the calendar (or not connected): record the appointment
-  // from the file. If Google is connected, approval writes it back.
+  // from the file. If Outlook is connected, approval writes it back.
   const existing = row.appointment_id ? appointments.getAppointment(row.appointment_id) : undefined;
   const appointment =
     existing ??
@@ -425,7 +431,8 @@ export async function retryApproved(): Promise<void> {
     } catch (err) {
       const retryable =
         (err instanceof WaveAPIError && err.isRetryable) ||
-        (err instanceof GoogleAuthError && err.isRetryable);
+        (err instanceof GoogleAuthError && err.isRetryable) ||
+        (err instanceof MicrosoftAuthError && err.isRetryable);
       examRequests.recordFailure(row.id, (err as Error).message, retryable, MAX_RETRIES);
     }
   }
@@ -567,17 +574,17 @@ export function updateInvoiceRow(id: string, fields: Record<string, unknown>): v
 }
 
 /**
- * Mirrors a file-sourced appointment onto Google Calendar on approval.
+ * Mirrors a file-sourced appointment onto the Outlook calendar on approval.
  *
  * Best-effort: a calendar write failing must not strand an otherwise
- * committed request. An appointment that already carries a
- * `google_event_id` was matched to a real event and is left alone.
+ * committed request. An appointment that already carries an `ms_event_id`
+ * was matched to a real event and is left alone.
  */
 async function writeAppointmentToCalendar(row: ExamRequestRow): Promise<void> {
-  if (!row.appointment_id || !isGoogleConnected()) return;
+  if (!row.appointment_id || !isMicrosoftConnected()) return;
 
   const appointment = appointments.getAppointment(row.appointment_id);
-  if (!appointment || appointment.google_event_id) return;
+  if (!appointment || appointment.ms_event_id) return;
 
   const patient = row.patient_id ? patients.getPatient(row.patient_id) : undefined;
   const extraction = examRequests.readExtraction(row);
@@ -590,7 +597,7 @@ async function writeAppointmentToCalendar(row: ExamRequestRow): Promise<void> {
       startsAt: appointment.starts_at,
       endsAt: appointment.ends_at,
     });
-    appointments.setGoogleEventId(appointment.id, event.id);
+    appointments.setMicrosoftEventId(appointment.id, event);
     audit({ action: 'appointment.calendar_write', entityType: 'appointment', entityId: appointment.id });
   } catch (err) {
     console.error('[exams-queue] calendar write failed:', (err as Error).message);
