@@ -1,7 +1,8 @@
 import fs from 'fs';
+import http from 'http';
+import { once } from 'events';
 import os from 'os';
 import path from 'path';
-import type { Express } from 'express';
 import { vi } from 'vitest';
 
 const CREDENTIAL_ENV_KEYS = [
@@ -61,7 +62,15 @@ export function clearCredentialEnv(): void {
 }
 
 export interface TestContext {
-  app: Express;
+  /**
+   * A real HTTP server listening on an ephemeral port, kept up for the
+   * life of the context. `supertest(ctx.app)` reuses it instead of
+   * spinning up (and tearing down) a fresh server per request — the
+   * churn that lets superagent's keep-alive pool hand a request a socket
+   * whose server has just closed, surfacing as an intermittent
+   * "socket hang up". `http.Server` satisfies supertest's `App` type.
+   */
+  app: http.Server;
   dataDir: string;
   /** Restores cwd and removes the temp directories. Call in afterAll. */
   teardown: () => void;
@@ -99,10 +108,22 @@ export async function setupTestApp(envOverrides: Record<string, string> = {}): P
   const { closeDb } = await import('../../server/db/db.js');
   const app = createApp();
 
+  // One listening server per context, closed in teardown(). Await the
+  // 'listening' event so supertest sees an already-bound server
+  // (app.address() truthy) and reuses it rather than calling listen(0)
+  // itself.
+  const server = http.createServer(app);
+  server.listen(0);
+  await once(server, 'listening');
+
   return {
-    app,
+    app: server,
     dataDir,
     teardown: () => {
+      // Drop any lingering keep-alive sockets before close() so the
+      // handle is released now rather than after keepAliveTimeout.
+      server.closeAllConnections();
+      server.close();
       // Close before deleting the directory: an open SQLite handle in WAL
       // mode keeps file descriptors alive, and with ~200 tests each
       // opening one, the process eventually exhausts them and unrelated
