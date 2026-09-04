@@ -14,9 +14,9 @@ import { makeCallbackRouter } from '../integrations/oauth/callback.js';
 import { WaveAPIError } from '../integrations/wave/index.js';
 
 /**
- * Wave OAuth, structurally identical to the Google flow in routes/google.ts
- * — the state store, the callback router, and the result page are all
- * shared (integrations/oauth/).
+ * Wave OAuth, structurally identical to the Microsoft flow in
+ * routes/microsoft.ts — the state store, the callback router, and the
+ * result page are all shared (integrations/oauth/).
  *
  * OAuth is the alternative to the pasted access token, not a replacement:
  * Wave only allows third-party OAuth against businesses on an active Wave

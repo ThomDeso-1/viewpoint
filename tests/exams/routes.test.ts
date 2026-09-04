@@ -61,10 +61,6 @@ describe('exams API', () => {
     patients = await import('../../server/exams/patients.js');
 
     store = await import('../../server/platform/oauth-store.js');
-    store.saveTokens('google', {
-      accessToken: 'google-token',
-      expiresAt: new Date(Date.now() + 3_600_000),
-    });
   });
 
   afterEach(() => {

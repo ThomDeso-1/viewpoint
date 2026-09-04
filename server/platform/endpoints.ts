@@ -21,11 +21,6 @@ const REAL = {
   waveGraphql: 'https://gql.waveapps.com/graphql/public',
   waveAuthorize: 'https://api.waveapps.com/oauth2/authorize',
   waveToken: 'https://api.waveapps.com/oauth2/token/',
-  googleAuthorize: 'https://accounts.google.com/o/oauth2/v2/auth',
-  googleToken: 'https://oauth2.googleapis.com/token',
-  googleUserinfo: 'https://www.googleapis.com/oauth2/v2/userinfo',
-  gmailBase: 'https://gmail.googleapis.com/gmail/v1/users/me',
-  calendarBase: 'https://www.googleapis.com/calendar/v3',
   microsoftAuthorize: 'https://login.microsoftonline.com/{tenant}/oauth2/v2.0/authorize',
   microsoftToken: 'https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token',
   graphBase: 'https://graph.microsoft.com/v1.0',
@@ -47,11 +42,6 @@ const DEMO_PATHS: Record<EndpointName, string> = {
   waveGraphql: '/wave/graphql',
   waveAuthorize: '/wave/oauth/authorize',
   waveToken: '/wave/oauth/token',
-  googleAuthorize: '/google/oauth/authorize',
-  googleToken: '/google/oauth/token',
-  googleUserinfo: '/google/oauth/userinfo',
-  gmailBase: '/gmail/v1/users/me',
-  calendarBase: '/calendar/v3',
   microsoftAuthorize: '/microsoft/oauth/authorize',
   microsoftToken: '/microsoft/oauth/token',
   graphBase: '/graph/v1.0',
@@ -73,7 +63,7 @@ export function warnIfDemoMode(): void {
   console.warn('  ┌─────────────────────────────────────────────────────────┐');
   console.warn('  │  DEMO MODE — no real services are being contacted.      │');
   console.warn('  │                                                         │');
-  console.warn('  │  Claude, Wave, Gmail and Calendar all point at the      │');
+  console.warn('  │  Claude, Wave and Microsoft Graph all point at the      │');
   console.warn(`  │  local mock server at ${demoBase().padEnd(34)}│`);
   console.warn('  │  Invoices, emails and extractions are all fabricated.   │');
   console.warn('  └─────────────────────────────────────────────────────────┘');

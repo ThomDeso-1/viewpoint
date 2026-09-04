@@ -1895,34 +1895,6 @@ img {
   color: var(--text-tertiary);
 }
 
-/* ── Reminder email provider picker (Settings) ── */
-
-.settings-radio-group {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-top: 12px;
-}
-
-.settings-radio {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 15px;
-  cursor: pointer;
-}
-
-.settings-radio input {
-  width: 18px;
-  height: 18px;
-  accent-color: var(--accent);
-  cursor: pointer;
-}
-
-.settings-radio input:disabled {
-  cursor: default;
-}
-
 /* ────────────────────────────────────────
    Desktop / wide-viewport layout
 

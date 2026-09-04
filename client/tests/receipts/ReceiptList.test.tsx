@@ -20,8 +20,7 @@ beforeEach(() => {
     demoMode: false,
     hasClaudeKey: true,
     hasWaveToken: true,
-    googleConnected: true,
-    microsoftConnected: false,
+    microsoftConnected: true,
   } as any);
   api.getExamSettings.mockResolvedValue({ sourceFolder: '/files', invoicingReady: true } as any);
   vi.stubGlobal('confirm', vi.fn(() => true));

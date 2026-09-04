@@ -23,8 +23,6 @@ const baseSettings: SettingsData = {
   waveAnchorAccountId: '',
   waveSalesTaxId: '',
   isOnboarded: true,
-  emailProvider: 'google',
-  googleConnected: false,
   microsoftConnected: false,
 };
 

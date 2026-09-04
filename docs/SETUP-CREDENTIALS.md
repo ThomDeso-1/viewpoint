@@ -17,16 +17,14 @@ get it.
 | 3 | Wave access token | For invoicing & receipts | Setup, step 3 |
 | 4 | Wave business + accounts | With #3 | Setup, step 3 |
 | 5 | OHIP mode + ministry credentials | Disabled by default (`OHIP_ENABLED`) | Settings → OHIP, when on |
-| 6 | Google OAuth client | For calendar & reminder emails | Settings → Google |
-| 6b | Outlook / Microsoft 365 | Optional alternative to Gmail for reminders | Settings → Outlook |
+| 6 | Outlook / Microsoft 365 | For the appointment calendar & reminder emails | Settings → Outlook |
 | 7 | Patient files folder | For automatic intake | Settings → Exam Requests |
 | 8 | Invoice product/account | For invoicing | Settings → Exam Requests |
 | 9 | Business name, timezone, fee | Recommended | Settings → Exam Requests |
 | 10 | Wave OAuth client | Optional alternative to #3 | Settings → Wave |
 
 Steps 1–4 are the first-run wizard (step 5, OHIP, is skipped while
-`OHIP_ENABLED` is off). Steps 6–9 are done once in Settings afterwards,
-because they need a Google Cloud project.
+`OHIP_ENABLED` is off). Steps 6–9 are done once in Settings afterwards.
 
 ---
 
@@ -135,34 +133,13 @@ Mock mode has fixed test numbers, so you can try each outcome:
 
 ---
 
-## 6. Google OAuth client
+## 6. Outlook / Microsoft 365
 
-**Required for calendar matching and sending reminder emails.** Settings →
-Google. The app does not read your inbox.
-
-1. Go to [console.cloud.google.com](https://console.cloud.google.com) and
-   create a project (or reuse one).
-2. Enable the **Gmail API** and the **Google Calendar API**.
-3. Credentials → Create Credentials → **OAuth client ID** → type
-   **Web application**.
-4. Under *Authorized redirect URIs*, add exactly the URI the Settings
-   screen shows you — normally `http://localhost:3000/api/google/callback`.
-5. Copy the **client ID** and **client secret** into Settings and save.
-6. Click **Connect Google** and grant access.
-
-> Do the connect step **in a browser on the Mac running the app**. The
-> redirect address is a localhost one and won't resolve from your phone.
-
-The app asks for: send email as you, and manage calendar events.
-
----
-
-## 6b. Outlook / Microsoft 365 *(the calendar backend + optional reminder mailbox)*
-
-**One sign-in covers both:** the Schedule screen mirrors this account's
-Outlook calendar (created / rescheduled / cancelled appointments sync
-both ways), and reminder emails can send from its mailbox instead of
-Gmail. Settings → Outlook / Microsoft 365.
+**The app's calendar + reminder-email backend.** One sign-in covers both:
+the Schedule screen mirrors this account's Outlook calendar (created /
+rescheduled / cancelled appointments sync both ways), and reminder emails
+send from its mailbox. The app never reads your inbox. Settings → Outlook
+/ Microsoft 365.
 
 The app registers as a **public client** — there is no client secret.
 Usually the build already carries an application (client) ID, so you only
@@ -180,15 +157,19 @@ do the sign-in step. To point it at your own registration:
    by default). Grant admin consent if your tenant requires it.
 5. Copy the **Application (client) ID** into Settings and save. Set the
    **Directory (tenant) ID** too unless the registration is multi-tenant.
-6. Click **Sign in with Microsoft** and grant access. To send reminders
-   from this mailbox too, pick **Outlook** under *Reminder email account*.
+6. Click **Sign in with Microsoft** and grant access.
 
-> Do the sign-in step **in a browser on the Mac running the app** — same
-> localhost-redirect reason as Google.
+> Do the sign-in step **in a browser on the Mac running the app**. The
+> redirect address is a localhost one and won't resolve from your phone.
 
 The Schedule mirrors the mailbox's default calendar. To book into a
 shared or secondary calendar instead, set `MICROSOFT_CALENDAR_ID` in
 `.env` to that calendar's id.
+
+> **Upgrading from a build that used Google?** After this version, remove
+> `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `GOOGLE_CALENDAR_ID` /
+> `GOOGLE_REDIRECT_URI` / `EMAIL_PROVIDER` from `.env` — they do nothing
+> now. Migration 008 clears the stored Google token on first launch.
 
 ---
 
@@ -207,7 +188,7 @@ The OHIP "Status" column in a schedule is captured verbatim and shown on
 the request (interpreted as covered / not covered / private pay where the
 wording is clear). It is advisory — what the file said, not a live check.
 If `OHIP_ENABLED=true`, the app also runs its own eligibility check and
-shows that alongside. When Google is connected, approving a card also
+shows that alongside. When Outlook is connected, approving a card also
 writes the appointment to your calendar, and you can change that patient's
 reminder time on the card before approving.
 

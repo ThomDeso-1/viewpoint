@@ -10,9 +10,7 @@ import * as processedFiles from './processed-files.js';
 import { sourceDir, walkSourceDir, hashBuffer, readForExtraction } from './file-source.js';
 import { listEvents, matchEvent, createEvent } from '../integrations/microsoft/calendar.js';
 import { pullCalendar } from './calendar-sync.js';
-import { isGoogleConnected, GoogleAuthError } from '../integrations/google/auth.js';
 import { isMicrosoftConnected, MicrosoftAuthError } from '../integrations/microsoft/auth.js';
-import { emailProviderName } from '../integrations/email/index.js';
 import { extractPatientBatch, ClaudeAPIError } from '../integrations/claude.js';
 import { checkPatientEligibility } from './eligibility.js';
 import { ohipEnabled } from '../integrations/ohip/index.js';
@@ -170,7 +168,6 @@ export async function draftPending(): Promise<void> {
     } catch (err) {
       const retryable =
         (err instanceof WaveAPIError && err.isRetryable) ||
-        (err instanceof GoogleAuthError && err.isRetryable) ||
         (err instanceof MicrosoftAuthError && err.isRetryable);
       examRequests.recordFailure(row.id, (err as Error).message, retryable, MAX_RETRIES);
     }
@@ -431,7 +428,6 @@ export async function retryApproved(): Promise<void> {
     } catch (err) {
       const retryable =
         (err instanceof WaveAPIError && err.isRetryable) ||
-        (err instanceof GoogleAuthError && err.isRetryable) ||
         (err instanceof MicrosoftAuthError && err.isRetryable);
       examRequests.recordFailure(row.id, (err as Error).message, retryable, MAX_RETRIES);
     }
@@ -644,12 +640,8 @@ export function rejectExamRequest(examRequestId: string): void {
  * patient without review.
  */
 export async function sendDueReminders(): Promise<number> {
-  // Gate on the mailbox that will actually send — Gmail or Outlook,
-  // whichever EMAIL_PROVIDER selects. (Before this, an Outlook-only setup
-  // could never send a reminder because the gate only knew about Google.)
-  const ready =
-    emailProviderName() === 'microsoft' ? isMicrosoftConnected() : isGoogleConnected();
-  if (!ready) return 0;
+  // Reminders send from the connected Outlook mailbox (Graph sendMail).
+  if (!isMicrosoftConnected()) return 0;
 
   let sent = 0;
 
@@ -674,8 +666,7 @@ export async function sendDueReminders(): Promise<number> {
       await reminders.sendReminder({ reminder, appointment, patient });
       sent++;
     } catch (err) {
-      const retryable =
-        (err instanceof GoogleAuthError || err instanceof MicrosoftAuthError) && err.isRetryable;
+      const retryable = err instanceof MicrosoftAuthError && err.isRetryable;
       reminders.recordFailure(reminder.id, (err as Error).message, retryable, MAX_RETRIES);
     }
   }

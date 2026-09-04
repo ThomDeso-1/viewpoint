@@ -288,24 +288,3 @@ describe('Graph sendMail', () => {
     ).rejects.toMatchObject({ code: 'server_error', isRetryable: true });
   });
 });
-
-describe('email provider selection', () => {
-  let ctx: TestContext;
-  afterEach(() => {
-    ctx?.teardown();
-    delete process.env.EMAIL_PROVIDER;
-  });
-
-  it('defaults to google', async () => {
-    ctx = await setupTestApp();
-    const email = await import('../../server/integrations/email/index.js');
-    expect(email.emailProviderName()).toBe('google');
-    expect(email.getEmailProvider().name).toBe('google');
-  });
-
-  it('switches to microsoft when EMAIL_PROVIDER is set', async () => {
-    ctx = await setupTestApp({ EMAIL_PROVIDER: 'microsoft' });
-    const email = await import('../../server/integrations/email/index.js');
-    expect(email.getEmailProvider().name).toBe('microsoft');
-  });
-});

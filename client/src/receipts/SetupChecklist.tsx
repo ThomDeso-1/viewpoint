@@ -52,10 +52,7 @@ export function SetupChecklist({ settings }: Props) {
   const items: Item[] = [
     { label: 'Add your Claude API key', done: settings.hasClaudeKey },
     { label: 'Connect Wave for expense uploads', done: settings.hasWaveToken },
-    {
-      label: 'Connect a mailbox for reminder emails',
-      done: settings.googleConnected || settings.microsoftConnected,
-    },
+    { label: 'Sign in with Microsoft for mail + calendar', done: settings.microsoftConnected },
     { label: 'Point at your patient files folder', done: examFolderSet },
     { label: 'Choose an invoice product or account', done: invoicingReady },
   ];

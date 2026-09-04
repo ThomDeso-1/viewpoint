@@ -35,7 +35,11 @@ export type ExamRequestStatus =
 
 export type AppointmentStatus = 'scheduled' | 'completed' | 'cancelled';
 
-/** Where an appointment came from — a calendar event, a scanned file, or hand-entered. */
+/**
+ * Where an appointment came from — a calendar event, a scanned file, or
+ * hand-entered. `'google'` is a retired value kept only for historical
+ * rows written before the Outlook cutover (see migration 008).
+ */
 export type AppointmentSource = 'google' | 'microsoft' | 'file' | 'manual';
 
 /**
@@ -56,7 +60,7 @@ export type InvoiceStatus = 'draft' | 'created' | 'approved' | 'sent' | 'failed'
 /** Which HCV backend produced a result — a mock result must never be mistaken for a real one. */
 export type HcvMode = 'mock' | 'conformance' | 'production';
 
-export type OAuthProvider = 'google' | 'wave' | 'microsoft';
+export type OAuthProvider = 'wave' | 'microsoft';
 
 // ── Rows ──
 
@@ -80,7 +84,7 @@ export interface PatientRow {
 export interface AppointmentRow {
   id: string;
   patient_id: string | null;
-  /** Legacy Google Calendar id (migration 003). No longer read — see migration 007. */
+  /** Legacy Google Calendar id (migration 003). No longer read — see migration 008. */
   google_event_id: string | null;
   /** Graph event id — the idempotency key for delta upserts (migration 007). */
   ms_event_id: string | null;

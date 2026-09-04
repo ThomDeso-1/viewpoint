@@ -14,7 +14,6 @@ import { getWaveToken, isWaveConfigured, authMode } from '../integrations/wave/a
 import { hcvMode, ohipEnabled, resetHcvClient, loadConfigFromEnv, SoapHcvClient, HcvError } from '../integrations/ohip/index.js';
 import { isDemoMode } from '../platform/endpoints.js';
 import { isConnected } from '../platform/oauth-store.js';
-import { emailProviderName } from '../integrations/email/index.js';
 import { rateLimited } from '../platform/rate-limit.js';
 import path from 'path';
 import { walkSourceDir, SourceFolderError } from '../exams/file-source.js';
@@ -69,24 +68,9 @@ export function settingsRoutes(): Router {
       waveSalesTaxId: process.env.WAVE_SALES_TAX_ID || '',
       isOnboarded: getConfig('onboarded') === 'true',
       demoMode: isDemoMode(),
-      // Which mailbox reminder emails are sent from, and whether each
-      // provider has actually been connected.
-      emailProvider: emailProviderName(),
-      googleConnected: isConnected('google'),
+      // The Outlook / Microsoft 365 connection — mail send + calendar sync.
       microsoftConnected: isConnected('microsoft'),
     });
-  });
-
-  // ── POST /api/settings/email-provider — choose the reminder mailbox ──
-  router.post('/email-provider', (req: Request, res: Response): void => {
-    const { provider } = req.body;
-    if (provider !== 'google' && provider !== 'microsoft') {
-      res.status(400).json({ error: 'Provider must be "google" or "microsoft".' });
-      return;
-    }
-
-    updateEnvConfig({ EMAIL_PROVIDER: provider });
-    res.json({ success: true, provider });
   });
 
   // ── POST /api/settings/validate-claude-key — Test a Claude API key ──

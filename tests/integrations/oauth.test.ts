@@ -9,10 +9,9 @@ import {
 import { makeCallbackRouter } from '../../server/integrations/oauth/callback.js';
 
 /**
- * The pieces the Google, Wave and Microsoft OAuth flows now share (audit
- * P2-25). The full flows are still exercised end to end in google.test.ts,
- * microsoft.test.ts and wave-oauth.test.ts; this covers the extracted seam
- * directly.
+ * The pieces the Wave and Microsoft OAuth flows share (audit P2-25). The
+ * full flows are still exercised end to end in microsoft.test.ts and
+ * wave-oauth.test.ts; this covers the extracted seam directly.
  */
 
 describe('oauth state store', () => {

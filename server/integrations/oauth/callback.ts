@@ -7,23 +7,23 @@ import { escapeHtml } from '../../platform/escape.js';
  *
  * It cannot be session-authenticated: the session cookie is
  * `sameSite: strict`, so the browser does not send it on the top-level
- * navigation back from accounts.google.com / api.waveapps.com. The
+ * navigation back from login.microsoftonline.com / api.waveapps.com. The
  * single-use `state` secret protects it instead — which is what state is
  * for — and every other OAuth route stays behind the normal auth gate.
  *
- * Google, Wave and Microsoft differ only in their `buildAuthorizeUrl` /
+ * Wave and Microsoft differ only in their `buildAuthorizeUrl` /
  * `exchange` and the error class they throw; everything below — state
  * handling, the result page, the status codes — was byte-for-byte
  * identical between the route files (audit P2-25).
  */
 
 export interface CallbackProvider {
-  /** Display name, e.g. "Google" or "Microsoft". */
+  /** Display name, e.g. "Wave" or "Microsoft". */
   name: string;
   /**
    * Exchanges the callback's `code` for tokens and stores them. `state`
    * carries whatever `issueState` stashed — the PKCE `verifier` for the
-   * Microsoft public-client flow; unused by Google and Wave.
+   * Microsoft public-client flow; unused by Wave.
    */
   exchange: (code: string, state: StateData) => Promise<void>;
   /** Turns a thrown exchange error into a user-facing message. */

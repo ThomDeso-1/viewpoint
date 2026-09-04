@@ -13,15 +13,15 @@ import {
 
 /**
  * A local stand-in for every external service the app talks to:
- * Anthropic, Wave, Google OAuth, Gmail send, Google Calendar, and
- * Microsoft OAuth + Graph send (the Outlook alternative).
+ * Anthropic, Wave, and the Microsoft identity platform + Graph (Outlook
+ * mail send and the appointment calendar).
  *
  * The app's own clients are unmodified — they make the same requests
  * they would in production and parse the same response shapes. Only the
- * base URLs move (see server/services/endpoints.ts), so the GraphQL
- * parsing, MIME decoding, OAuth exchange, and error handling all still
- * get exercised. A mock that bypassed those would not surface the bugs
- * that live in them.
+ * base URLs move (see server/platform/endpoints.ts), so the GraphQL
+ * parsing, OAuth exchange, delta-sync and error handling all still get
+ * exercised. A mock that bypassed those would not surface the bugs that
+ * live in them.
  *
  * Everything sent *to* this server is captured and shown at
  * http://localhost:4000 — the invoices "raised" and emails "sent" are
@@ -298,52 +298,7 @@ app.post('/wave/graphql', (req: Request, res: Response) => {
   return res.json({ errors: [{ message: 'Demo mock does not implement this query.' }] });
 });
 
-// ── Google OAuth ──
-
-app.get('/google/oauth/authorize', (req: Request, res: Response) => {
-  const redirectUri = String(req.query.redirect_uri ?? '');
-  const state = String(req.query.state ?? '');
-  log('google', 'consent screen (auto-approved)');
-
-  // No consent UI: bounce straight back with a code, so the app's real
-  // callback and token-exchange path still runs.
-  const url = new URL(redirectUri);
-  url.searchParams.set('code', 'demo-auth-code');
-  url.searchParams.set('state', state);
-  res.redirect(url.toString());
-});
-
-app.post('/google/oauth/token', (req: Request, res: Response) => {
-  const grant = req.body?.grant_type;
-  log('google', `token exchange (${grant})`);
-  res.json({
-    access_token: `demo-access-${Date.now()}`,
-    refresh_token: 'demo-refresh-token',
-    expires_in: 3600,
-    scope: 'gmail.readonly gmail.send calendar.events',
-    token_type: 'Bearer',
-  });
-});
-
-app.get('/google/oauth/userinfo', (_req: Request, res: Response) => {
-  res.json({ email: 'reception@viewpoint-demo.example.com' });
-});
-
-// ── Gmail (send only — the app no longer reads the inbox) ──
-
-app.post('/gmail/v1/users/me/messages/send', (req: Request, res: Response) => {
-  const raw = Buffer.from(String(req.body?.raw ?? ''), 'base64url').toString('utf-8');
-  const to = /^To: (.*)$/m.exec(raw)?.[1] ?? 'unknown';
-  const subject = /^Subject: (.*)$/m.exec(raw)?.[1] ?? '(no subject)';
-  const body = raw.split('\r\n\r\n').slice(1).join('\r\n\r\n');
-
-  sentEmails.push({ at: new Date().toISOString(), to, subject, body });
-  log('gmail', `send → ${to}`);
-
-  res.json({ id: `demo-sent-${sentEmails.length}`, threadId: 'demo-thread-sent' });
-});
-
-// ── Microsoft OAuth + Graph (Outlook send alternative) ──
+// ── Microsoft OAuth + Graph (Outlook — mail send + calendar) ──
 
 app.get('/microsoft/oauth/authorize', (req: Request, res: Response) => {
   const redirectUri = String(req.query.redirect_uri ?? '');
@@ -387,29 +342,7 @@ app.post('/graph/v1.0/me/sendMail', (req: Request, res: Response) => {
   res.status(202).end();
 });
 
-// ── Google Calendar ──
-
-app.get('/calendar/v3/calendars/:calendarId/events', (_req: Request, res: Response) => {
-  log('calendar', 'list events');
-
-  res.json({
-    items: PEOPLE.map((person: DemoPerson, i: number) => {
-      const start = appointmentFor(person);
-      return {
-        id: `demo-event-${i + 1}`,
-        summary: `Eye exam — ${person.name}`,
-        description: person.reason,
-        location: '123 Demo Street, Toronto',
-        status: 'confirmed',
-        start: { dateTime: start.toISOString() },
-        end: { dateTime: new Date(start.getTime() + 30 * 60_000).toISOString() },
-        attendees: [{ email: person.email }],
-      };
-    }),
-  });
-});
-
-// ── Microsoft Graph calendar (Outlook — the Phase 1 calendar backend) ──
+// ── Microsoft Graph calendar (Outlook — the appointment calendar) ──
 
 interface MsEvent {
   id: string;
@@ -629,7 +562,7 @@ app.get('/', (_req: Request, res: Response) => {
 </style></head>
 <body>
   <h1>Demo services</h1>
-  <p class="sub">Standing in for Anthropic, Wave, Gmail send and Google Calendar.
+  <p class="sub">Standing in for Anthropic, Wave and Microsoft Graph (Outlook mail + calendar).
      Nothing here leaves your machine. Refreshes every 10s.</p>
 
   <h2>Emails "sent" (${sentEmails.length})</h2>
@@ -647,6 +580,6 @@ app.get('/', (_req: Request, res: Response) => {
 
 app.listen(PORT, () => {
   console.log(`\n  Demo services listening on http://localhost:${PORT}`);
-  console.log('  Standing in for: Anthropic · Wave · Google OAuth · Gmail send · Calendar · Microsoft Graph');
+  console.log('  Standing in for: Anthropic · Wave · Microsoft identity + Graph (mail + calendar)');
   console.log(`  Captured invoices and emails: http://localhost:${PORT}\n`);
 });

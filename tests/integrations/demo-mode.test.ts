@@ -28,11 +28,6 @@ describe('demo mode', () => {
     'waveGraphql',
     'waveAuthorize',
     'waveToken',
-    'googleAuthorize',
-    'googleToken',
-    'googleUserinfo',
-    'gmailBase',
-    'calendarBase',
     'microsoftAuthorize',
     'microsoftToken',
     'graphBase',
@@ -51,7 +46,7 @@ describe('demo mode', () => {
 
     expect(endpoints.endpoint('anthropicMessages')).toBe('https://api.anthropic.com/v1/messages');
     expect(endpoints.endpoint('waveGraphql')).toBe('https://gql.waveapps.com/graphql/public');
-    expect(endpoints.endpoint('gmailBase')).toContain('gmail.googleapis.com');
+    expect(endpoints.endpoint('graphBase')).toContain('graph.microsoft.com');
   });
 
   it('redirects every endpoint when on — none left pointing outward', () => {
@@ -73,7 +68,7 @@ describe('demo mode', () => {
     process.env.DEMO_MODE = '1';
     process.env.DEMO_API_BASE = 'http://localhost:4000/';
 
-    expect(endpoints.endpoint('gmailBase')).toBe('http://localhost:4000/gmail/v1/users/me');
+    expect(endpoints.endpoint('graphBase')).toBe('http://localhost:4000/graph/v1.0');
   });
 
   it.each([['0'], ['false'], [''], ['yes'], ['on']])(

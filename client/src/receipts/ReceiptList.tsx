@@ -94,7 +94,7 @@ export function ReceiptList() {
       {/* Demo mode — must be impossible to mistake for the real thing */}
       {settings?.demoMode && (
         <div className="banner banner-demo">
-          <strong>Demo mode.</strong> Claude, Wave and Google are local fakes — nothing is
+          <strong>Demo mode.</strong> Claude, Wave and Outlook are local fakes — nothing is
           sent to anyone and no invoice is real.{' '}
           <a href="http://localhost:4000" target="_blank" rel="noreferrer">
             See what they captured

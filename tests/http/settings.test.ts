@@ -277,30 +277,12 @@ describe('settings: health banner', () => {
     expect(res.body.waveHealthy).toBe(false);
   });
 
-  describe('reminder email provider', () => {
-    afterEach(() => {
-      delete process.env.EMAIL_PROVIDER;
-    });
-
-    it('defaults to google and reports connection state', async () => {
+  describe('Outlook connection state', () => {
+    it('reports the Microsoft connection as not set up on a fresh install', async () => {
       const res = await request(ctx.app).get('/api/settings');
-      expect(res.body.emailProvider).toBe('google');
-      expect(res.body.googleConnected).toBe(false);
       expect(res.body.microsoftConnected).toBe(false);
-    });
-
-    it('rejects an unknown provider', async () => {
-      const res = await request(ctx.app).post('/api/settings/email-provider').send({ provider: 'yahoo' });
-      expect(res.status).toBe(400);
-    });
-
-    it('persists the choice and reflects it back', async () => {
-      const res = await request(ctx.app).post('/api/settings/email-provider').send({ provider: 'microsoft' });
-      expect(res.status).toBe(200);
-      expect(process.env.EMAIL_PROVIDER).toBe('microsoft');
-
-      const settings = await request(ctx.app).get('/api/settings');
-      expect(settings.body.emailProvider).toBe('microsoft');
+      expect(res.body).not.toHaveProperty('emailProvider');
+      expect(res.body).not.toHaveProperty('googleConnected');
     });
   });
 });

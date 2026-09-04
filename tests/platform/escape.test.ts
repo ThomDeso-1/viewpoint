@@ -2,10 +2,10 @@ import { describe, it, expect } from 'vitest';
 import { escapeHtml, escapeXml } from '../../server/platform/escape.js';
 
 /**
- * One escaper, replacing the three that had drifted (`hcv-soap.ts`,
- * `routes/google.ts`, `routes/wave-oauth.ts`). The single intended
- * difference: `'` becomes `&#39;` for HTML (portable) and `&apos;` for
- * XML (valid there, not in HTML 4).
+ * One escaper, replacing the three that had drifted (`hcv-soap.ts` and the
+ * OAuth callback result pages). The single intended difference: `'`
+ * becomes `&#39;` for HTML (portable) and `&apos;` for XML (valid there,
+ * not in HTML 4).
  */
 describe('escape', () => {
   it('escapes the five markup-significant characters for HTML', () => {
@@ -17,8 +17,8 @@ describe('escape', () => {
   });
 
   it('leaves ordinary text untouched', () => {
-    expect(escapeHtml('Google connected. Close this tab.')).toBe(
-      'Google connected. Close this tab.',
+    expect(escapeHtml('Microsoft connected. Close this tab.')).toBe(
+      'Microsoft connected. Close this tab.',
     );
   });
 

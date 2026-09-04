@@ -1,13 +1,11 @@
 import { graphFetch, graphJson } from './client.js';
 
 /**
- * The Outlook / Microsoft 365 calendar — the app's appointment calendar
- * from Phase 1 on.
+ * The Outlook / Microsoft 365 calendar — the app's appointment calendar.
  *
- * Mirrors the surface of the (Phase 3 — soon-deleted) Google client in
- * `integrations/google/calendar.ts`: `listEvents` / `getEvent` /
- * `createEvent` / `updateEvent` / `deleteEvent` / `matchEvent`, plus a
- * `deltaSync` the poller uses to pull Outlook-side changes cheaply.
+ * `listEvents` / `getEvent` / `createEvent` / `updateEvent` / `deleteEvent`
+ * / `matchEvent`, plus a `deltaSync` the poller uses to pull Outlook-side
+ * changes cheaply.
  *
  * Times are handled explicitly rather than relying on the mailbox's
  * default zone: reads ask Graph for UTC (`Prefer: outlook.timezone`),
@@ -347,8 +345,7 @@ export async function deltaSync(deltaLink?: string | null): Promise<DeltaResult>
  * Matches on start time within a tolerance, then prefers an event whose
  * attendees or title mention the patient. Returns undefined rather than
  * guessing when nothing lines up — a wrong match attaches the appointment
- * to the wrong person. (Copied from the Google client; the shape is the
- * same and that file goes away in Phase 3.)
+ * to the wrong person.
  */
 export function matchEvent(
   events: CalendarEvent[],

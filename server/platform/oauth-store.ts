@@ -4,7 +4,7 @@ import { encrypt, decrypt, decryptOptional } from './crypto.js';
 import { audit } from './audit.js';
 
 /**
- * Encrypted storage for OAuth tokens, shared by Google and Wave.
+ * Encrypted storage for OAuth tokens, shared by Wave and Microsoft.
  *
  * Deliberately not `.env` like the other credentials: these rotate on
  * their own (Wave access tokens last two hours), and rewriting the env

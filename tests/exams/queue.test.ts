@@ -76,12 +76,7 @@ describe('exams queue', () => {
     patients = await import('../../server/exams/patients.js');
     store = await import('../../server/platform/oauth-store.js');
 
-    store.saveTokens('google', {
-      accessToken: 'google-token',
-      expiresAt: new Date(Date.now() + 3_600_000),
-    });
-    // The calendar backend is Outlook from Phase 1 on; the Gmail token
-    // above stays for the reminder-email path (default EMAIL_PROVIDER).
+    // Outlook is the calendar + reminder-email backend.
     store.saveTokens('microsoft', {
       accessToken: 'ms-token',
       expiresAt: new Date(Date.now() + 3_600_000),
@@ -559,19 +554,18 @@ describe('exams queue', () => {
 
       await queue.approveExamRequest(row.id);
 
-      mock.mockResolvedValueOnce(jsonResponse(200, { id: 'sent-1' }));
+      mock.mockResolvedValueOnce(new Response(null, { status: 202 })); // Graph sendMail
       expect(await queue.sendDueReminders()).toBe(1);
 
       const reminders = await import('../../server/exams/reminders.js');
       const reminder = reminders.findForAppointment(row.appointment_id!)!;
       expect(reminder.status).toBe('sent');
-      expect(reminder.provider_message_id).toBe('sent-1');
+      expect(reminder.provider_message_id).toMatch(/^graph-/);
 
-      const sendCall = mock.mock.calls.find((c) => String(c[0]).includes('/messages/send'))!;
+      const sendCall = mock.mock.calls.find((c) => String(c[0]).includes('/me/sendMail'))!;
       const payload = JSON.parse((sendCall[1] as RequestInit).body as string);
-      const mime = Buffer.from(payload.raw, 'base64url').toString();
-      expect(mime).toContain('To: ada@example.com');
-      expect(mime).toContain('reminder');
+      expect(payload.message.toRecipients[0].emailAddress.address).toBe('ada@example.com');
+      expect(payload.message.subject.toLowerCase()).toContain('reminder');
     });
 
     it('does not send the same reminder twice', async () => {

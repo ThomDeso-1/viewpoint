@@ -138,9 +138,7 @@ export interface Settings {
   waveAnchorAccountId: string;
   waveSalesTaxId: string;
   isOnboarded: boolean;
-  /** Which mailbox reminder emails send from, and each provider's connection state. */
-  emailProvider: 'google' | 'microsoft';
-  googleConnected: boolean;
+  /** Whether the Outlook / Microsoft 365 connection (mail + calendar) is set up. */
   microsoftConnected: boolean;
 }
 
@@ -534,33 +532,6 @@ export function checkAppointmentEligibility(id: string, force = false): Promise<
   });
 }
 
-// ── Google connection ──
-
-export interface GoogleStatus {
-  configured: boolean;
-  connected: boolean;
-  redirectUri: string;
-  accountLabel: string | null;
-  scope: string | null;
-  expiresAt: string | null;
-}
-
-export function getGoogleStatus(): Promise<GoogleStatus> {
-  return request('/google/status');
-}
-
-export function saveGoogleCredentials(body: {
-  clientId: string;
-  clientSecret: string;
-  calendarId?: string;
-}): Promise<{ success: boolean; redirectUri: string }> {
-  return request('/google/credentials', { method: 'POST', body: JSON.stringify(body) });
-}
-
-export function disconnectGoogle(): Promise<{ success: boolean }> {
-  return request('/google/disconnect', { method: 'POST' });
-}
-
 // ── Microsoft connection (Outlook mail + calendar) ──
 
 export interface MicrosoftStatus {
@@ -586,15 +557,6 @@ export function saveMicrosoftCredentials(body: {
 
 export function disconnectMicrosoft(): Promise<{ success: boolean }> {
   return request('/microsoft/disconnect', { method: 'POST' });
-}
-
-export function setEmailProvider(
-  provider: 'google' | 'microsoft',
-): Promise<{ success: boolean; provider: string }> {
-  return request('/settings/email-provider', {
-    method: 'POST',
-    body: JSON.stringify({ provider }),
-  });
 }
 
 // ── Invoice line items ──

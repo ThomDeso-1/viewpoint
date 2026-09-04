@@ -1,7 +1,7 @@
 import { v4 as uuid } from 'uuid';
 import { getDb } from '../db/db.js';
 import type { ReminderRow, ReminderChannelName, AppointmentRow, PatientRow } from './types.js';
-import { getEmailProvider } from '../integrations/email/index.js';
+import { sendMail } from '../integrations/microsoft/graph.js';
 import { audit } from '../platform/audit.js';
 import { applyFailure } from '../platform/failure.js';
 import { DEFAULT_MAX_RETRIES } from '../platform/backoff.js';
@@ -9,10 +9,10 @@ import { DEFAULT_MAX_RETRIES } from '../platform/backoff.js';
 /**
  * Appointment reminders.
  *
- * Email is the only channel today — sent through whichever provider
- * `EMAIL_PROVIDER` selects (see `integrations/email/`) — but it sits behind
- * a ReminderChannel interface so adding SMS later is a new implementation
- * rather than a change to the queue that drives it.
+ * Email is the only channel today — sent from the connected Outlook /
+ * Microsoft 365 mailbox via Graph — but it sits behind a ReminderChannel
+ * interface so adding SMS later is a new implementation rather than a
+ * change to the queue that drives it.
  */
 
 export interface ReminderContext {
@@ -35,7 +35,7 @@ export class EmailReminderChannel implements ReminderChannel {
       throw new Error('Patient has no email address on file.');
     }
 
-    return getEmailProvider().send({
+    return sendMail({
       to: patient.email,
       subject: reminder.subject ?? 'Appointment reminder',
       body: reminder.body ?? '',

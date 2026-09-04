@@ -18,15 +18,11 @@ const CREDENTIAL_ENV_KEYS = [
   // the first test to trigger generation leaks its key into every later
   // test, which then reuses it instead of writing its own .env.
   'DATA_ENCRYPTION_KEY',
-  'GOOGLE_CLIENT_ID',
-  'GOOGLE_CLIENT_SECRET',
-  'GOOGLE_REDIRECT_URI',
-  'GOOGLE_CALENDAR_ID',
   'MICROSOFT_CLIENT_ID',
   'MICROSOFT_CLIENT_SECRET',
   'MICROSOFT_REDIRECT_URI',
   'MICROSOFT_TENANT',
-  'EMAIL_PROVIDER',
+  'MICROSOFT_CALENDAR_ID',
   'EXAM_REQUEST_SOURCE_DIR',
   'EXAM_REQUEST_SOURCE_MAX_FILE_MB',
   'EXAM_REQUEST_MIN_CONFIDENCE',

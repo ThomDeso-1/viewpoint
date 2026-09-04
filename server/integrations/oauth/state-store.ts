@@ -1,8 +1,7 @@
 import crypto from 'crypto';
 
 /**
- * The pending-`state` map shared by the Google, Wave and Microsoft OAuth
- * flows.
+ * The pending-`state` map shared by the Wave and Microsoft OAuth flows.
  *
  * `state` is a single-use, short-lived secret minted when the consent
  * flow starts and checked when the provider redirects back. Rejecting a
@@ -11,7 +10,7 @@ import crypto from 'crypto';
  * session cookie the `sameSite: strict` policy withholds on that
  * top-level navigation.
  *
- * One map for all three is safe: tokens are 32 random bytes and matched
+ * One map for both is safe: tokens are 32 random bytes and matched
  * exactly, so the flows cannot collide. The Microsoft flow additionally
  * stashes its PKCE `code_verifier` here, keyed to the same `state`, so the
  * verifier never leaves the server.

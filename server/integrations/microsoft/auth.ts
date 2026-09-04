@@ -17,8 +17,8 @@ import { endpoint } from '../../platform/endpoints.js';
  * nothing to mis-copy from the portal ("Value" vs "Secret ID"), nothing
  * to expire, and no confidential-client / SPA platform mismatch.
  *
- * Like Google, Microsoft permits `http://localhost` redirect URIs, so the
- * one-time sign-in happens in a browser on the machine running the server.
+ * Microsoft permits `http://localhost` redirect URIs, so the one-time
+ * sign-in happens in a browser on the machine running the server.
  */
 
 export const MICROSOFT_SCOPES = [

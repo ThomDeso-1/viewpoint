@@ -15,7 +15,7 @@ import { PEOPLE, patientFileCsv } from './fixtures.js';
 import { v4 as uuid } from 'uuid';
 
 /**
- * Prepares a demo database: settings filled in, Google "connected",
+ * Prepares a demo database: settings filled in, Microsoft "connected",
  * a couple of patients on file, and some receipts already captured.
  *
  * Idempotent — safe to re-run. `npm run demo:reset` deletes the demo data
@@ -51,10 +51,6 @@ async function main(): Promise<void> {
     WAVE_SALES_TAX_ID: 'tax-hst',
     WAVE_INCOME_ACCOUNT_ID: 'acct-income-fees',
 
-    GOOGLE_CLIENT_ID: 'demo-google-client-id',
-    GOOGLE_CLIENT_SECRET: 'demo-google-client-secret',
-    GOOGLE_CALENDAR_ID: 'primary',
-
     // Public client — id only, no secret. The mock server auto-approves
     // the PKCE consent flow, so "Sign in with Microsoft" still works if you
     // disconnect and reconnect.
@@ -89,20 +85,10 @@ async function main(): Promise<void> {
   ).run();
   console.log('  ✓ onboarding marked complete');
 
-  // Pre-connect Google so the demo doesn't have to walk the consent flow
-  // (it still works if you disconnect and reconnect — the mock server
-  // auto-approves and the app's real OAuth code runs).
-  saveTokens('google', {
-    accessToken: 'demo-access-token',
-    refreshToken: 'demo-refresh-token',
-    expiresAt: new Date(Date.now() + 3600_000),
-    scope: 'gmail.send calendar.events',
-    accountLabel: 'reception@viewpoint-demo.example.com',
-  });
-  console.log('  ✓ Google connected (mock)');
-
-  // Microsoft pre-connected too, so the Outlook sign-in shows as done and
-  // the reminder path works with EMAIL_PROVIDER=microsoft.
+  // Pre-connect Microsoft so the demo doesn't have to walk the consent
+  // flow — mail send + calendar sync both work immediately. It still works
+  // if you disconnect and reconnect: the mock server auto-approves the
+  // PKCE flow and the app's real OAuth code runs.
   saveTokens('microsoft', {
     accessToken: 'demo-ms-access-token',
     refreshToken: 'demo-ms-refresh-token',

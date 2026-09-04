@@ -13,7 +13,6 @@ import { apiNotFound, errorHandler } from './platform/http.js';
 import { authRoutes } from './routes/auth.js';
 import { receiptRoutes } from './routes/receipts.js';
 import { settingsRoutes } from './routes/settings.js';
-import { googleRoutes, googleCallbackRoutes } from './routes/google.js';
 import { examsRoutes } from './routes/exams.js';
 import { waveOAuthRoutes, waveCallbackRoutes } from './routes/wave-oauth.js';
 import { microsoftRoutes, microsoftCallbackRoutes } from './routes/microsoft.js';
@@ -60,11 +59,10 @@ export function createApp(): Express {
 
   app.use('/api/auth', authRoutes());
 
-  // Ahead of the auth gate: Google redirects the browser here from
-  // accounts.google.com, and the sameSite=strict session cookie is not
+  // Ahead of the auth gate: the OAuth provider redirects the browser here
+  // from its own domain, and the sameSite=strict session cookie is not
   // sent on a cross-site navigation. Protected by its single-use `state`
-  // parameter instead — see routes/google.ts.
-  app.use('/api/google', googleCallbackRoutes());
+  // parameter instead — see integrations/oauth/callback.ts.
   app.use('/api/wave', waveCallbackRoutes());
   app.use('/api/microsoft', microsoftCallbackRoutes());
 
@@ -72,7 +70,6 @@ export function createApp(): Express {
 
   app.use('/api/receipts', receiptRoutes(storage));
   app.use('/api/settings', settingsRoutes());
-  app.use('/api/google', googleRoutes());
   app.use('/api/exams', examsRoutes());
   app.use('/api/wave', waveOAuthRoutes());
   app.use('/api/microsoft', microsoftRoutes());

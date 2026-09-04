@@ -25,8 +25,6 @@ function settings(overrides: Partial<Settings> = {}): Settings {
     waveAnchorAccountId: '',
     waveSalesTaxId: '',
     isOnboarded: true,
-    emailProvider: 'google',
-    googleConnected: false,
     microsoftConnected: false,
     ...overrides,
   };
@@ -45,7 +43,7 @@ describe('SetupChecklist', () => {
     renderChecklist(settings());
     expect(await screen.findByText(/finish setting up \(5 left\)/i)).toBeInTheDocument();
     expect(screen.getByText('Add your Claude API key')).toBeInTheDocument();
-    expect(screen.getByText('Connect a mailbox for reminder emails')).toBeInTheDocument();
+    expect(screen.getByText('Sign in with Microsoft for mail + calendar')).toBeInTheDocument();
   });
 
   it('counts a connected Outlook mailbox as done', async () => {
@@ -56,7 +54,7 @@ describe('SetupChecklist', () => {
   it('renders nothing once every step is done', async () => {
     api.getExamSettings.mockResolvedValue({ sourceFolder: '/files', invoicingReady: true } as any);
     const { container } = renderChecklist(
-      settings({ hasClaudeKey: true, hasWaveToken: true, googleConnected: true }),
+      settings({ hasClaudeKey: true, hasWaveToken: true, microsoftConnected: true }),
     );
     await waitFor(() => expect(container).toBeEmptyDOMElement());
   });
