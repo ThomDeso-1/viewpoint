@@ -511,8 +511,10 @@ export function checkPatientEligibility(
   });
 }
 
-export function getAppointments(): Promise<Appointment[]> {
-  return request('/exams/appointments');
+/** With a range, returns every appointment (any status) that starts within it; without, the upcoming non-cancelled ones. */
+export function getAppointments(from?: string, to?: string): Promise<Appointment[]> {
+  const qs = from && to ? `?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}` : '';
+  return request(`/exams/appointments${qs}`);
 }
 
 export function getCalendarSyncStatus(): Promise<CalendarSyncStatus> {

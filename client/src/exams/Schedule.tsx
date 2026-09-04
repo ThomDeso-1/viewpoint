@@ -1,56 +1,76 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import FullCalendar from '@fullcalendar/react';
+import dayGridPlugin from '@fullcalendar/daygrid';
+import timeGridPlugin from '@fullcalendar/timegrid';
+import listPlugin from '@fullcalendar/list';
+import interactionPlugin from '@fullcalendar/interaction';
+import type { DateClickArg } from '@fullcalendar/interaction';
+import type { DatesSetArg, EventClickArg, EventInput } from '@fullcalendar/core';
 import {
   getAppointments,
   getCalendarSyncStatus,
   syncCalendarNow,
-  cancelAppointment,
-  checkAppointmentEligibility,
   getPatients,
-  linkPatientToAppointment,
   type Appointment,
   type CalendarSyncStatus,
   type Patient,
 } from '../shared/api';
 import { useToast } from '../shared/Toast';
 import { AppNav } from '../shared/AppNav';
-import { AppointmentForm } from '../exams/AppointmentForm';
+import { AppointmentForm } from './AppointmentForm';
+import { AppointmentDetail } from './AppointmentDetail';
 
 /**
- * Upcoming appointments, mirrored from the Outlook / Microsoft 365 calendar.
- *
- * When the OHIP integration is on, each linked appointment also shows
- * whether coverage has been confirmed, with a button to re-check on the
- * day. With OHIP off, those surfaces are hidden.
+ * The Outlook / Microsoft 365 calendar, as a real month / week / day /
+ * agenda view (FullCalendar). Click a day to book; click an event for its
+ * detail and the actions that reach Outlook. Rescheduling is form-based —
+ * there is no drag.
  */
 export function Schedule({ ohipEnabled = false }: { ohipEnabled?: boolean }) {
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [rows, setRows] = useState<Appointment[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [syncStatus, setSyncStatus] = useState<CalendarSyncStatus | null>(null);
   const [syncing, setSyncing] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [checkingId, setCheckingId] = useState<string | null>(null);
-  const [adding, setAdding] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [cancellingId, setCancellingId] = useState<string | null>(null);
-  const [linkingId, setLinkingId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [mode, setMode] = useState<'closed' | 'create' | 'edit'>('closed');
+  const [createStart, setCreateStart] = useState<string>('');
+  // The visible window (set by FullCalendar's datesSet) and a bump-to-refetch key.
+  const [range, setRange] = useState<{ from: string; to: string } | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
   const { showToast } = useToast();
 
-  const load = async () => {
-    try {
-      const [rows, patientList, sync] = await Promise.all([
-        getAppointments(),
-        getPatients(),
-        getCalendarSyncStatus().catch(() => null),
-      ]);
-      setAppointments(rows);
-      setPatients(patientList);
-      setSyncStatus(sync);
-    } catch (err) {
-      showToast((err as Error).message, 'error');
-    } finally {
-      setLoading(false);
-    }
+  const initialView =
+    typeof window !== 'undefined' && window.innerWidth < 768 ? 'listWeek' : 'dayGridMonth';
+
+  useEffect(() => {
+    Promise.all([getPatients(), getCalendarSyncStatus().catch(() => null)])
+      .then(([p, s]) => {
+        setPatients(p);
+        setSyncStatus(s);
+      })
+      .catch((err) => showToast((err as Error).message, 'error'));
+  }, []);
+
+  useEffect(() => {
+    if (!range) return;
+    let live = true;
+    getAppointments(range.from, range.to)
+      .then((appts) => {
+        if (live) setRows(appts);
+      })
+      .catch((err) => showToast((err as Error).message, 'error'));
+    return () => {
+      live = false;
+    };
+  }, [range, reloadKey]);
+
+  const refetch = () => setReloadKey((k) => k + 1);
+  const reloadSyncStatus = () => getCalendarSyncStatus().then(setSyncStatus).catch(() => {});
+
+  const handleDatesSet = (arg: DatesSetArg) => {
+    setRange((prev) =>
+      prev?.from === arg.startStr && prev?.to === arg.endStr ? prev : { from: arg.startStr, to: arg.endStr },
+    );
   };
 
   const handleSyncNow = async () => {
@@ -62,7 +82,7 @@ export function Schedule({ ohipEnabled = false }: { ohipEnabled?: boolean }) {
         result.pulled > 0 ? `Synced — ${result.pulled} change(s) from Outlook.` : 'Already up to date.',
         'success',
       );
-      await load();
+      refetch();
     } catch (err) {
       showToast((err as Error).message, 'error');
     } finally {
@@ -70,262 +90,129 @@ export function Schedule({ ohipEnabled = false }: { ohipEnabled?: boolean }) {
     }
   };
 
-  const handleLink = async (appointmentId: string, patientId: string) => {
-    if (!patientId) return;
-    try {
-      await linkPatientToAppointment(appointmentId, patientId);
-      showToast('Patient linked.', 'success');
-      setLinkingId(null);
-      await load();
-    } catch (err) {
-      showToast((err as Error).message, 'error');
-    }
+  const openCreate = (start?: string) => {
+    setSelectedId(null);
+    setCreateStart(start ?? '');
+    setMode('create');
   };
 
-  const handleCancelAppointment = async (appointment: Appointment) => {
-    const who = appointment.patient?.full_name ?? appointment.title ?? 'this appointment';
-    if (!window.confirm(`Cancel ${who}? Outlook will show it as cancelled.`)) return;
-    setCancellingId(appointment.id);
-    try {
-      await cancelAppointment(appointment.id);
-      showToast('Appointment cancelled.', 'success');
-      await load();
-    } catch (err) {
-      showToast((err as Error).message, 'error');
-    } finally {
-      setCancellingId(null);
-    }
+  const handleDateClick = (info: DateClickArg) => {
+    const d = new Date(info.date);
+    if (info.allDay) d.setHours(9, 0, 0, 0); // month view has no time — default to 9am
+    openCreate(d.toISOString());
   };
 
-  useEffect(() => {
-    load();
-  }, []);
-
-  const handleCheck = async (appointment: Appointment) => {
-    setCheckingId(appointment.id);
-    try {
-      const result = await checkAppointmentEligibility(appointment.id);
-      const suffix = result.reused ? ' (from a recent check)' : '';
-      showToast(
-        result.error
-          ? `Check failed: ${result.error}`
-          : result.isEligible
-            ? `Coverage confirmed.${suffix}`
-            : `Not covered: ${result.responseDescription ?? result.responseCode}${suffix}`,
-        result.error || !result.isEligible ? 'error' : 'success',
-      );
-      await load();
-    } catch (err) {
-      showToast((err as Error).message, 'error');
-    } finally {
-      setCheckingId(null);
-    }
+  const handleEventClick = (info: EventClickArg) => {
+    setMode('closed');
+    setSelectedId(info.event.id);
   };
 
-  if (loading) {
-    return (
-      <div className="loading-screen">
-        <div className="loading-spinner" />
-      </div>
-    );
-  }
-
-  const groups = groupByDay(appointments);
+  const selected = selectedId ? rows.find((r) => r.id === selectedId) ?? null : null;
 
   return (
     <>
       <AppNav />
-      <div className="page">
-      <header className="screen-header">
-        <h1 className="screen-title">Schedule</h1>
-        <div className="screen-actions">
-          <button className="primary" onClick={() => setAdding((v) => !v)}>
-            {adding ? 'Close' : 'Add'}
-          </button>
-        </div>
-      </header>
+      <div className="page schedule-page">
+        <header className="screen-header">
+          <h1 className="screen-title">Schedule</h1>
+          <div className="screen-actions">
+            <button className="primary" onClick={() => (mode === 'create' ? setMode('closed') : openCreate())}>
+              {mode === 'create' ? 'Close' : 'Add'}
+            </button>
+          </div>
+        </header>
 
-      <div className="schedule-sync">
-        <span className="muted">
-          {syncStatus?.connected ? (
-            <>Synced with Outlook · {formatSyncAge(syncStatus.lastSyncedAt)}</>
-          ) : (
-            <>Not connected to Outlook — sign in from Settings.</>
-          )}
-        </span>
-        {syncStatus?.connected && (
-          <button className="link-button" onClick={handleSyncNow} disabled={syncing}>
-            {syncing ? 'Syncing…' : 'Sync now'}
-          </button>
-        )}
-      </div>
-
-      {adding && (
-        <AppointmentForm
-          patients={patients}
-          onSaved={() => {
-            setAdding(false);
-            load();
-          }}
-          onCancel={() => setAdding(false)}
-        />
-      )}
-
-      {appointments.length === 0 ? (
-        <p className="empty-state">
-          No upcoming appointments. These mirror your Outlook calendar — sign in from Settings if you
-          haven't yet.
-        </p>
-      ) : (
-        groups.map(([day, items]) => (
-          <section key={day} className="schedule-day">
-            <h2 className="month-header">{day}</h2>
-            {items.map((appointment) =>
-              editingId === appointment.id ? (
-                <AppointmentForm
-                  key={appointment.id}
-                  patients={patients}
-                  appointment={appointment}
-                  onSaved={() => {
-                    setEditingId(null);
-                    load();
-                  }}
-                  onCancel={() => setEditingId(null)}
-                />
-              ) : (
-                <div key={appointment.id} className="appointment-row">
-                  <div className="appointment-time">{formatTime(appointment.starts_at)}</div>
-
-                  <div className="appointment-body">
-                    <div className="appointment-title">
-                      {appointment.patient ? (
-                        <Link to={`/patients/${appointment.patient.id}`}>{appointment.patient.full_name}</Link>
-                      ) : (
-                        (appointment.title ?? 'Untitled appointment')
-                      )}
-                      {appointment.sync_state !== 'synced' && (
-                        <span className="tag tag-warn" title="Not yet saved to Outlook — will retry">
-                          Not synced
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="appointment-meta">
-                      {appointment.patient ? (
-                        ohipEnabled ? (
-                          <EligibilityTag appointment={appointment} />
-                        ) : null
-                      ) : linkingId === appointment.id ? (
-                        <select
-                          className="wizard-select"
-                          aria-label="Link a patient"
-                          autoFocus
-                          defaultValue=""
-                          onChange={(e) => handleLink(appointment.id, e.target.value)}
-                        >
-                          <option value="">Choose a patient…</option>
-                          {patients.map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {p.full_name}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        <>
-                          <span className="muted">No patient linked</span>{' '}
-                          <button className="link-button" onClick={() => setLinkingId(appointment.id)}>
-                            Link a patient
-                          </button>
-                        </>
-                      )}
-                    </div>
-
-                    <div className="appointment-actions">
-                      {appointment.is_recurring ? (
-                        <span className="muted">Recurring — edit in Outlook</span>
-                      ) : (
-                        <>
-                          <button className="link-button" onClick={() => setEditingId(appointment.id)}>
-                            Edit
-                          </button>
-                          <button
-                            className="link-button"
-                            onClick={() => handleCancelAppointment(appointment)}
-                            disabled={cancellingId === appointment.id}
-                          >
-                            {cancellingId === appointment.id ? 'Cancelling…' : 'Cancel'}
-                          </button>
-                        </>
-                      )}
-                      {appointment.web_link && (
-                        <a className="link-button" href={appointment.web_link} target="_blank" rel="noreferrer">
-                          Open in Outlook
-                        </a>
-                      )}
-                    </div>
-                  </div>
-
-                  {ohipEnabled && appointment.patient && (
-                    <button
-                      className="secondary"
-                      onClick={() => handleCheck(appointment)}
-                      disabled={checkingId === appointment.id}
-                    >
-                      {checkingId === appointment.id ? 'Checking…' : 'Check OHIP'}
-                    </button>
-                  )}
-                </div>
-              ),
+        <div className="schedule-sync">
+          <span className="muted">
+            {syncStatus?.connected ? (
+              <>Synced with Outlook · {formatSyncAge(syncStatus.lastSyncedAt)}</>
+            ) : (
+              <>Not connected to Outlook — sign in from Settings.</>
             )}
-          </section>
-        ))
-      )}
+          </span>
+          {syncStatus?.connected && (
+            <button className="link-button" onClick={handleSyncNow} disabled={syncing}>
+              {syncing ? 'Syncing…' : 'Sync now'}
+            </button>
+          )}
+        </div>
+
+        <div className="schedule-calendar">
+          <FullCalendar
+            plugins={[dayGridPlugin, timeGridPlugin, listPlugin, interactionPlugin]}
+            initialView={initialView}
+            headerToolbar={{
+              left: 'prev,next today',
+              center: 'title',
+              right: 'dayGridMonth,timeGridWeek,timeGridDay,listWeek',
+            }}
+            buttonText={{ today: 'Today', month: 'Month', week: 'Week', day: 'Day', list: 'Agenda' }}
+            firstDay={1}
+            height="auto"
+            nowIndicator
+            displayEventEnd
+            eventTimeFormat={{ hour: 'numeric', minute: '2-digit', meridiem: 'short' }}
+            events={rows.map(toFcEvent)}
+            datesSet={handleDatesSet}
+            dateClick={handleDateClick}
+            eventClick={handleEventClick}
+            noEventsContent="No appointments in this range."
+          />
+        </div>
+
+        {mode === 'create' && (
+          <AppointmentForm
+            patients={patients}
+            defaultStartIso={createStart || undefined}
+            onSaved={() => {
+              setMode('closed');
+              refetch();
+              reloadSyncStatus();
+            }}
+            onCancel={() => setMode('closed')}
+          />
+        )}
+
+        {mode === 'edit' && selected && (
+          <AppointmentForm
+            patients={patients}
+            appointment={selected}
+            onSaved={() => {
+              setMode('closed');
+              refetch();
+            }}
+            onCancel={() => setMode('closed')}
+          />
+        )}
+
+        {mode === 'closed' && selected && (
+          <AppointmentDetail
+            appointment={selected}
+            patients={patients}
+            ohipEnabled={ohipEnabled}
+            onEdit={() => setMode('edit')}
+            onChanged={refetch}
+            onClose={() => setSelectedId(null)}
+          />
+        )}
       </div>
     </>
   );
 }
 
-function EligibilityTag({ appointment }: { appointment: Appointment }) {
-  const check = appointment.eligibility;
-
-  if (!check) return <span className="muted">OHIP not checked</span>;
-  if (check.error) return <span className="eligibility eligibility-unknown">Check failed</span>;
-
-  return (
-    <span className={`eligibility ${check.is_eligible ? 'eligibility-ok' : 'eligibility-bad'}`}>
-      {check.is_eligible ? 'OHIP covered' : `Not covered (${check.response_code})`}
-      {check.mode === 'mock' && <span className="tag tag-mock">mock</span>}
-    </span>
-  );
-}
-
-/** Groups appointments under a date heading, preserving their order. */
-function groupByDay(appointments: Appointment[]): [string, Appointment[]][] {
-  const groups = new Map<string, Appointment[]>();
-
-  for (const appointment of appointments) {
-    const date = new Date(appointment.starts_at);
-    const key = Number.isNaN(date.getTime())
-      ? 'Unscheduled'
-      : date.toLocaleDateString('en-CA', {
-          weekday: 'long',
-          month: 'long',
-          day: 'numeric',
-          year: 'numeric',
-        });
-
-    const existing = groups.get(key);
-    if (existing) existing.push(appointment);
-    else groups.set(key, [appointment]);
-  }
-
-  return [...groups.entries()];
-}
-
-function formatTime(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return '—';
-  return date.toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit' });
+function toFcEvent(a: Appointment): EventInput {
+  return {
+    id: a.id,
+    title: a.patient?.full_name ?? a.title ?? 'Appointment',
+    start: a.starts_at,
+    end: a.ends_at ?? undefined,
+    editable: false,
+    classNames: [
+      a.status === 'cancelled' && 'fc-appt-cancelled',
+      a.is_recurring === 1 && 'fc-appt-recurring',
+      a.sync_state !== 'synced' && 'fc-appt-unsynced',
+    ].filter(Boolean) as string[],
+  };
 }
 
 /** "updated 3 min ago" / "updated just now" / "never synced". */

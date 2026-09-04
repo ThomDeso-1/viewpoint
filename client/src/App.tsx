@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, lazy, Suspense } from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { getAuthStatus, type AuthStatus } from './shared/api';
 import { Login } from './auth/Login';
@@ -9,10 +9,13 @@ import { ReceiptReview } from './receipts/ReceiptReview';
 import { BatchReview } from './receipts/BatchReview';
 import { Settings } from './receipts/Settings';
 import { Inbox } from './exams/Inbox';
-import { Schedule } from './exams/Schedule';
 import { PatientDetail } from './exams/PatientDetail';
 import { Patients } from './exams/Patients';
 import { AuditLog } from './exams/AuditLog';
+
+// Split off the Schedule screen — it pulls in FullCalendar (~90 kB gzip),
+// which no other screen needs and which most sessions never open.
+const Schedule = lazy(() => import('./exams/Schedule').then((m) => ({ default: m.Schedule })));
 
 /**
  * Where a route guard should send an incomplete/unauthenticated session,
@@ -119,7 +122,15 @@ export function App() {
       />
       <Route
         path="/schedule"
-        element={authed ? <Schedule ohipEnabled={ohipEnabled} /> : <Navigate to={gateTarget(auth)} replace />}
+        element={
+          authed ? (
+            <Suspense fallback={<div className="loading-screen"><div className="loading-spinner" /></div>}>
+              <Schedule ohipEnabled={ohipEnabled} />
+            </Suspense>
+          ) : (
+            <Navigate to={gateTarget(auth)} replace />
+          )
+        }
       />
       <Route path="/patients" element={authed ? <Patients /> : <Navigate to={gateTarget(auth)} replace />} />
       <Route

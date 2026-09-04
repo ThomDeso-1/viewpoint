@@ -6,6 +6,8 @@ interface Props {
   patients: Patient[];
   /** Present → edit that appointment; absent → create a new one. */
   appointment?: Appointment;
+  /** Create mode only: pre-fill the start (ISO instant, e.g. from a calendar day-click). */
+  defaultStartIso?: string;
   onSaved: () => void;
   onCancel: () => void;
 }
@@ -35,9 +37,15 @@ function initialDuration(appointment?: Appointment): number {
  * pushes straight to it (Phase 2). Recurring events are edited in Outlook
  * only — the Schedule doesn't offer this form for them.
  */
-export function AppointmentForm({ patients, appointment, onSaved, onCancel }: Props) {
+export function AppointmentForm({ patients, appointment, defaultStartIso, onSaved, onCancel }: Props) {
   const editing = !!appointment;
-  const [startsAt, setStartsAt] = useState(appointment ? toLocalInput(appointment.starts_at) : '');
+  const [startsAt, setStartsAt] = useState(
+    appointment
+      ? toLocalInput(appointment.starts_at)
+      : defaultStartIso
+        ? toLocalInput(defaultStartIso)
+        : '',
+  );
   const [duration, setDuration] = useState(initialDuration(appointment));
   const [title, setTitle] = useState(appointment?.title ?? '');
   const [location, setLocation] = useState(appointment?.location ?? '');

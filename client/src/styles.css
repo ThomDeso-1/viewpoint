@@ -1371,49 +1371,132 @@ img {
   margin-bottom: 16px;
 }
 
-.schedule-day {
-  margin-bottom: 24px;
-}
-
-.appointment-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 12px;
-  margin-bottom: 8px;
-}
-
-.appointment-time {
-  flex-shrink: 0;
-  width: 76px;
-  font-size: 14px;
-  font-weight: 700;
-}
-
-.appointment-body {
-  flex: 1;
-  min-width: 0;
-}
-.appointment-title {
-  font-size: 15px;
-  font-weight: 600;
-}
-.appointment-title a {
-  color: inherit;
-}
-.appointment-meta {
-  font-size: 13px;
-  margin-top: 2px;
-}
 .appointment-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
-  margin-top: 6px;
+  gap: 14px;
+  margin-top: 12px;
   font-size: 13px;
+}
+.link-danger {
+  color: var(--status-failed);
+}
+
+.appointment-detail-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+.appointment-detail-head h2 a {
+  color: inherit;
+}
+.appointment-detail-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0;
+}
+.appointment-detail-ohip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 10px 0;
+}
+
+/* ── FullCalendar theming — map its tokens onto the app's ── */
+
+.schedule-calendar {
+  margin-bottom: 16px;
+}
+
+.fc {
+  --fc-border-color: var(--border);
+  --fc-page-bg-color: var(--bg-card);
+  --fc-neutral-bg-color: var(--bg);
+  --fc-neutral-text-color: var(--text-secondary);
+  --fc-today-bg-color: rgba(37, 99, 235, 0.09);
+  --fc-event-bg-color: var(--accent);
+  --fc-event-border-color: var(--accent);
+  --fc-event-text-color: #fff;
+  --fc-list-event-hover-bg-color: var(--bg);
+  --fc-now-indicator-color: var(--status-failed);
+  font-size: 13px;
+}
+
+.fc .fc-toolbar.fc-header-toolbar {
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-bottom: 12px;
+}
+.fc .fc-toolbar-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+.fc .fc-button {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 5px 10px;
+  box-shadow: none;
+  text-transform: capitalize;
+}
+.fc .fc-button:hover {
+  background: var(--bg);
+}
+.fc .fc-button-primary:not(:disabled).fc-button-active,
+.fc .fc-button-primary:not(:disabled):active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.fc .fc-button:focus,
+.fc .fc-button-primary:focus {
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.35);
+}
+.fc .fc-daygrid-day-number,
+.fc .fc-col-header-cell-cushion {
+  color: var(--text-secondary);
+  text-decoration: none;
+}
+.fc .fc-daygrid-event,
+.fc .fc-timegrid-event {
+  cursor: pointer;
+  font-weight: 600;
+}
+.fc .fc-list-event:hover td {
+  cursor: pointer;
+}
+
+/* Event state: cancelled struck through, unsynced amber, recurring grey. */
+.fc-appt-cancelled {
+  opacity: 0.55;
+  text-decoration: line-through;
+}
+.fc-appt-unsynced {
+  --fc-event-bg-color: var(--status-attention);
+  --fc-event-border-color: var(--status-attention);
+}
+.fc-appt-recurring {
+  --fc-event-bg-color: var(--text-tertiary);
+  --fc-event-border-color: var(--text-tertiary);
+}
+.fc-appt-cancelled.fc-list-event td,
+.fc-appt-unsynced.fc-list-event .fc-list-event-dot {
+  border-color: var(--status-attention);
+}
+
+@media (max-width: 600px) {
+  .fc .fc-toolbar.fc-header-toolbar {
+    justify-content: center;
+  }
+  .fc .fc-toolbar-chunk {
+    display: flex;
+    justify-content: center;
+  }
 }
 
 /* ── Banners ── */
