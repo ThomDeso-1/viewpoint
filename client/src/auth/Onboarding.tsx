@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   validateClaudeKey,
@@ -7,6 +7,8 @@ import {
   saveWaveConnection,
   markOnboarded,
   saveOhipSettings,
+  getMicrosoftStatus,
+  type MicrosoftStatus,
 } from '../shared/api';
 
 interface Props {
@@ -21,22 +23,24 @@ interface WaveBusiness {
   isPersonal: boolean;
 }
 
-type OuterStep = 'claude' | 'wave' | 'ohip';
+type OuterStep = 'claude' | 'wave' | 'microsoft' | 'ohip';
 type WaveStage = 'token' | 'business';
 
 /**
- * First-run wizard. Four screens: password (done before this mounts),
- * Claude API key, Wave (token → business), then OHIP mode.
+ * First-run wizard. Screens: password (done before this mounts), Claude
+ * API key, Wave (token → business), Outlook / Microsoft 365, then OHIP
+ * mode.
  *
  * Deliberately short: it only captures what's needed to start working.
- * The finer Wave setup (expense/anchor accounts, sales tax) and OHIP
- * ministry credentials are done later in Settings, which has the full
- * forms — asking for them here was the biggest drop-off point.
+ * The finer Wave setup (expense/anchor accounts, sales tax), the full
+ * Microsoft app-registration form, and OHIP ministry credentials are done
+ * later in Settings, which has the full forms — asking for them here was
+ * the biggest drop-off point.
  */
 export function Onboarding({ onComplete, ohipEnabled = false }: Props) {
   const navigate = useNavigate();
   const [step, setStep] = useState<OuterStep>('claude');
-  const totalSteps = ohipEnabled ? 4 : 3;
+  const totalSteps = ohipEnabled ? 5 : 4;
 
   // ── Claude API key ──
   const [claudeKey, setClaudeKey] = useState('');
@@ -50,6 +54,27 @@ export function Onboarding({ onComplete, ohipEnabled = false }: Props) {
   const [waveSubmitting, setWaveSubmitting] = useState(false);
   const [businesses, setBusinesses] = useState<WaveBusiness[]>([]);
 
+  // ── Microsoft / Outlook ──
+  const [msStatus, setMsStatus] = useState<MicrosoftStatus | null>(null);
+
+  useEffect(() => {
+    if (step !== 'microsoft') return;
+    let live = true;
+    const load = () =>
+      Promise.resolve(getMicrosoftStatus())
+        .then((s) => {
+          if (live) setMsStatus(s ?? null);
+        })
+        .catch(() => {});
+    load();
+    // The sign-in link opens in a new tab; catch the operator coming back.
+    window.addEventListener('focus', load);
+    return () => {
+      live = false;
+      window.removeEventListener('focus', load);
+    };
+  }, [step]);
+
   // ── OHIP ──
   const [ohipError, setOhipError] = useState('');
   const [ohipSubmitting, setOhipSubmitting] = useState(false);
@@ -60,9 +85,14 @@ export function Onboarding({ onComplete, ohipEnabled = false }: Props) {
     navigate('/', { replace: true });
   };
 
-  // After Wave: collect the OHIP mode when the integration is on, otherwise
-  // the wizard is done.
+  // After Wave: connect Outlook next.
   const afterWave = () => {
+    setStep('microsoft');
+  };
+
+  // After Microsoft: collect the OHIP mode when the integration is on,
+  // otherwise the wizard is done.
+  const afterMicrosoft = () => {
     if (ohipEnabled) setStep('ohip');
     else void finish();
   };
@@ -267,9 +297,55 @@ export function Onboarding({ onComplete, ohipEnabled = false }: Props) {
           </>
         )}
 
-        {step === 'ohip' && (
+        {step === 'microsoft' && (
           <>
             <p className="wizard-steps">Step 4 of {totalSteps}</p>
+            <h1>Connect Outlook</h1>
+            <p className="auth-subtitle">
+              Sign in once to send appointment reminders from your mailbox and keep the Schedule in
+              sync with your Outlook calendar.
+            </p>
+
+            {msStatus?.connected ? (
+              <>
+                <p className="settings-help">
+                  Signed in{msStatus.accountLabel ? ` — ${msStatus.accountLabel}` : ''}.
+                </p>
+                <button className="auth-button" onClick={afterMicrosoft}>
+                  Continue
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="settings-help">
+                  Use a work or school Microsoft 365 account, not a personal outlook.com account —
+                  a personal account's sign-in expires every 24 hours instead of every 90 days.
+                </p>
+                <a
+                  className="auth-button"
+                  href="/api/microsoft/connect"
+                  target="_blank"
+                  rel="noopener"
+                  style={{ display: 'block', textAlign: 'center' }}
+                >
+                  Sign in with Microsoft
+                </a>
+                <p className="muted" style={{ marginTop: 8 }}>
+                  Opens in a new tab. Come back here when it's done — this page picks up the change
+                  on its own.
+                </p>
+              </>
+            )}
+
+            <button className="wizard-skip" onClick={afterMicrosoft}>
+              Skip for now — connect later in Settings
+            </button>
+          </>
+        )}
+
+        {step === 'ohip' && (
+          <>
+            <p className="wizard-steps">Step 5 of {totalSteps}</p>
             <h1>OHIP Validation</h1>
             <p className="auth-subtitle">
               Checks a patient's health card coverage automatically when a request comes in.

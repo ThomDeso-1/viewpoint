@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import type { ExamRequestExtraction } from '../exams/types.js';
 import { endpoint } from '../platform/endpoints.js';
+import { ApiError } from '../platform/api-error.js';
 
 /**
  * Claude API Service — server-side port of ClaudeAPIService.swift
@@ -44,19 +45,16 @@ export interface ExtractionResult {
   confidence: string; // "high" | "medium" | "low"
 }
 
-export class ClaudeAPIError extends Error {
-  code: string;
+export class ClaudeAPIError extends ApiError {
   retryAfter?: number;
 
   constructor(code: string, message: string, retryAfter?: number) {
-    super(message);
-    this.name = 'ClaudeAPIError';
-    this.code = code;
+    super('ClaudeAPIError', code, message);
     this.retryAfter = retryAfter;
   }
 
-  get isRetryable(): boolean {
-    return this.code === 'rate_limited' || this.code === 'server_error' || this.code === 'network_error';
+  override get isRetryable(): boolean {
+    return this.code === 'rate_limited' || super.isRetryable;
   }
 }
 

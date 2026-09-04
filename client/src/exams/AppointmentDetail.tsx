@@ -9,6 +9,7 @@ import {
   type Patient,
 } from '../shared/api';
 import { useToast } from '../shared/Toast';
+import { parseIsoDate } from '../shared/format';
 
 interface Props {
   appointment: Appointment;
@@ -193,8 +194,8 @@ export function EligibilityTag({ appointment }: { appointment: Appointment }) {
 }
 
 function formatRange(startsAt: string, endsAt: string | null): string {
-  const start = new Date(startsAt);
-  if (Number.isNaN(start.getTime())) return '—';
+  const start = parseIsoDate(startsAt);
+  if (!start) return '—';
   const date = start.toLocaleDateString('en-CA', {
     weekday: 'long',
     month: 'long',
@@ -202,8 +203,6 @@ function formatRange(startsAt: string, endsAt: string | null): string {
     year: 'numeric',
   });
   const t = (d: Date) => d.toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit' });
-  const end = endsAt ? new Date(endsAt) : null;
-  return end && !Number.isNaN(end.getTime())
-    ? `${date} · ${t(start)} – ${t(end)}`
-    : `${date} · ${t(start)}`;
+  const end = parseIsoDate(endsAt);
+  return end ? `${date} · ${t(start)} – ${t(end)}` : `${date} · ${t(start)}`;
 }

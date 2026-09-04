@@ -162,6 +162,12 @@ do the sign-in step. To point it at your own registration:
 > Do the sign-in step **in a browser on the Mac running the app**. The
 > redirect address is a localhost one and won't resolve from your phone.
 
+> **Use a work or school Microsoft 365 account, not a personal
+> `outlook.com`/`hotmail.com` one.** A work/school account's sign-in stays
+> valid for 90 days between uses; a personal account's expires every 24
+> hours, so the calendar and reminder sync would silently stop working
+> daily until someone notices and reconnects in Settings.
+
 The Schedule mirrors the mailbox's default calendar. To book into a
 shared or secondary calendar instead, set `MICROSOFT_CALENDAR_ID` in
 `.env` to that calendar's id.

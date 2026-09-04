@@ -21,7 +21,7 @@ import { classifyCoverageStatus } from '../exams/coverage-status.js';
 import { getDb } from '../db/db.js';
 import { auditRequest, recentAuditEntries, verifyAuditChain } from '../platform/audit.js';
 import { rateLimited } from '../platform/rate-limit.js';
-import type { ExamRequestRow, WaveInvoiceRow, InvoiceLineItemDraft } from '../exams/types.js';
+import type { ExamRequestRow, WaveInvoiceRow, InvoiceLineItemDraft, AppointmentRow } from '../exams/types.js';
 
 /**
  * The exam-request workflow API.
@@ -57,9 +57,14 @@ function validateLineItems(value: unknown): string | null {
   return null;
 }
 
-/** The Schedule row shape: the appointment plus its linked patient and latest OHIP check. */
-function appointmentDto(id: string) {
-  const appointment = appointmentsService.getAppointment(id);
+/**
+ * The Schedule row shape: the appointment plus its linked patient and
+ * latest OHIP check. Takes a row directly when the caller already has one
+ * (e.g. a list endpoint) to avoid a redundant re-fetch per row.
+ */
+function appointmentDto(idOrRow: string | AppointmentRow) {
+  const appointment =
+    typeof idOrRow === 'string' ? appointmentsService.getAppointment(idOrRow) : idOrRow;
   if (!appointment) return null;
   const patient = appointment.patient_id
     ? patientsService.getPatient(appointment.patient_id)
@@ -82,14 +87,7 @@ async function pushNewAppointment(id: string): Promise<void> {
   if (!appointment || appointment.ms_event_id) return;
 
   try {
-    const event = await calendar.createEvent({
-      summary: appointment.title ?? 'Appointment',
-      location: appointment.location,
-      startsAt: appointment.starts_at,
-      endsAt: appointment.ends_at,
-      transactionId: appointment.id,
-    });
-    appointmentsService.setMicrosoftEventId(appointment.id, event);
+    await calendarSync.pushAppointmentChange(appointment);
   } catch (err) {
     if (err instanceof MicrosoftAuthError) {
       appointmentsService.setPushState(appointment.id, 'pending_push');
@@ -388,7 +386,7 @@ export function examsRoutes(): Router {
         ? appointmentsService.listBetween(String(req.query.from), String(req.query.to))
         : appointmentsService.listUpcoming();
 
-    res.json(rows.map((a) => appointmentDto(a.id)));
+    res.json(rows.map((a) => appointmentDto(a)));
   });
 
   router.post('/appointments/:id/check-eligibility', rateLimited('eligibility', 30, 5 * 60_000), async (req: Request, res: Response): Promise<void> => {
@@ -582,45 +580,38 @@ export function examsRoutes(): Router {
     };
     appointmentsService.updateAppointment(appointment.id, edit);
 
-    // Keep a pending reminder the same lead time ahead of the new start.
-    if (startsAt !== undefined && newStart !== appointment.starts_at) {
-      const reminder = remindersService.findForAppointment(appointment.id);
-      if (reminder && reminder.status === 'pending') {
-        const lead = new Date(appointment.starts_at).getTime() - new Date(reminder.scheduled_for).getTime();
-        remindersService.reschedule(
-          reminder.id,
-          new Date(new Date(newStart).getTime() - lead).toISOString(),
-        );
-      }
-    }
-
     // Push to Outlook if this row mirrors a real event.
     let conflict = false;
+    let finalStart = newStart;
     if (appointment.ms_event_id && isMicrosoftConnected()) {
       try {
-        const result = await calendar.updateEvent(
-          appointment.ms_event_id,
-          {
-            summary: title !== undefined ? title || '' : undefined,
-            location: location !== undefined ? location || null : undefined,
-            startsAt: startsAt !== undefined ? newStart : undefined,
-            endsAt: endsAt !== undefined ? newEnd : undefined,
-          },
-          appointment.provider_etag,
-        );
-        if (result.conflict) {
-          conflict = true;
-          const fresh = await calendar.getEvent(appointment.ms_event_id);
-          appointmentsService.upsertFromCalendarEvent(fresh);
-        } else if (result.event) {
-          appointmentsService.markPushed(appointment.id, result.event);
-        }
+        const freshRow = appointmentsService.getAppointment(appointment.id)!;
+        const result = await calendarSync.pushAppointmentChange(freshRow);
+        conflict = result.conflict;
+        // Outlook wins on a conflict — the reminder (below) follows the
+        // reloaded time, which pushAppointmentChange already wrote back.
+        if (conflict) finalStart = appointmentsService.getAppointment(appointment.id)!.starts_at;
       } catch (err) {
         if (err instanceof MicrosoftAuthError) {
           appointmentsService.setPushState(appointment.id, 'pending_push');
         } else {
           throw err;
         }
+      }
+    }
+
+    // Keep a pending reminder the same lead time ahead of the *final*
+    // start — computed after the Graph push resolves, so a 412 that rolls
+    // the local edit back to Outlook's time doesn't leave the reminder
+    // pinned to a start that was discarded.
+    if (startsAt !== undefined && finalStart !== appointment.starts_at) {
+      const reminder = remindersService.findForAppointment(appointment.id);
+      if (reminder && reminder.status === 'pending') {
+        const lead = new Date(appointment.starts_at).getTime() - new Date(reminder.scheduled_for).getTime();
+        remindersService.reschedule(
+          reminder.id,
+          new Date(new Date(finalStart).getTime() - lead).toISOString(),
+        );
       }
     }
 
@@ -648,20 +639,10 @@ export function examsRoutes(): Router {
 
     if (appointment.ms_event_id && isMicrosoftConnected()) {
       try {
-        const result = await calendar.tombstoneEvent(
-          appointment.ms_event_id,
-          appointment.title ?? 'Appointment',
-          appointment.provider_etag,
-        );
-        if (result.conflict) {
-          appointmentsService.upsertFromCalendarEvent(await calendar.getEvent(appointment.ms_event_id));
-          // The re-pull may have un-cancelled the row; the operator's
-          // intent stands — cancel it again locally and let pushPending retry.
-          appointmentsService.setStatus(appointment.id, 'cancelled');
-          appointmentsService.setPushState(appointment.id, 'pending_push');
-        } else if (result.event) {
-          appointmentsService.markPushed(appointment.id, result.event);
-        }
+        // The operator's cancel intent on a conflict (re-cancel + keep
+        // retrying) is handled inside pushAppointmentChange.
+        const freshRow = appointmentsService.getAppointment(appointment.id)!;
+        await calendarSync.pushAppointmentChange(freshRow);
       } catch (err) {
         if (err instanceof MicrosoftAuthError) {
           appointmentsService.setPushState(appointment.id, 'pending_push');

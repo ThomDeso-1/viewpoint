@@ -8,6 +8,7 @@
  */
 
 import type { HcvMode } from '../../exams/types.js';
+import { ApiError } from '../../platform/api-error.js';
 
 export interface EligibilityRequest {
   /** 10-digit Ontario health number, digits only. */
@@ -37,21 +38,13 @@ export interface HcvClient {
   checkEligibility(request: EligibilityRequest): Promise<EligibilityResult>;
 }
 
-export class HcvError extends Error {
-  code: string;
-
+/**
+ * Transport and ministry-side outages (`isRetryable`, inherited) are
+ * worth retrying; a rejected card or a misconfigured keystore is not.
+ */
+export class HcvError extends ApiError {
   constructor(code: string, message: string) {
-    super(message);
-    this.name = 'HcvError';
-    this.code = code;
-  }
-
-  /**
-   * Transport and ministry-side outages are worth retrying; a rejected
-   * card or a misconfigured keystore is not.
-   */
-  get isRetryable(): boolean {
-    return this.code === 'network_error' || this.code === 'server_error';
+    super('HcvError', code, message);
   }
 }
 

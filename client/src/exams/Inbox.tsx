@@ -15,6 +15,7 @@ import {
 import { useToast } from '../shared/Toast';
 import { AppNav } from '../shared/AppNav';
 import { StatusBadge } from '../shared/StatusBadge';
+import { parseIsoDate } from '../shared/format';
 import { InvoiceEditor } from '../exams/InvoiceEditor';
 
 /**
@@ -175,8 +176,8 @@ export function Inbox({ ohipEnabled = false }: { ohipEnabled?: boolean }) {
 
 function formatDateTime(iso: string | null): string {
   if (!iso) return '—';
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return iso;
+  const date = parseIsoDate(iso);
+  if (!date) return iso;
   return date.toLocaleString('en-CA', {
     weekday: 'short',
     month: 'short',

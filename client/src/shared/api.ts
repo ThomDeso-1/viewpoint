@@ -300,7 +300,6 @@ export interface EligibilityCheck {
 export interface Appointment {
   id: string;
   patient_id: string | null;
-  google_event_id: string | null;
   /** Graph event id — set once the appointment is mirrored from / to Outlook. */
   ms_event_id: string | null;
   /** Deep link to open the event in Outlook. */

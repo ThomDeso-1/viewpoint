@@ -53,18 +53,14 @@ export function calendarId(): string {
   return process.env.MICROSOFT_CALENDAR_ID || 'primary';
 }
 
-/** `/me/events` for the default calendar, `/me/calendars/{id}/events` otherwise. */
-function eventsBase(): string {
+/** `/me/{resource}` for the default calendar, `/me/calendars/{id}/{resource}` otherwise. */
+function calendarBase(resource: 'events' | 'calendarView'): string {
   const id = calendarId();
-  return id === 'primary' ? '/me/events' : `/me/calendars/${encodeURIComponent(id)}/events`;
+  return id === 'primary' ? `/me/${resource}` : `/me/calendars/${encodeURIComponent(id)}/${resource}`;
 }
 
-function calendarViewBase(): string {
-  const id = calendarId();
-  return id === 'primary'
-    ? '/me/calendarView'
-    : `/me/calendars/${encodeURIComponent(id)}/calendarView`;
-}
+const eventsBase = () => calendarBase('events');
+const calendarViewBase = () => calendarBase('calendarView');
 
 /** Graph's `dateTime` has no offset; its sibling `timeZone` says how to read it. */
 function toInstant(slot: { dateTime?: string; timeZone?: string } | undefined): string | null {
@@ -260,7 +256,11 @@ export async function updateEvent(
     body.location = patch.location ? { displayName: patch.location } : { displayName: '' };
   }
   if (patch.startsAt !== undefined) body.start = toGraphSlot(patch.startsAt);
-  if (patch.endsAt) body.end = toGraphSlot(patch.endsAt);
+  // Graph's `end` is required and has no "cleared" representation, so an
+  // explicit `null` (no local value to assert) leaves it untouched rather
+  // than sending an invalid payload — the next delta pull reconciles the
+  // local `ends_at` from Graph's real value either way.
+  if (patch.endsAt !== undefined && patch.endsAt) body.end = toGraphSlot(patch.endsAt);
 
   const res = await graphFetch(
     `${eventsBase()}/${encodeURIComponent(eventId)}`,

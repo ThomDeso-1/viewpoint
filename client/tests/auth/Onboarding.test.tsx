@@ -9,6 +9,14 @@ import * as api from '../../src/shared/api';
 
 beforeEach(() => {
   for (const fn of Object.values(api)) fn.mockReset();
+  api.getMicrosoftStatus.mockResolvedValue({
+    configured: true,
+    connected: false,
+    redirectUri: 'http://localhost:3000/api/microsoft/callback',
+    accountLabel: null,
+    scope: null,
+    expiresAt: null,
+  });
 });
 
 function renderWizard(onComplete = vi.fn(), ohipEnabled = true) {
@@ -22,8 +30,9 @@ function renderWizard(onComplete = vi.fn(), ohipEnabled = true) {
 
 /**
  * Spec: a short first-run wizard — password (done before this mounts),
- * Claude API key, Wave (token → business), then OHIP. Every credential
- * step can be skipped. The finer Wave account setup and OHIP ministry
+ * Claude API key, Wave (token → business), Outlook / Microsoft 365, then
+ * OHIP. Every credential step can be skipped. The finer Wave account
+ * setup, the full Microsoft app-registration form, and OHIP ministry
  * credentials moved to Settings; finishing always records OHIP `mock`
  * explicitly so results stay labelled simulated.
  */
@@ -102,7 +111,7 @@ describe('Onboarding: Wave step', () => {
     expect(screen.queryByText(/choose a business/i)).not.toBeInTheDocument();
   });
 
-  it('selecting a business saves the connection and hands off to the OHIP step', async () => {
+  it('selecting a business saves the connection and hands off to the Microsoft step', async () => {
     api.validateWaveToken.mockResolvedValue({
       valid: true,
       businesses: [{ id: 'b1', name: 'Acme Co', isPersonal: false }],
@@ -121,11 +130,11 @@ describe('Onboarding: Wave step', () => {
       businessName: 'Acme Co',
     });
 
-    await screen.findByText(/ohip validation/i);
+    await screen.findByText(/connect outlook/i);
     expect(api.markOnboarded).not.toHaveBeenCalled();
   });
 
-  it('skipping Wave advances to the OHIP step', async () => {
+  it('skipping Wave advances to the Microsoft step', async () => {
     const onComplete = vi.fn();
     renderWizard(onComplete);
 
@@ -133,22 +142,72 @@ describe('Onboarding: Wave step', () => {
     await screen.findByText(/connect wave/i);
     await userEvent.click(screen.getByRole('button', { name: /skip for now/i }));
 
-    await screen.findByText(/ohip validation/i);
+    await screen.findByText(/connect outlook/i);
     expect(api.saveWaveConnection).not.toHaveBeenCalled();
     expect(api.markOnboarded).not.toHaveBeenCalled();
   });
 });
 
+describe('Onboarding: Microsoft step', () => {
+  async function skipToMicrosoft(onComplete = vi.fn()) {
+    renderWizard(onComplete);
+    await userEvent.click(screen.getByRole('button', { name: /skip for now/i }));
+    await screen.findByText(/connect wave/i);
+    await userEvent.click(screen.getByRole('button', { name: /skip for now/i }));
+    await screen.findByText(/connect outlook/i);
+    return onComplete;
+  }
+
+  it('shows a sign-in link that opens in a new tab and warns off personal accounts', async () => {
+    await skipToMicrosoft();
+
+    const link = screen.getByRole('link', { name: /sign in with microsoft/i });
+    expect(link).toHaveAttribute('href', '/api/microsoft/connect');
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(screen.getByText(/personal outlook\.com account/i)).toBeInTheDocument();
+  });
+
+  it('skipping Microsoft advances to the OHIP step without connecting anything', async () => {
+    await skipToMicrosoft();
+    await userEvent.click(screen.getByRole('button', { name: /skip for now/i }));
+
+    await screen.findByText(/ohip validation/i);
+    expect(api.markOnboarded).not.toHaveBeenCalled();
+  });
+
+  it('shows Continue instead of the sign-in link once already connected', async () => {
+    api.getMicrosoftStatus.mockResolvedValue({
+      configured: true,
+      connected: true,
+      redirectUri: 'http://localhost:3000/api/microsoft/callback',
+      accountLabel: 'ada@clinic.example',
+      scope: 'Calendars.ReadWrite',
+      expiresAt: null,
+    });
+    await skipToMicrosoft();
+
+    expect(await screen.findByText(/ada@clinic\.example/)).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /sign in with microsoft/i })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /^continue$/i }));
+    await screen.findByText(/ohip validation/i);
+  });
+});
+
 describe('Onboarding: OHIP disabled (default)', () => {
-  it('skips the OHIP step entirely and finishes after Wave', async () => {
+  it('skips the OHIP step entirely and finishes after Microsoft', async () => {
     const onComplete = vi.fn();
     api.markOnboarded.mockResolvedValue({ success: true });
     renderWizard(onComplete, false);
 
     await userEvent.click(screen.getByRole('button', { name: /skip for now/i }));
     await screen.findByText(/connect wave/i);
-    // Step count reflects three steps, not four.
-    expect(screen.getByText(/step 3 of 3/i)).toBeInTheDocument();
+    // Step count reflects four steps, not five.
+    expect(screen.getByText(/step 3 of 4/i)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /skip for now/i }));
+    await screen.findByText(/connect outlook/i);
+    expect(screen.getByText(/step 4 of 4/i)).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: /skip for now/i }));
 
@@ -167,6 +226,8 @@ describe('Onboarding: OHIP step', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /skip for now/i }));
     await screen.findByText(/connect wave/i);
+    await userEvent.click(screen.getByRole('button', { name: /skip for now/i }));
+    await screen.findByText(/connect outlook/i);
     await userEvent.click(screen.getByRole('button', { name: /skip for now/i }));
     await screen.findByText(/ohip validation/i);
     return onComplete;

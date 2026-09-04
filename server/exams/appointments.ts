@@ -66,6 +66,11 @@ export interface AppointmentInput {
 export function createAppointment(input: AppointmentInput): AppointmentRow {
   const now = new Date().toISOString();
   const id = uuid();
+  // No Graph event yet means this row still needs a push — pending_push
+  // makes it eligible for pushPending()'s retry, so a row created before
+  // Microsoft is connected (or while it's down) is not forgotten once it
+  // comes back up.
+  const syncState: SyncState = input.msEventId ? 'synced' : 'pending_push';
 
   getDb()
     .prepare(
@@ -75,7 +80,7 @@ export function createAppointment(input: AppointmentInput): AppointmentRow {
          starts_at, ends_at, title, location, status, source, created_at, updated_at
        ) VALUES (
          @id, @patient_id, @ms_event_id, @ical_uid, @provider_etag, @web_link,
-         @is_recurring, @series_master_id, @last_synced_at, 'synced',
+         @is_recurring, @series_master_id, @last_synced_at, @sync_state,
          @starts_at, @ends_at, @title, @location, @status, @source, @created_at, @updated_at
        )`,
     )
@@ -89,6 +94,7 @@ export function createAppointment(input: AppointmentInput): AppointmentRow {
       is_recurring: input.isRecurring ? 1 : 0,
       series_master_id: input.seriesMasterId ?? null,
       last_synced_at: input.msEventId ? now : null,
+      sync_state: syncState,
       starts_at: input.startsAt,
       ends_at: input.endsAt ?? null,
       title: input.title ?? null,

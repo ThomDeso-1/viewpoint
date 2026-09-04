@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
@@ -108,6 +108,7 @@ export function Schedule({ ohipEnabled = false }: { ohipEnabled?: boolean }) {
   };
 
   const selected = selectedId ? rows.find((r) => r.id === selectedId) ?? null : null;
+  const events = useMemo(() => rows.map(toFcEvent), [rows]);
 
   return (
     <>
@@ -152,7 +153,7 @@ export function Schedule({ ohipEnabled = false }: { ohipEnabled?: boolean }) {
             nowIndicator
             displayEventEnd
             eventTimeFormat={{ hour: 'numeric', minute: '2-digit', meridiem: 'short' }}
-            events={rows.map(toFcEvent)}
+            events={events}
             datesSet={handleDatesSet}
             dateClick={handleDateClick}
             eventClick={handleEventClick}

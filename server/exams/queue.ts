@@ -596,6 +596,9 @@ async function writeAppointmentToCalendar(row: ExamRequestRow): Promise<void> {
     appointments.setMicrosoftEventId(appointment.id, event);
     audit({ action: 'appointment.calendar_write', entityType: 'appointment', entityId: appointment.id });
   } catch (err) {
+    // Never strand the request over a calendar hiccup — but flag the row
+    // so pushPending() retries it, same as every other write path here.
+    appointments.setPushState(appointment.id, err instanceof MicrosoftAuthError ? 'pending_push' : 'push_failed');
     console.error('[exams-queue] calendar write failed:', (err as Error).message);
   }
 }

@@ -116,7 +116,7 @@ export function AppointmentForm({ patients, appointment, defaultStartIso, onSave
         <select value={duration} onChange={(e) => setDuration(Number(e.target.value))}>
           {durationOptions.map((mins) => (
             <option key={mins} value={mins}>
-              {mins < 60 ? `${mins} minutes` : mins === 60 ? '1 hour' : `${mins} minutes`}
+              {mins === 60 ? '1 hour' : `${mins} minutes`}
             </option>
           ))}
         </select>

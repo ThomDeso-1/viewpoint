@@ -319,11 +319,45 @@ describe('Outlook calendar client', () => {
       expect(match?.id).toBe('a');
     });
 
+    it('finds nothing when no event is close enough', () => {
+      const match = calendar.matchEvent([ev('a', '2026-09-01T10:00:00Z')], {
+        requestedAt: new Date('2026-09-01T18:00:00Z'),
+      });
+      expect(match).toBeUndefined();
+    });
+
+    it('disambiguates several nearby events by attendee email', () => {
+      const match = calendar.matchEvent(
+        [
+          ev('a', '2026-09-01T10:00:00Z', { attendeeEmails: ['someone@example.com'] }),
+          ev('b', '2026-09-01T10:15:00Z', { attendeeEmails: ['ada@example.com'] }),
+        ],
+        { requestedAt: new Date('2026-09-01T10:00:00Z'), patientEmail: 'ADA@example.com' },
+      );
+      expect(match?.id).toBe('b');
+    });
+
+    it('disambiguates by patient name in the event title', () => {
+      const match = calendar.matchEvent(
+        [
+          ev('a', '2026-09-01T10:00:00Z', { summary: 'Exam — Bob' }),
+          ev('b', '2026-09-01T10:15:00Z', { summary: 'Exam — Ada Lovelace' }),
+        ],
+        { requestedAt: new Date('2026-09-01T10:00:00Z'), patientName: 'Ada Lovelace' },
+      );
+      expect(match?.id).toBe('b');
+    });
+
     it('refuses to guess between indistinguishable candidates', () => {
       const match = calendar.matchEvent(
         [ev('a', '2026-09-01T10:00:00Z'), ev('b', '2026-09-01T10:15:00Z')],
         { requestedAt: new Date('2026-09-01T10:00:00Z') },
       );
+      expect(match).toBeUndefined();
+    });
+
+    it('ignores events with an unparseable start', () => {
+      const match = calendar.matchEvent([ev('a', '')], { requestedAt: new Date('2026-09-01T10:00:00Z') });
       expect(match).toBeUndefined();
     });
   });

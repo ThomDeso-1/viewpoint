@@ -21,6 +21,7 @@ function isHttpsConfigured(): boolean {
   return (
     httpsUrl(process.env.APP_PUBLIC_URL) ||
     httpsUrl(process.env.WAVE_REDIRECT_URI) ||
+    httpsUrl(process.env.MICROSOFT_REDIRECT_URI) ||
     process.env.TRUST_PROXY === '1' // a proxy is in front — assume it terminates TLS
   );
 }

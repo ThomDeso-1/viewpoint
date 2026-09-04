@@ -117,18 +117,19 @@ export function MicrosoftSettings() {
 
       {status?.configured && !status.connected && (
         <>
-          <a className="btn-primary" href="/api/microsoft/connect">
+          <a className="btn-primary" href="/api/microsoft/connect" target="_blank" rel="noopener">
             Sign in with Microsoft
           </a>
           <p className="muted" style={{ marginTop: 8 }}>
-            Do this from a browser on the computer running the app.
+            Opens in a new tab. Use a work or school account, not a personal outlook.com one — a
+            personal account's sign-in expires every 24 hours instead of every 90 days.
           </p>
         </>
       )}
 
       {status?.connected && (
         <div className="request-actions">
-          <a className="btn-secondary" href="/api/microsoft/connect">
+          <a className="btn-secondary" href="/api/microsoft/connect" target="_blank" rel="noopener">
             Reconnect
           </a>
           <button className="btn-secondary" onClick={handleDisconnect}>

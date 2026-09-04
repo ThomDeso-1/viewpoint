@@ -55,7 +55,11 @@ export async function graphFetch(
   }
 
   if (res.status === 429 || res.status >= 500) {
-    throw new MicrosoftAuthError('server_error', `Graph API error (${res.status}): ${res.statusText}`);
+    throw new MicrosoftAuthError(
+      'server_error',
+      `Graph API error (${res.status}): ${res.statusText}`,
+      retryAfterMs(res),
+    );
   }
 
   if (!res.ok) {
@@ -64,6 +68,13 @@ export async function graphFetch(
   }
 
   return res;
+}
+
+/** Graph's `Retry-After` is seconds, on both a 429 and a 5xx. */
+function retryAfterMs(res: Response): number | undefined {
+  const header = res.headers.get('Retry-After');
+  const seconds = header ? Number(header) : NaN;
+  return Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : undefined;
 }
 
 /** `graphFetch` plus JSON parsing, for the common read case. */

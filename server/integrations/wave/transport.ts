@@ -8,18 +8,11 @@
  */
 
 import { endpoint } from '../../platform/endpoints.js';
+import { ApiError } from '../../platform/api-error.js';
 
-export class WaveAPIError extends Error {
-  code: string;
-
+export class WaveAPIError extends ApiError {
   constructor(code: string, message: string) {
-    super(message);
-    this.name = 'WaveAPIError';
-    this.code = code;
-  }
-
-  get isRetryable(): boolean {
-    return this.code === 'network_error' || this.code === 'server_error';
+    super('WaveAPIError', code, message);
   }
 }
 

@@ -81,7 +81,6 @@ export function makeAppointment(overrides: Partial<Appointment> = {}): Appointme
   return {
     id: 'appt-1',
     patient_id: 'patient-1',
-    google_event_id: null,
     ms_event_id: 'evt-1',
     web_link: 'https://outlook.office365.com/calendar/item/evt-1',
     is_recurring: 0,

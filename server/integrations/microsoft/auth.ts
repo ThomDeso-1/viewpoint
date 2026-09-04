@@ -1,6 +1,7 @@
 import { saveTokens, getTokens, isExpired, isConnected, disconnect } from '../../platform/oauth-store.js';
 import { audit } from '../../platform/audit.js';
 import { endpoint } from '../../platform/endpoints.js';
+import { ApiError } from '../../platform/api-error.js';
 
 /**
  * Microsoft identity platform OAuth 2.0 — authorization code + PKCE,
@@ -34,17 +35,13 @@ export const MICROSOFT_SCOPES = [
   'https://graph.microsoft.com/Calendars.ReadWrite',
 ];
 
-export class MicrosoftAuthError extends Error {
-  code: string;
+export class MicrosoftAuthError extends ApiError {
+  /** From Graph's `Retry-After` on a 429 — how long to back off before trying again. */
+  retryAfterMs?: number;
 
-  constructor(code: string, message: string) {
-    super(message);
-    this.name = 'MicrosoftAuthError';
-    this.code = code;
-  }
-
-  get isRetryable(): boolean {
-    return this.code === 'network_error' || this.code === 'server_error';
+  constructor(code: string, message: string, retryAfterMs?: number) {
+    super('MicrosoftAuthError', code, message);
+    this.retryAfterMs = retryAfterMs;
   }
 }
 
