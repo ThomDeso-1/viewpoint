@@ -146,6 +146,56 @@ describe('Outlook calendar client', () => {
       expect(body.isReminderOn).toBe(false);
       expect(body.attendees).toBeUndefined();
     });
+
+    it('passes a transactionId through for idempotent retries', async () => {
+      const mock = installFetchMock();
+      mock.mockResolvedValue(jsonResponse(201, msEvent()));
+
+      await calendar.createEvent({
+        summary: 'x',
+        startsAt: '2026-09-02T15:00:00.000Z',
+        transactionId: 'appt-abc',
+      });
+
+      const body = JSON.parse((mock.mock.calls[0][1] as RequestInit).body as string);
+      expect(body.transactionId).toBe('appt-abc');
+    });
+  });
+
+  describe('tombstoneEvent', () => {
+    it('frees the slot, tags it Cancelled, prefixes the subject, sends If-Match', async () => {
+      const mock = installFetchMock();
+      mock.mockResolvedValue(jsonResponse(200, msEvent({ subject: 'Cancelled — Eye exam — Ada Lovelace' })));
+
+      const { event, conflict } = await calendar.tombstoneEvent('evt-1', 'Eye exam — Ada Lovelace', 'W/"abc"');
+
+      expect(conflict).toBe(false);
+      expect(event?.summary).toContain('Cancelled — ');
+      const [url, init] = mock.mock.calls[0];
+      expect(String(url)).toContain('/me/events/evt-1');
+      expect((init as RequestInit).method).toBe('PATCH');
+      expect((init as RequestInit).headers).toMatchObject({ 'If-Match': 'W/"abc"' });
+      const body = JSON.parse((init as RequestInit).body as string);
+      expect(body).toMatchObject({ subject: 'Cancelled — Eye exam — Ada Lovelace', showAs: 'free' });
+      expect(body.categories).toEqual(['Cancelled']);
+    });
+
+    it('does not double-prefix an already-cancelled subject', async () => {
+      const mock = installFetchMock();
+      mock.mockResolvedValue(jsonResponse(200, msEvent()));
+
+      await calendar.tombstoneEvent('evt-1', 'Cancelled — Eye exam');
+      const body = JSON.parse((mock.mock.calls[0][1] as RequestInit).body as string);
+      expect(body.subject).toBe('Cancelled — Eye exam');
+    });
+
+    it('reports a 412 as a conflict', async () => {
+      const mock = installFetchMock();
+      mock.mockResolvedValue(jsonResponse(412, {}));
+
+      const { conflict } = await calendar.tombstoneEvent('evt-1', 'x', 'W/"stale"');
+      expect(conflict).toBe(true);
+    });
   });
 
   describe('updateEvent', () => {

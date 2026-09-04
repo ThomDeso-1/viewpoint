@@ -207,3 +207,150 @@ describe('pullCalendar', () => {
     expect(sync.calendarSyncStatus().lastSyncedAt).toBeTruthy();
   });
 });
+
+describe('pushPending', () => {
+  let ctx: TestContext;
+  let sync: typeof import('../../server/exams/calendar-sync.js');
+  let appointments: typeof import('../../server/exams/appointments.js');
+  let store: typeof import('../../server/platform/oauth-store.js');
+
+  beforeEach(async () => {
+    ctx = await setupTestApp({ ...CREDS });
+    sync = await import('../../server/exams/calendar-sync.js');
+    appointments = await import('../../server/exams/appointments.js');
+    store = await import('../../server/platform/oauth-store.js');
+    store.saveTokens('microsoft', {
+      accessToken: 'valid-token',
+      expiresAt: new Date(Date.now() + 3_600_000),
+    });
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    ctx.teardown();
+    delete process.env.MICROSOFT_CLIENT_ID;
+  });
+
+  const flag = (id: string) => appointments.setPushState(id, 'pending_push');
+  const graphEventBody = (over: Record<string, unknown> = {}) =>
+    jsonResponse(200, {
+      id: 'ms-1',
+      '@odata.etag': 'W/"9"',
+      webLink: 'https://outlook/ms-1',
+      subject: 'x',
+      start: { dateTime: '2026-09-01T14:00:00', timeZone: 'UTC' },
+      ...over,
+    });
+
+  it('does nothing when Microsoft is not connected', async () => {
+    store.disconnect('microsoft');
+    const a = appointments.createAppointment({ startsAt: '2026-09-01T14:00:00.000Z', source: 'manual' });
+    flag(a.id);
+    const mock = installFetchMock();
+
+    expect(await sync.pushPending()).toBe(0);
+    expect(mock).not.toHaveBeenCalled();
+  });
+
+  it('creates the Outlook event for a never-synced pending row', async () => {
+    const a = appointments.createAppointment({
+      startsAt: '2026-09-01T14:00:00.000Z',
+      title: 'Walk-in',
+      source: 'manual',
+    });
+    flag(a.id);
+
+    const mock = installFetchMock();
+    mock.mockResolvedValue(graphEventBody());
+
+    expect(await sync.pushPending()).toBe(1);
+    const after = appointments.getAppointment(a.id)!;
+    expect(after.ms_event_id).toBe('ms-1');
+    expect(after.sync_state).toBe('synced');
+    expect(mock.mock.calls[0][1]).toMatchObject({ method: 'POST' });
+    expect(JSON.parse((mock.mock.calls[0][1] as RequestInit).body as string).transactionId).toBe(a.id);
+  });
+
+  it('updates the Outlook event for a synced-then-edited pending row', async () => {
+    const a = appointments.createAppointment({
+      startsAt: '2026-09-01T14:00:00.000Z',
+      msEventId: 'ms-1',
+      etag: 'W/"1"',
+      source: 'microsoft',
+    });
+    appointments.updateAppointment(a.id, { title: 'Renamed' });
+    flag(a.id);
+
+    const mock = installFetchMock();
+    mock.mockResolvedValue(graphEventBody({ '@odata.etag': 'W/"2"' }));
+
+    expect(await sync.pushPending()).toBe(1);
+    expect(mock.mock.calls[0][1]).toMatchObject({ method: 'PATCH' });
+    expect((mock.mock.calls[0][1] as RequestInit).headers).toMatchObject({ 'If-Match': 'W/"1"' });
+    expect(appointments.getAppointment(a.id)!.sync_state).toBe('synced');
+  });
+
+  it('tombstones the Outlook event for a cancelled pending row', async () => {
+    const a = appointments.createAppointment({
+      startsAt: '2026-09-01T14:00:00.000Z',
+      msEventId: 'ms-1',
+      etag: 'W/"1"',
+      title: 'Eye exam',
+      source: 'microsoft',
+    });
+    appointments.setStatus(a.id, 'cancelled');
+    flag(a.id);
+
+    const mock = installFetchMock();
+    mock.mockResolvedValue(graphEventBody({ subject: 'Cancelled — Eye exam' }));
+
+    expect(await sync.pushPending()).toBe(1);
+    const body = JSON.parse((mock.mock.calls[0][1] as RequestInit).body as string);
+    expect(body.subject).toBe('Cancelled — Eye exam');
+    expect(body.showAs).toBe('free');
+    const after = appointments.getAppointment(a.id)!;
+    expect(after.status).toBe('cancelled');
+    expect(after.sync_state).toBe('synced');
+  });
+
+  it('leaves the row flagged when the connection is down', async () => {
+    const a = appointments.createAppointment({ startsAt: '2026-09-01T14:00:00.000Z', source: 'manual' });
+    flag(a.id);
+
+    const mock = installFetchMock();
+    mock.mockResolvedValue(jsonResponse(503, {}));
+
+    expect(await sync.pushPending()).toBe(0);
+    expect(appointments.getAppointment(a.id)!.sync_state).toBe('pending_push');
+  });
+
+  it('marks push_failed on a non-retryable rejection', async () => {
+    const a = appointments.createAppointment({ startsAt: '2026-09-01T14:00:00.000Z', source: 'manual' });
+    flag(a.id);
+
+    const mock = installFetchMock();
+    mock.mockResolvedValue(jsonResponse(400, { error: { message: 'bad' } }));
+
+    await sync.pushPending();
+    expect(appointments.getAppointment(a.id)!.sync_state).toBe('push_failed');
+  });
+
+  it('runs on the poller pass', async () => {
+    const a = appointments.createAppointment({ startsAt: '2026-09-01T14:00:00.000Z', source: 'manual' });
+    flag(a.id);
+
+    const mock = installFetchMock();
+    mock
+      .mockResolvedValueOnce(graphEventBody()) // the create
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          value: [],
+          '@odata.deltaLink':
+            'https://graph.microsoft.com/v1.0/me/calendarView/delta?$deltatoken=t',
+        }),
+      );
+
+    const result = await sync.pullCalendar({ force: true });
+    expect(result).toMatchObject({ pushed: 1 });
+    expect(appointments.getAppointment(a.id)!.sync_state).toBe('synced');
+  });
+});

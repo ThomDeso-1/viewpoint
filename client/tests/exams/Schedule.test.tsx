@@ -182,6 +182,54 @@ describe('Schedule', () => {
     });
   });
 
+  describe('editing and cancelling from a row', () => {
+    it('opens the edit form prefilled for that appointment', async () => {
+      api.getAppointments.mockResolvedValue([
+        { ...makeAppointment({ title: 'Follow-up' }), patient: null, patient_id: null, eligibility: null },
+      ]);
+      renderSchedule({ ohipEnabled: false });
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+      expect(screen.getByRole('heading', { name: /Edit appointment/i })).toBeInTheDocument();
+      expect(screen.getByLabelText('Title')).toHaveValue('Follow-up');
+    });
+
+    it('cancels an appointment after confirmation', async () => {
+      vi.spyOn(window, 'confirm').mockReturnValue(true);
+      api.getAppointments.mockResolvedValue([
+        { ...makeAppointment(), patient: makePatient(), eligibility: null },
+      ]);
+      api.cancelAppointment.mockResolvedValue({ appointment: makeAppointment({ status: 'cancelled' }) });
+      renderSchedule({ ohipEnabled: false });
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
+
+      await waitFor(() => expect(api.cancelAppointment).toHaveBeenCalledWith('appt-1'));
+      expect(await screen.findByText('Appointment cancelled.')).toBeInTheDocument();
+    });
+
+    it('renders a recurring appointment read-only', async () => {
+      api.getAppointments.mockResolvedValue([
+        { ...makeAppointment({ is_recurring: 1 }), patient: makePatient(), eligibility: null },
+      ]);
+      renderSchedule({ ohipEnabled: false });
+
+      expect(await screen.findByText(/Recurring — edit in Outlook/i)).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument();
+      expect(screen.getByRole('link', { name: /Open in Outlook/i })).toBeInTheDocument();
+    });
+
+    it('flags a row whose push has not landed', async () => {
+      api.getAppointments.mockResolvedValue([
+        { ...makeAppointment({ sync_state: 'pending_push' }), patient: makePatient(), eligibility: null },
+      ]);
+      renderSchedule({ ohipEnabled: false });
+
+      expect(await screen.findByText('Not synced')).toBeInTheDocument();
+    });
+  });
+
   describe('adding an appointment by hand', () => {
     it('opens and closes the form', async () => {
       renderSchedule();

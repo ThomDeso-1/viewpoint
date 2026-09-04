@@ -4,6 +4,7 @@ import {
   getAppointments,
   getCalendarSyncStatus,
   syncCalendarNow,
+  cancelAppointment,
   checkAppointmentEligibility,
   getPatients,
   linkPatientToAppointment,
@@ -30,6 +31,8 @@ export function Schedule({ ohipEnabled = false }: { ohipEnabled?: boolean }) {
   const [loading, setLoading] = useState(true);
   const [checkingId, setCheckingId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [linkingId, setLinkingId] = useState<string | null>(null);
   const { showToast } = useToast();
 
@@ -76,6 +79,21 @@ export function Schedule({ ohipEnabled = false }: { ohipEnabled?: boolean }) {
       await load();
     } catch (err) {
       showToast((err as Error).message, 'error');
+    }
+  };
+
+  const handleCancelAppointment = async (appointment: Appointment) => {
+    const who = appointment.patient?.full_name ?? appointment.title ?? 'this appointment';
+    if (!window.confirm(`Cancel ${who}? Outlook will show it as cancelled.`)) return;
+    setCancellingId(appointment.id);
+    try {
+      await cancelAppointment(appointment.id);
+      showToast('Appointment cancelled.', 'success');
+      await load();
+    } catch (err) {
+      showToast((err as Error).message, 'error');
+    } finally {
+      setCancellingId(null);
     }
   };
 
@@ -145,7 +163,7 @@ export function Schedule({ ohipEnabled = false }: { ohipEnabled?: boolean }) {
       {adding && (
         <AppointmentForm
           patients={patients}
-          onCreated={() => {
+          onSaved={() => {
             setAdding(false);
             load();
           }}
@@ -162,61 +180,103 @@ export function Schedule({ ohipEnabled = false }: { ohipEnabled?: boolean }) {
         groups.map(([day, items]) => (
           <section key={day} className="schedule-day">
             <h2 className="month-header">{day}</h2>
-            {items.map((appointment) => (
-              <div key={appointment.id} className="appointment-row">
-                <div className="appointment-time">{formatTime(appointment.starts_at)}</div>
+            {items.map((appointment) =>
+              editingId === appointment.id ? (
+                <AppointmentForm
+                  key={appointment.id}
+                  patients={patients}
+                  appointment={appointment}
+                  onSaved={() => {
+                    setEditingId(null);
+                    load();
+                  }}
+                  onCancel={() => setEditingId(null)}
+                />
+              ) : (
+                <div key={appointment.id} className="appointment-row">
+                  <div className="appointment-time">{formatTime(appointment.starts_at)}</div>
 
-                <div className="appointment-body">
-                  <div className="appointment-title">
-                    {appointment.patient ? (
-                      <Link to={`/patients/${appointment.patient.id}`}>{appointment.patient.full_name}</Link>
-                    ) : (
-                      (appointment.title ?? 'Untitled appointment')
-                    )}
+                  <div className="appointment-body">
+                    <div className="appointment-title">
+                      {appointment.patient ? (
+                        <Link to={`/patients/${appointment.patient.id}`}>{appointment.patient.full_name}</Link>
+                      ) : (
+                        (appointment.title ?? 'Untitled appointment')
+                      )}
+                      {appointment.sync_state !== 'synced' && (
+                        <span className="tag tag-warn" title="Not yet saved to Outlook — will retry">
+                          Not synced
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="appointment-meta">
+                      {appointment.patient ? (
+                        ohipEnabled ? (
+                          <EligibilityTag appointment={appointment} />
+                        ) : null
+                      ) : linkingId === appointment.id ? (
+                        <select
+                          className="wizard-select"
+                          aria-label="Link a patient"
+                          autoFocus
+                          defaultValue=""
+                          onChange={(e) => handleLink(appointment.id, e.target.value)}
+                        >
+                          <option value="">Choose a patient…</option>
+                          {patients.map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.full_name}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <>
+                          <span className="muted">No patient linked</span>{' '}
+                          <button className="link-button" onClick={() => setLinkingId(appointment.id)}>
+                            Link a patient
+                          </button>
+                        </>
+                      )}
+                    </div>
+
+                    <div className="appointment-actions">
+                      {appointment.is_recurring ? (
+                        <span className="muted">Recurring — edit in Outlook</span>
+                      ) : (
+                        <>
+                          <button className="link-button" onClick={() => setEditingId(appointment.id)}>
+                            Edit
+                          </button>
+                          <button
+                            className="link-button"
+                            onClick={() => handleCancelAppointment(appointment)}
+                            disabled={cancellingId === appointment.id}
+                          >
+                            {cancellingId === appointment.id ? 'Cancelling…' : 'Cancel'}
+                          </button>
+                        </>
+                      )}
+                      {appointment.web_link && (
+                        <a className="link-button" href={appointment.web_link} target="_blank" rel="noreferrer">
+                          Open in Outlook
+                        </a>
+                      )}
+                    </div>
                   </div>
 
-                  <div className="appointment-meta">
-                    {appointment.patient ? (
-                      ohipEnabled ? (
-                        <EligibilityTag appointment={appointment} />
-                      ) : null
-                    ) : linkingId === appointment.id ? (
-                      <select
-                        className="wizard-select"
-                        aria-label="Link a patient"
-                        autoFocus
-                        defaultValue=""
-                        onChange={(e) => handleLink(appointment.id, e.target.value)}
-                      >
-                        <option value="">Choose a patient…</option>
-                        {patients.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.full_name}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <>
-                        <span className="muted">No patient linked</span>{' '}
-                        <button className="link-button" onClick={() => setLinkingId(appointment.id)}>
-                          Link a patient
-                        </button>
-                      </>
-                    )}
-                  </div>
+                  {ohipEnabled && appointment.patient && (
+                    <button
+                      className="secondary"
+                      onClick={() => handleCheck(appointment)}
+                      disabled={checkingId === appointment.id}
+                    >
+                      {checkingId === appointment.id ? 'Checking…' : 'Check OHIP'}
+                    </button>
+                  )}
                 </div>
-
-                {ohipEnabled && appointment.patient && (
-                  <button
-                    className="secondary"
-                    onClick={() => handleCheck(appointment)}
-                    disabled={checkingId === appointment.id}
-                  >
-                    {checkingId === appointment.id ? 'Checking…' : 'Check OHIP'}
-                  </button>
-                )}
-              </div>
-            ))}
+              ),
+            )}
           </section>
         ))
       )}

@@ -3,6 +3,10 @@ import * as appointments from './appointments.js';
 import { isMicrosoftConnected, MicrosoftAuthError } from '../integrations/microsoft/auth.js';
 import {
   deltaSync,
+  getEvent,
+  createEvent,
+  updateEvent,
+  tombstoneEvent,
   calendarId,
   SYNC_WINDOW_BACK_MS,
   SYNC_WINDOW_FORWARD_MS,
@@ -80,9 +84,94 @@ function ageMs(iso: string | null | undefined): number {
 
 export interface PullResult {
   pulled: number;
+  /** Local edits flushed to Outlook this pass (the pending_push retry). */
+  pushed: number;
   primed: boolean;
-  /** True when the cadence gate short-circuited before touching Graph. */
+  /** True when the cadence gate short-circuited the *pull* before touching Graph. */
   throttled: boolean;
+}
+
+/** Best-effort re-read of one event after a `412` — Outlook wins. */
+async function repull(msEventId: string): Promise<void> {
+  try {
+    appointments.upsertFromCalendarEvent(await getEvent(msEventId));
+  } catch {
+    // The next full pull reconciles it.
+  }
+}
+
+/**
+ * Retries pushes that a synchronous operator action could not land
+ * (`sync_state` still `pending_push` / `push_failed`). The op is inferred
+ * from the row: no `ms_event_id` → create, cancelled → tombstone,
+ * otherwise → update. A `412` re-pulls (Outlook wins, flag clears); a
+ * broken connection leaves everything flagged for the next pass.
+ */
+export async function pushPending(): Promise<number> {
+  if (!isMicrosoftConnected()) return 0;
+
+  let pushed = 0;
+  for (const row of appointments.listPendingPush()) {
+    try {
+      if (!row.ms_event_id && row.status !== 'cancelled') {
+        const event = await createEvent({
+          summary: row.title ?? 'Appointment',
+          location: row.location,
+          startsAt: row.starts_at,
+          endsAt: row.ends_at,
+          transactionId: row.id,
+        });
+        appointments.setMicrosoftEventId(row.id, event);
+      } else if (row.ms_event_id && row.status === 'cancelled') {
+        const { event, conflict } = await tombstoneEvent(
+          row.ms_event_id,
+          row.title ?? 'Appointment',
+          row.provider_etag,
+        );
+        if (conflict) await repull(row.ms_event_id);
+        else if (event) appointments.markPushed(row.id, event);
+        appointments.setPushState(row.id, 'synced');
+      } else if (row.ms_event_id) {
+        const { event, conflict } = await updateEvent(
+          row.ms_event_id,
+          {
+            summary: row.title ?? undefined,
+            location: row.location,
+            startsAt: row.starts_at,
+            endsAt: row.ends_at,
+          },
+          row.provider_etag,
+        );
+        if (conflict) await repull(row.ms_event_id);
+        else if (event) appointments.markPushed(row.id, event);
+      } else {
+        // A never-synced row that was also cancelled — nothing to push.
+        appointments.setPushState(row.id, 'synced');
+      }
+      pushed++;
+    } catch (err) {
+      if (err instanceof MicrosoftAuthError) {
+        if (!err.isRetryable) {
+          appointments.setPushState(row.id, 'push_failed');
+          continue;
+        }
+        // Connection down — stop; the next poll pass tries again.
+        break;
+      }
+      throw err;
+    }
+  }
+
+  if (pushed > 0) {
+    audit({
+      action: 'appointment.calendar_sync',
+      entityType: 'calendar',
+      entityId: calendarId(),
+      detail: `${pushed} local edit(s) pushed`,
+    });
+  }
+
+  return pushed;
 }
 
 /**
@@ -92,6 +181,9 @@ export interface PullResult {
 export async function pullCalendar(opts: { force?: boolean } = {}): Promise<PullResult | null> {
   if (!isMicrosoftConnected()) return null;
 
+  // Flush local edits first, every pass — cheap (one indexed query).
+  const pushed = await pushPending();
+
   const calId = calendarId();
   const row = getSyncRow(calId);
 
@@ -99,7 +191,7 @@ export async function pullCalendar(opts: { force?: boolean } = {}): Promise<Pull
     !row || !row.delta_link || ageMs(row.last_full_sync_at) > CALENDAR_REPRIME_MS;
 
   if (!opts.force && !needsPrime && ageMs(row?.last_delta_at) < CALENDAR_DELTA_MS) {
-    return { pulled: 0, primed: false, throttled: true };
+    return { pulled: 0, pushed, primed: false, throttled: true };
   }
 
   let primed = needsPrime;
@@ -141,7 +233,7 @@ export async function pullCalendar(opts: { force?: boolean } = {}): Promise<Pull
     });
   }
 
-  return { pulled: result.events.length, primed, throttled: false };
+  return { pulled: result.events.length, pushed, primed, throttled: false };
 }
 
 export interface CalendarSyncStatus {

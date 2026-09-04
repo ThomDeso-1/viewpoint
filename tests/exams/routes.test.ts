@@ -35,6 +35,14 @@ describe('exams API', () => {
   let queue: typeof import('../../server/exams/queue.js');
   let examRequests: typeof import('../../server/exams/exam-requests.js');
   let patients: typeof import('../../server/exams/patients.js');
+  let store: typeof import('../../server/platform/oauth-store.js');
+
+  /** Marks Microsoft connected so a route/queue step pushes to Graph. */
+  const connectMicrosoft = () =>
+    store.saveTokens('microsoft', {
+      accessToken: 'ms-token',
+      expiresAt: new Date(Date.now() + 3_600_000),
+    });
 
   beforeEach(async () => {
     sourceDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vr-src-'));
@@ -52,13 +60,9 @@ describe('exams API', () => {
     examRequests = await import('../../server/exams/exam-requests.js');
     patients = await import('../../server/exams/patients.js');
 
-    const store = await import('../../server/platform/oauth-store.js');
+    store = await import('../../server/platform/oauth-store.js');
     store.saveTokens('google', {
       accessToken: 'google-token',
-      expiresAt: new Date(Date.now() + 3_600_000),
-    });
-    store.saveTokens('microsoft', {
-      accessToken: 'ms-token',
       expiresAt: new Date(Date.now() + 3_600_000),
     });
   });
@@ -74,6 +78,7 @@ describe('exams API', () => {
   /** Drives a request through to `drafted` with everything mocked. */
   async function seedDrafted() {
     fs.writeFileSync(path.join(sourceDir, 'bookings.csv'), 'a patient file');
+    connectMicrosoft(); // the calendar match below goes through Graph
 
     const mock = installFetchMock();
     mock.mockResolvedValueOnce(
@@ -257,6 +262,133 @@ describe('exams API', () => {
     });
   });
 
+  describe('appointment push to Outlook', () => {
+    const graphEvent = (over: Record<string, unknown> = {}) => ({
+      id: 'ms-evt-1',
+      '@odata.etag': 'W/"1"',
+      webLink: 'https://outlook/ms-evt-1',
+      subject: 'Eye exam',
+      start: { dateTime: '2026-09-10T14:00:00', timeZone: 'UTC' },
+      end: { dateTime: '2026-09-10T14:30:00', timeZone: 'UTC' },
+      type: 'singleInstance',
+      isCancelled: false,
+      ...over,
+    });
+
+    /** Create through the API with the Graph create mocked out. */
+    async function createSynced(body: Record<string, unknown> = {}) {
+      connectMicrosoft();
+      const mock = installFetchMock();
+      mock.mockResolvedValueOnce(jsonResponse(201, graphEvent()));
+      const res = await request(ctx.app)
+        .post('/api/exams/appointments')
+        .set(auth())
+        .send({ startsAt: new Date(Date.now() + 7 * 86_400_000).toISOString(), title: 'Eye exam', ...body });
+      return { mock, appointment: res.body as Record<string, any> };
+    }
+
+    it('pushes a hand-entered appointment to Outlook and stores its ids', async () => {
+      const { appointment } = await createSynced();
+      expect(appointment.ms_event_id).toBe('ms-evt-1');
+      expect(appointment.provider_etag).toBe('W/"1"');
+      expect(appointment.web_link).toBe('https://outlook/ms-evt-1');
+      expect(appointment.sync_state).toBe('synced');
+    });
+
+    it('flags pending_push (still 201) when Outlook is unreachable', async () => {
+      connectMicrosoft();
+      const mock = installFetchMock();
+      mock.mockResolvedValue(jsonResponse(503, {}));
+      const res = await request(ctx.app)
+        .post('/api/exams/appointments')
+        .set(auth())
+        .send({ startsAt: '2026-09-10T14:00:00.000Z', title: 'x' });
+      expect(res.status).toBe(201);
+      expect(res.body.sync_state).toBe('pending_push');
+      expect(res.body.ms_event_id).toBeNull();
+    });
+
+    it('PATCH edits locally and pushes to Graph with If-Match', async () => {
+      const { mock, appointment } = await createSynced();
+      mock.mockResolvedValueOnce(jsonResponse(200, graphEvent({ subject: 'Renamed', '@odata.etag': 'W/"2"' })));
+
+      const res = await request(ctx.app)
+        .patch(`/api/exams/appointments/${appointment.id}`)
+        .set(auth())
+        .send({ title: 'Renamed' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.appointment.title).toBe('Renamed');
+      expect(res.body.appointment.provider_etag).toBe('W/"2"');
+      const patchCall = mock.mock.calls.find((c) => (c[1] as RequestInit)?.method === 'PATCH')!;
+      expect((patchCall[1] as RequestInit).headers).toMatchObject({ 'If-Match': 'W/"1"' });
+      expect(JSON.parse((patchCall[1] as RequestInit).body as string).subject).toBe('Renamed');
+    });
+
+    it('PATCH on a 412 re-pulls and returns the conflict', async () => {
+      const { mock, appointment } = await createSynced();
+      mock
+        .mockResolvedValueOnce(jsonResponse(412, {}))
+        .mockResolvedValueOnce(jsonResponse(200, graphEvent({ subject: 'Outlook wins', '@odata.etag': 'W/"9"' })));
+
+      const res = await request(ctx.app)
+        .patch(`/api/exams/appointments/${appointment.id}`)
+        .set(auth())
+        .send({ title: 'App wins' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.conflict).toBe(true);
+      expect(res.body.appointment.title).toBe('Outlook wins');
+    });
+
+    it('PATCH refuses a recurring appointment', async () => {
+      const appts = await import('../../server/exams/appointments.js');
+      const a = appts.createAppointment({
+        startsAt: '2026-09-10T14:00:00.000Z',
+        msEventId: 'series-1',
+        isRecurring: true,
+        source: 'microsoft',
+      });
+
+      const res = await request(ctx.app)
+        .patch(`/api/exams/appointments/${a.id}`)
+        .set(auth())
+        .send({ title: 'nope' });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/recurring/i);
+    });
+
+    it('cancel tombstones the Outlook event and cancels a pending reminder', async () => {
+      const { mock, row } = await seedDrafted(); // appointment mirrors ms event 'evt-1', has a pending reminder
+      mock.mockResolvedValueOnce(jsonResponse(200, graphEvent({ id: 'evt-1', subject: 'Cancelled — Exam' })));
+
+      const res = await request(ctx.app)
+        .post(`/api/exams/appointments/${row.appointment_id}/cancel`)
+        .set(auth());
+
+      expect(res.status).toBe(200);
+      expect(res.body.appointment.status).toBe('cancelled');
+      const tomb = mock.mock.calls.find((c) => (c[1] as RequestInit)?.method === 'PATCH')!;
+      expect(JSON.parse((tomb[1] as RequestInit).body as string).showAs).toBe('free');
+
+      const dto = await request(ctx.app).get(`/api/exams/exam-requests/${row.id}`).set(auth());
+      expect(dto.body.reminder.status).toBe('cancelled');
+    });
+
+    it('DELETE removes the Outlook event too', async () => {
+      const { mock, appointment } = await createSynced();
+      mock.mockResolvedValueOnce(jsonResponse(204, {}));
+
+      const res = await request(ctx.app)
+        .delete(`/api/exams/appointments/${appointment.id}`)
+        .set(auth());
+      expect(res.status).toBe(200);
+
+      const delCall = mock.mock.calls.find((c) => (c[1] as RequestInit)?.method === 'DELETE')!;
+      expect(String(delCall[0])).toContain('/me/events/ms-evt-1');
+    });
+  });
+
   describe('manual appointments', () => {
     it('creates one and marks it manual, not a calendar event', async () => {
       const res = await request(ctx.app)
@@ -352,6 +484,8 @@ describe('exams API', () => {
   });
 
   describe('calendar sync', () => {
+    beforeEach(() => connectMicrosoft());
+
     const deltaBody = (events: unknown[]) => ({
       value: events,
       '@odata.deltaLink':

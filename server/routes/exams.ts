@@ -5,6 +5,8 @@ import * as appointmentsService from '../exams/appointments.js';
 import * as remindersService from '../exams/reminders.js';
 import * as queue from '../exams/queue.js';
 import * as calendarSync from '../exams/calendar-sync.js';
+import * as calendar from '../integrations/microsoft/calendar.js';
+import { isMicrosoftConnected, MicrosoftAuthError } from '../integrations/microsoft/auth.js';
 import * as processedFiles from '../exams/processed-files.js';
 import { sourceDir } from '../exams/file-source.js';
 import {
@@ -53,6 +55,48 @@ function validateLineItems(value: unknown): string | null {
   }
 
   return null;
+}
+
+/** The Schedule row shape: the appointment plus its linked patient and latest OHIP check. */
+function appointmentDto(id: string) {
+  const appointment = appointmentsService.getAppointment(id);
+  if (!appointment) return null;
+  const patient = appointment.patient_id
+    ? patientsService.getPatient(appointment.patient_id)
+    : undefined;
+  const eligibility = latestCheckForAppointment(appointment.id);
+  return {
+    ...appointment,
+    patient: patient ? patientsService.toPatientDto(patient) : null,
+    eligibility: eligibility ? toEligibilityDto(eligibility) : null,
+  };
+}
+
+/**
+ * Pushes a freshly hand-entered appointment to Outlook. Best-effort — a
+ * connection failure flags the row `pending_push` for the poller.
+ */
+async function pushNewAppointment(id: string): Promise<void> {
+  if (!isMicrosoftConnected()) return;
+  const appointment = appointmentsService.getAppointment(id);
+  if (!appointment || appointment.ms_event_id) return;
+
+  try {
+    const event = await calendar.createEvent({
+      summary: appointment.title ?? 'Appointment',
+      location: appointment.location,
+      startsAt: appointment.starts_at,
+      endsAt: appointment.ends_at,
+      transactionId: appointment.id,
+    });
+    appointmentsService.setMicrosoftEventId(appointment.id, event);
+  } catch (err) {
+    if (err instanceof MicrosoftAuthError) {
+      appointmentsService.setPushState(appointment.id, 'pending_push');
+    } else {
+      throw err;
+    }
+  }
 }
 
 /** Assembles the full card the Inbox screen renders. */
@@ -344,20 +388,7 @@ export function examsRoutes(): Router {
         ? appointmentsService.listBetween(String(req.query.from), String(req.query.to))
         : appointmentsService.listUpcoming();
 
-    res.json(
-      rows.map((appointment) => {
-        const patient = appointment.patient_id
-          ? patientsService.getPatient(appointment.patient_id)
-          : undefined;
-        const eligibility = latestCheckForAppointment(appointment.id);
-
-        return {
-          ...appointment,
-          patient: patient ? patientsService.toPatientDto(patient) : null,
-          eligibility: eligibility ? toEligibilityDto(eligibility) : null,
-        };
-      }),
-    );
+    res.json(rows.map((a) => appointmentDto(a.id)));
   });
 
   router.post('/appointments/:id/check-eligibility', rateLimited('eligibility', 30, 5 * 60_000), async (req: Request, res: Response): Promise<void> => {
@@ -474,7 +505,7 @@ export function examsRoutes(): Router {
   });
 
   // ── POST /api/exams/appointments — enter one by hand ──
-  router.post('/appointments', (req: Request, res: Response): void => {
+  router.post('/appointments', async (req: Request, res: Response): Promise<void> => {
     const { startsAt, endsAt, title, location, patientId } = req.body;
 
     if (!startsAt || Number.isNaN(new Date(startsAt).getTime())) {
@@ -498,19 +529,171 @@ export function examsRoutes(): Router {
       endsAt: endsAt ? new Date(endsAt).toISOString() : null,
       title: title || null,
       location: location || null,
-      // Not from calendar sync, so a later poll must not treat it as a
-      // stale Google event and overwrite it.
       source: 'manual',
     });
 
-    res.status(201).json(appointment);
+    // Hand-entered appointments now go to Outlook too (Phase 2). A push
+    // failure is not fatal: the row is flagged `pending_push` and the
+    // poller's `pushPending()` retries it.
+    await pushNewAppointment(appointment.id);
+
+    res.status(201).json(appointmentsService.getAppointment(appointment.id));
   });
 
-  router.delete('/appointments/:id', (req: Request, res: Response): void => {
-    if (!appointmentsService.deleteAppointment(req.params.id)) {
+  // ── PATCH /api/exams/appointments/:id — edit title / time / location / patient ──
+  router.patch('/appointments/:id', async (req: Request, res: Response): Promise<void> => {
+    const appointment = appointmentsService.getAppointment(req.params.id);
+    if (!appointment) {
       res.status(404).json({ error: 'Appointment not found.' });
       return;
     }
+    if (appointment.is_recurring) {
+      res.status(400).json({ error: 'This is a recurring appointment — edit it in Outlook.' });
+      return;
+    }
+
+    const { startsAt, endsAt, title, location, patientId } = req.body;
+
+    if (startsAt !== undefined && Number.isNaN(new Date(startsAt).getTime())) {
+      res.status(400).json({ error: 'A valid start date and time is required.' });
+      return;
+    }
+    const newStart = startsAt !== undefined ? new Date(startsAt).toISOString() : appointment.starts_at;
+    const newEnd =
+      endsAt !== undefined ? (endsAt ? new Date(endsAt).toISOString() : null) : appointment.ends_at;
+    if (newEnd && new Date(newEnd).getTime() < new Date(newStart).getTime()) {
+      res.status(400).json({ error: 'The end time cannot be before the start time.' });
+      return;
+    }
+
+    if (patientId !== undefined && patientId) {
+      if (!patientsService.getPatient(patientId)) {
+        res.status(400).json({ error: 'That patient does not exist.' });
+        return;
+      }
+      appointmentsService.linkPatient(appointment.id, patientId);
+    }
+
+    const edit = {
+      startsAt: startsAt !== undefined ? newStart : undefined,
+      endsAt: endsAt !== undefined ? newEnd : undefined,
+      title: title !== undefined ? title || null : undefined,
+      location: location !== undefined ? location || null : undefined,
+    };
+    appointmentsService.updateAppointment(appointment.id, edit);
+
+    // Keep a pending reminder the same lead time ahead of the new start.
+    if (startsAt !== undefined && newStart !== appointment.starts_at) {
+      const reminder = remindersService.findForAppointment(appointment.id);
+      if (reminder && reminder.status === 'pending') {
+        const lead = new Date(appointment.starts_at).getTime() - new Date(reminder.scheduled_for).getTime();
+        remindersService.reschedule(
+          reminder.id,
+          new Date(new Date(newStart).getTime() - lead).toISOString(),
+        );
+      }
+    }
+
+    // Push to Outlook if this row mirrors a real event.
+    let conflict = false;
+    if (appointment.ms_event_id && isMicrosoftConnected()) {
+      try {
+        const result = await calendar.updateEvent(
+          appointment.ms_event_id,
+          {
+            summary: title !== undefined ? title || '' : undefined,
+            location: location !== undefined ? location || null : undefined,
+            startsAt: startsAt !== undefined ? newStart : undefined,
+            endsAt: endsAt !== undefined ? newEnd : undefined,
+          },
+          appointment.provider_etag,
+        );
+        if (result.conflict) {
+          conflict = true;
+          const fresh = await calendar.getEvent(appointment.ms_event_id);
+          appointmentsService.upsertFromCalendarEvent(fresh);
+        } else if (result.event) {
+          appointmentsService.markPushed(appointment.id, result.event);
+        }
+      } catch (err) {
+        if (err instanceof MicrosoftAuthError) {
+          appointmentsService.setPushState(appointment.id, 'pending_push');
+        } else {
+          throw err;
+        }
+      }
+    }
+
+    res.json({ appointment: appointmentDto(appointment.id), ...(conflict ? { conflict: true } : {}) });
+  });
+
+  // ── POST /api/exams/appointments/:id/cancel — tombstone in Outlook, keep the row ──
+  router.post('/appointments/:id/cancel', async (req: Request, res: Response): Promise<void> => {
+    const appointment = appointmentsService.getAppointment(req.params.id);
+    if (!appointment) {
+      res.status(404).json({ error: 'Appointment not found.' });
+      return;
+    }
+    if (appointment.is_recurring) {
+      res.status(400).json({ error: 'This is a recurring appointment — cancel it in Outlook.' });
+      return;
+    }
+
+    appointmentsService.setStatus(appointment.id, 'cancelled');
+
+    const reminder = remindersService.findForAppointment(appointment.id);
+    if (reminder && reminder.status === 'pending') {
+      remindersService.cancelReminder(reminder.id);
+    }
+
+    if (appointment.ms_event_id && isMicrosoftConnected()) {
+      try {
+        const result = await calendar.tombstoneEvent(
+          appointment.ms_event_id,
+          appointment.title ?? 'Appointment',
+          appointment.provider_etag,
+        );
+        if (result.conflict) {
+          appointmentsService.upsertFromCalendarEvent(await calendar.getEvent(appointment.ms_event_id));
+          // The re-pull may have un-cancelled the row; the operator's
+          // intent stands — cancel it again locally and let pushPending retry.
+          appointmentsService.setStatus(appointment.id, 'cancelled');
+          appointmentsService.setPushState(appointment.id, 'pending_push');
+        } else if (result.event) {
+          appointmentsService.markPushed(appointment.id, result.event);
+        }
+      } catch (err) {
+        if (err instanceof MicrosoftAuthError) {
+          appointmentsService.setPushState(appointment.id, 'pending_push');
+        } else {
+          throw err;
+        }
+      }
+    }
+
+    res.json({ appointment: appointmentDto(appointment.id) });
+  });
+
+  router.delete('/appointments/:id', async (req: Request, res: Response): Promise<void> => {
+    const appointment = appointmentsService.getAppointment(req.params.id);
+    if (!appointment) {
+      res.status(404).json({ error: 'Appointment not found.' });
+      return;
+    }
+
+    // Hard path: remove the event from Outlook entirely (recoverable from
+    // Deleted Items). Routine cancellations use /cancel instead.
+    if (appointment.ms_event_id && isMicrosoftConnected()) {
+      try {
+        await calendar.deleteEvent(appointment.ms_event_id);
+      } catch (err) {
+        if (!(err instanceof MicrosoftAuthError)) throw err;
+        // Connection down — delete locally anyway; the Outlook event is
+        // orphaned but a human asked for this row to go.
+      }
+    }
+
+    appointmentsService.deleteAppointment(appointment.id);
     res.json({ success: true });
   });
 

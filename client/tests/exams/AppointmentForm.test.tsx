@@ -11,20 +11,36 @@ import * as api from '../../src/shared/api';
 beforeEach(() => {
   for (const fn of Object.values(api)) (fn as any).mockReset?.();
   api.createAppointment.mockResolvedValue(makeAppointment());
+  api.updateAppointment.mockResolvedValue({ appointment: makeAppointment() });
 });
 
-function renderForm(onCreated = vi.fn(), onCancel = vi.fn()) {
+function renderForm(onSaved = vi.fn(), onCancel = vi.fn()) {
   render(
     <ToastProvider>
-      <AppointmentForm patients={[makePatient()]} onCreated={onCreated} onCancel={onCancel} />
+      <AppointmentForm patients={[makePatient()]} onSaved={onSaved} onCancel={onCancel} />
     </ToastProvider>,
   );
-  return { onCreated, onCancel };
+  return { onSaved, onCancel };
+}
+
+function renderEditForm(appointment = makeAppointment(), onSaved = vi.fn()) {
+  render(
+    <ToastProvider>
+      <AppointmentForm
+        patients={[makePatient()]}
+        appointment={appointment}
+        onSaved={onSaved}
+        onCancel={vi.fn()}
+      />
+    </ToastProvider>,
+  );
+  return { onSaved };
 }
 
 /**
  * Spec: the calendar is normally the source of truth, so this covers what
- * it can't — a walk-in, or a phone booking not yet in Google Calendar.
+ * it can't — a walk-in, or a phone booking not yet in Outlook — plus
+ * editing an existing appointment, which pushes the change to Outlook.
  */
 describe('AppointmentForm', () => {
   it('offers the known patients, defaulting to unlinked', () => {
@@ -42,7 +58,7 @@ describe('AppointmentForm', () => {
   });
 
   it('creates an appointment with a computed end time', async () => {
-    const { onCreated } = renderForm();
+    const { onSaved } = renderForm();
 
     await userEvent.type(screen.getByLabelText(/Date and time/i), '2026-09-01T10:00');
     await userEvent.selectOptions(screen.getByLabelText('Length'), '60');
@@ -57,7 +73,7 @@ describe('AppointmentForm', () => {
     expect(payload.endsAt).toBe(new Date('2026-09-01T11:00').toISOString());
     expect(payload.title).toBe('Walk-in');
     expect(payload.patientId).toBeNull();
-    expect(onCreated).toHaveBeenCalled();
+    expect(onSaved).toHaveBeenCalled();
   });
 
   it('links the chosen patient', async () => {
@@ -73,13 +89,13 @@ describe('AppointmentForm', () => {
 
   it('surfaces a server rejection', async () => {
     api.createAppointment.mockRejectedValue(new Error('That patient does not exist.'));
-    const { onCreated } = renderForm();
+    const { onSaved } = renderForm();
 
     await userEvent.type(screen.getByLabelText(/Date and time/i), '2026-09-01T10:00');
     await userEvent.click(screen.getByRole('button', { name: /Add appointment/i }));
 
     expect(await screen.findByText(/That patient does not exist/i)).toBeInTheDocument();
-    expect(onCreated).not.toHaveBeenCalled();
+    expect(onSaved).not.toHaveBeenCalled();
   });
 
   it('cancels without creating anything', async () => {
@@ -89,5 +105,39 @@ describe('AppointmentForm', () => {
 
     expect(onCancel).toHaveBeenCalled();
     expect(api.createAppointment).not.toHaveBeenCalled();
+  });
+
+  describe('edit mode', () => {
+    it('prefills from the appointment and saves via updateAppointment', async () => {
+      const appointment = makeAppointment({
+        id: 'appt-9',
+        title: 'Follow-up',
+        starts_at: '2026-09-01T14:00:00.000Z',
+        ends_at: '2026-09-01T15:00:00.000Z',
+      });
+      const { onSaved } = renderEditForm(appointment);
+
+      expect(screen.getByRole('heading', { name: /Edit appointment/i })).toBeInTheDocument();
+      expect(screen.getByLabelText('Title')).toHaveValue('Follow-up');
+
+      await userEvent.clear(screen.getByLabelText('Title'));
+      await userEvent.type(screen.getByLabelText('Title'), 'Renamed');
+      await userEvent.click(screen.getByRole('button', { name: /Save changes/i }));
+
+      await waitFor(() => expect(api.updateAppointment).toHaveBeenCalled());
+      const [id, body] = api.updateAppointment.mock.calls[0];
+      expect(id).toBe('appt-9');
+      expect(body.title).toBe('Renamed');
+      expect(onSaved).toHaveBeenCalled();
+    });
+
+    it('surfaces an Outlook conflict', async () => {
+      api.updateAppointment.mockResolvedValue({ appointment: makeAppointment(), conflict: true });
+      renderEditForm();
+
+      await userEvent.click(screen.getByRole('button', { name: /Save changes/i }));
+
+      expect(await screen.findByText(/changed in Outlook/i)).toBeInTheDocument();
+    });
   });
 });

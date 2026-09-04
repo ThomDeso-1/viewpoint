@@ -166,6 +166,12 @@ export interface CalendarEventInput {
   startsAt: string;
   /** ISO 8601 instant; defaults to 30 minutes after the start. */
   endsAt?: string | null;
+  /**
+   * Client-supplied idempotency key. Graph drops a POST whose
+   * `transactionId` it has already seen (recent window), so a retried
+   * create after a lost response does not double-book.
+   */
+  transactionId?: string;
 }
 
 /** Graph wants a zone-less wall clock plus a named zone — send UTC of the instant. */
@@ -193,10 +199,44 @@ export async function createEvent(input: CalendarEventInput): Promise<CalendarEv
       start: toGraphSlot(start.toISOString()),
       end: toGraphSlot(end.toISOString()),
       isReminderOn: false,
+      ...(input.transactionId ? { transactionId: input.transactionId } : {}),
     }),
   });
 
   return toEvent(json);
+}
+
+/**
+ * Marks an event cancelled without deleting it — a tombstone the front
+ * desk still sees in Outlook. Graph's `isCancelled` is not directly
+ * settable on a no-attendee event and `/cancel` only applies to meetings
+ * with attendees, so this frees the slot (`showAs: 'free'`), tags it
+ * `Cancelled`, and prefixes the subject. `etag` → `If-Match`; `412` is
+ * surfaced like `updateEvent`.
+ */
+export async function tombstoneEvent(
+  eventId: string,
+  subject: string,
+  etag?: string | null,
+): Promise<{ event: CalendarEvent | null; conflict: boolean }> {
+  const prefixed = subject.startsWith('Cancelled — ') ? subject : `Cancelled — ${subject}`;
+
+  const res = await graphFetch(
+    `${eventsBase()}/${encodeURIComponent(eventId)}`,
+    {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Prefer: READ_TIMEZONE,
+        ...(etag ? { 'If-Match': etag } : {}),
+      },
+      body: JSON.stringify({ subject: prefixed, showAs: 'free', categories: ['Cancelled'] }),
+    },
+    { allow: [412] },
+  );
+
+  if (res.status === 412) return { event: null, conflict: true };
+  return { event: toEvent(await res.json()), conflict: false };
 }
 
 export interface CalendarEventPatch {

@@ -1,6 +1,6 @@
 import { v4 as uuid } from 'uuid';
 import { getDb } from '../db/db.js';
-import type { AppointmentRow, AppointmentSource, AppointmentStatus } from './types.js';
+import type { AppointmentRow, AppointmentSource, AppointmentStatus, SyncState } from './types.js';
 import type { CalendarEvent } from '../integrations/microsoft/calendar.js';
 
 /**
@@ -232,6 +232,74 @@ export function linkPatient(appointmentId: string, patientId: string): void {
   getDb()
     .prepare(`UPDATE appointments SET patient_id = ?, updated_at = ? WHERE id = ?`)
     .run(patientId, new Date().toISOString(), appointmentId);
+}
+
+export interface AppointmentEdit {
+  startsAt?: string;
+  endsAt?: string | null;
+  title?: string | null;
+  location?: string | null;
+}
+
+/**
+ * Local write of the operator-editable fields. The Graph push is the
+ * caller's job (routes/exams.ts); this just records the app-side state.
+ */
+export function updateAppointment(id: string, edit: AppointmentEdit): void {
+  const sets: string[] = [];
+  const params: Record<string, unknown> = { id, updated_at: new Date().toISOString() };
+
+  if (edit.startsAt !== undefined) {
+    sets.push('starts_at = @starts_at');
+    params.starts_at = edit.startsAt;
+  }
+  if (edit.endsAt !== undefined) {
+    sets.push('ends_at = @ends_at');
+    params.ends_at = edit.endsAt;
+  }
+  if (edit.title !== undefined) {
+    sets.push('title = @title');
+    params.title = edit.title;
+  }
+  if (edit.location !== undefined) {
+    sets.push('location = @location');
+    params.location = edit.location;
+  }
+  if (sets.length === 0) return;
+
+  getDb()
+    .prepare(`UPDATE appointments SET ${sets.join(', ')}, updated_at = @updated_at WHERE id = @id`)
+    .run(params);
+}
+
+/** After a successful Graph push: refresh the ETag / link and clear the flag. */
+export function markPushed(appointmentId: string, event: CalendarEvent): void {
+  const now = new Date().toISOString();
+  getDb()
+    .prepare(
+      `UPDATE appointments SET
+         provider_etag = @provider_etag,
+         web_link = COALESCE(@web_link, web_link),
+         sync_state = 'synced',
+         last_synced_at = @now,
+         updated_at = @now
+       WHERE id = @id`,
+    )
+    .run({ id: appointmentId, provider_etag: event.etag, web_link: event.webLink, now });
+}
+
+/** Flags a row whose synchronous Graph push failed, for the poller to retry. */
+export function setPushState(appointmentId: string, state: SyncState): void {
+  getDb()
+    .prepare(`UPDATE appointments SET sync_state = ?, updated_at = ? WHERE id = ?`)
+    .run(state, new Date().toISOString(), appointmentId);
+}
+
+/** Rows whose last push did not land — retried by `calendar-sync.pushPending()`. */
+export function listPendingPush(): AppointmentRow[] {
+  return getDb()
+    .prepare(`SELECT * FROM appointments WHERE sync_state IN ('pending_push', 'push_failed')`)
+    .all() as AppointmentRow[];
 }
 
 export function setStatus(appointmentId: string, status: AppointmentStatus): void {

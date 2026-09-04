@@ -1,29 +1,51 @@
 import { useState, type FormEvent } from 'react';
-import { createAppointment, type Patient } from '../shared/api';
+import { createAppointment, updateAppointment, type Appointment, type Patient } from '../shared/api';
 import { useToast } from '../shared/Toast';
 
 interface Props {
   patients: Patient[];
-  onCreated: () => void;
+  /** Present → edit that appointment; absent → create a new one. */
+  appointment?: Appointment;
+  onSaved: () => void;
   onCancel: () => void;
 }
 
+const DURATIONS = [15, 30, 45, 60];
+
+/** ISO instant → the `YYYY-MM-DDTHH:mm` a datetime-local input wants, in local time. */
+function toLocalInput(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function initialDuration(appointment?: Appointment): number {
+  if (!appointment?.ends_at) return 30;
+  const mins = Math.round(
+    (new Date(appointment.ends_at).getTime() - new Date(appointment.starts_at).getTime()) / 60_000,
+  );
+  return mins > 0 ? mins : 30;
+}
+
 /**
- * Enters an appointment by hand.
+ * Enters an appointment by hand, or edits an existing one.
  *
- * The calendar is normally the source of truth, so this is for the cases
- * it can't cover — a walk-in, or a booking taken by phone that hasn't
- * been put in Google Calendar yet. Such rows are marked `manual` so a
- * later calendar sync won't treat them as stale events.
+ * The Outlook calendar is the source of truth; a create or an edit here
+ * pushes straight to it (Phase 2). Recurring events are edited in Outlook
+ * only — the Schedule doesn't offer this form for them.
  */
-export function AppointmentForm({ patients, onCreated, onCancel }: Props) {
-  const [startsAt, setStartsAt] = useState('');
-  const [duration, setDuration] = useState(30);
-  const [title, setTitle] = useState('');
-  const [location, setLocation] = useState('');
-  const [patientId, setPatientId] = useState('');
+export function AppointmentForm({ patients, appointment, onSaved, onCancel }: Props) {
+  const editing = !!appointment;
+  const [startsAt, setStartsAt] = useState(appointment ? toLocalInput(appointment.starts_at) : '');
+  const [duration, setDuration] = useState(initialDuration(appointment));
+  const [title, setTitle] = useState(appointment?.title ?? '');
+  const [location, setLocation] = useState(appointment?.location ?? '');
+  const [patientId, setPatientId] = useState(appointment?.patient_id ?? '');
   const [saving, setSaving] = useState(false);
   const { showToast } = useToast();
+
+  const durationOptions = DURATIONS.includes(duration) ? DURATIONS : [duration, ...DURATIONS];
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -39,17 +61,27 @@ export function AppointmentForm({ patients, onCreated, onCancel }: Props) {
       // time — the same assumption the calendar matcher makes.
       const start = new Date(startsAt);
       const end = new Date(start.getTime() + duration * 60_000);
-
-      await createAppointment({
+      const body = {
         startsAt: start.toISOString(),
         endsAt: end.toISOString(),
         title: title.trim() || null,
         location: location.trim() || null,
         patientId: patientId || null,
-      });
+      };
 
-      showToast('Appointment added.', 'success');
-      onCreated();
+      if (editing) {
+        const result = await updateAppointment(appointment!.id, body);
+        showToast(
+          result.conflict
+            ? 'This appointment changed in Outlook — reloaded the latest version.'
+            : 'Appointment updated.',
+          result.conflict ? 'error' : 'success',
+        );
+      } else {
+        await createAppointment(body);
+        showToast('Appointment added.', 'success');
+      }
+      onSaved();
     } catch (err) {
       showToast((err as Error).message, 'error');
     } finally {
@@ -59,7 +91,7 @@ export function AppointmentForm({ patients, onCreated, onCancel }: Props) {
 
   return (
     <form className="card" onSubmit={handleSubmit}>
-      <h2>New appointment</h2>
+      <h2>{editing ? 'Edit appointment' : 'New appointment'}</h2>
 
       <label>
         Date and time
@@ -74,10 +106,11 @@ export function AppointmentForm({ patients, onCreated, onCancel }: Props) {
       <label>
         Length
         <select value={duration} onChange={(e) => setDuration(Number(e.target.value))}>
-          <option value={15}>15 minutes</option>
-          <option value={30}>30 minutes</option>
-          <option value={45}>45 minutes</option>
-          <option value={60}>1 hour</option>
+          {durationOptions.map((mins) => (
+            <option key={mins} value={mins}>
+              {mins < 60 ? `${mins} minutes` : mins === 60 ? '1 hour' : `${mins} minutes`}
+            </option>
+          ))}
         </select>
       </label>
 
@@ -108,7 +141,7 @@ export function AppointmentForm({ patients, onCreated, onCancel }: Props) {
 
       <div className="request-actions">
         <button type="submit" className="primary" disabled={saving}>
-          {saving ? 'Adding…' : 'Add appointment'}
+          {saving ? 'Saving…' : editing ? 'Save changes' : 'Add appointment'}
         </button>
         <button type="button" className="secondary" onClick={onCancel}>
           Cancel

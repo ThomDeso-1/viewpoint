@@ -628,6 +628,24 @@ export function createAppointment(body: {
   return request('/exams/appointments', { method: 'POST', body: JSON.stringify(body) });
 }
 
+export function updateAppointment(
+  id: string,
+  body: {
+    startsAt?: string;
+    endsAt?: string | null;
+    title?: string | null;
+    location?: string | null;
+    patientId?: string | null;
+  },
+): Promise<{ appointment: Appointment; conflict?: boolean }> {
+  return request(`/exams/appointments/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
+}
+
+/** Tombstones the appointment in Outlook and keeps the local row (status: cancelled). */
+export function cancelAppointment(id: string): Promise<{ appointment: Appointment }> {
+  return request(`/exams/appointments/${id}/cancel`, { method: 'POST' });
+}
+
 export function deleteAppointment(id: string): Promise<{ success: boolean }> {
   return request(`/exams/appointments/${id}`, { method: 'DELETE' });
 }

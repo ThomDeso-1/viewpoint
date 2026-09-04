@@ -543,7 +543,7 @@ app.delete('/graph/v1.0/me/events/:id', (req: Request, res: Response) => {
 // ── Dashboard ──
 
 app.get('/_demo/state', (_req: Request, res: Response) => {
-  res.json({ sentEmails, invoices, expenses, customers: [...customers.values()] });
+  res.json({ sentEmails, invoices, expenses, customers: [...customers.values()], msEvents });
 });
 
 app.post('/_demo/reset', (_req: Request, res: Response) => {
