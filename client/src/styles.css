@@ -75,7 +75,8 @@ button {
   color: inherit;
 }
 
-input {
+input,
+textarea {
   font: inherit;
   border: none;
   outline: none;
@@ -1792,15 +1793,17 @@ img {
 }
 .email-template-tokens summary {
   cursor: pointer;
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
 }
 .email-template-tokens ul {
   margin: 8px 0 0;
   padding-left: 18px;
   line-height: 1.6;
+  color: var(--text-secondary);
 }
 .email-template-tokens code {
   font-size: 12px;
+  color: var(--text-primary);
 }
 
 /* Settings uses .btn-* rather than the .page button vocabulary, so the

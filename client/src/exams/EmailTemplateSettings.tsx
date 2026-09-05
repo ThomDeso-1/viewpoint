@@ -131,7 +131,7 @@ export function EmailTemplateSettings() {
 
             <details className="email-template-tokens">
               <summary>Placeholders</summary>
-              <ul className="muted">
+              <ul>
                 {data.placeholders[kind].map((p) => (
                   <li key={p.token}>
                     <code>{`{{${p.token}}}`}</code> — {p.description}
