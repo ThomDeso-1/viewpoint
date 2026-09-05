@@ -1467,6 +1467,21 @@ img {
   cursor: pointer;
   font-weight: 600;
 }
+/* FullCalendar defaults day-grid event titles to nowrap, which lets long
+   titles spill past the day cell into the next day instead of wrapping. */
+.fc .fc-daygrid-event {
+  white-space: normal;
+}
+.fc .fc-daygrid-dot-event {
+  align-items: flex-start;
+}
+.fc .fc-daygrid-event .fc-event-title {
+  overflow: visible;
+  overflow-wrap: break-word;
+}
+.fc .fc-daygrid-event-dot {
+  margin-top: 4px;
+}
 .fc .fc-list-event:hover td {
   cursor: pointer;
 }

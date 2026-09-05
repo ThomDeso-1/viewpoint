@@ -5,7 +5,7 @@ import timeGridPlugin from '@fullcalendar/timegrid';
 import listPlugin from '@fullcalendar/list';
 import interactionPlugin from '@fullcalendar/interaction';
 import type { DateClickArg } from '@fullcalendar/interaction';
-import type { DatesSetArg, EventClickArg, EventInput } from '@fullcalendar/core';
+import type { DatesSetArg, EventClickArg, EventContentArg, EventInput } from '@fullcalendar/core';
 import {
   getAppointments,
   getCalendarSyncStatus,
@@ -154,6 +154,7 @@ export function Schedule({ ohipEnabled = false }: { ohipEnabled?: boolean }) {
             displayEventEnd
             eventTimeFormat={{ hour: 'numeric', minute: '2-digit', meridiem: 'short' }}
             events={events}
+            eventContent={monthViewTimeOnly}
             datesSet={handleDatesSet}
             dateClick={handleDateClick}
             eventClick={handleEventClick}
@@ -197,6 +198,19 @@ export function Schedule({ ohipEnabled = false }: { ohipEnabled?: boolean }) {
           />
         )}
       </div>
+    </>
+  );
+}
+
+// Month view is too cramped for a name — show just the time (with the usual
+// status dot) and let the click-through detail carry the rest. Other views
+// keep the default (time + title).
+function monthViewTimeOnly(arg: EventContentArg) {
+  if (arg.view.type !== 'dayGridMonth') return true;
+  return (
+    <>
+      <div className="fc-daygrid-event-dot" style={{ borderColor: arg.borderColor }} />
+      <span className="fc-event-time">{arg.timeText}</span>
     </>
   );
 }
