@@ -4,6 +4,7 @@ export { Card, Section } from './Card';
 export { Screen } from './Screen';
 export { PageHeader } from './PageHeader';
 export { Dialog, ConfirmDialog } from './Dialog';
+export { Notice } from './Notice';
 export { EmptyState } from './EmptyState';
 export { Skeleton, SkeletonText, SkeletonRows } from './Skeleton';
 export { Pill, type Tone } from './Pill';

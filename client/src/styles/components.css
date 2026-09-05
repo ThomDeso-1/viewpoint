@@ -289,18 +289,25 @@
 /* ============================================================
    KeyValue
    ============================================================ */
-.vp-kv {
-  display: grid;
-  grid-template-columns: max-content 1fr;
-  gap: var(--space-2) var(--space-4);
-  font-size: var(--text-sm);
-}
-.vp-kv-row { display: contents; }
-.vp-kv-key { color: var(--ink-3); }
+.vp-kv { font-size: var(--text-sm); }
+.vp-kv-row { display: flex; flex-direction: column; gap: 1px; }
+.vp-kv-row + .vp-kv-row { margin-top: var(--space-3); }
+.vp-kv-key { color: var(--ink-3); font-size: var(--text-xs); }
 .vp-kv-val { color: var(--ink-1); font-variant-numeric: tabular-nums; }
-@media (min-width: 768px) {
+
+@media (min-width: 560px) {
+  .vp-kv {
+    display: grid;
+    grid-template-columns: minmax(7rem, max-content) 1fr;
+    gap: var(--space-3) var(--space-4);
+  }
+  .vp-kv-row { display: contents; }
+  .vp-kv-row + .vp-kv-row { margin-top: 0; }
+  .vp-kv-key { font-size: var(--text-sm); padding-top: 1px; }
+}
+@media (min-width: 960px) {
   .vp-kv--2col {
-    grid-template-columns: max-content 1fr max-content 1fr;
+    grid-template-columns: minmax(7rem, max-content) 1fr minmax(7rem, max-content) 1fr;
     column-gap: var(--space-6);
   }
 }
@@ -356,3 +363,56 @@
 .vp-toast-msg { flex: 1; }
 .vp-toast-x { display: inline-flex; color: rgba(255, 255, 255, 0.6); padding: 2px; margin: -2px -2px 0 0; }
 .vp-toast-x:hover { color: #fff; }
+
+/* ============================================================
+   Notice
+   ============================================================ */
+.vp-notice {
+  display: flex;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-3);
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  font-size: var(--text-sm);
+  line-height: var(--leading-snug);
+}
+.vp-notice-icon { flex-shrink: 0; margin-top: 1px; }
+.vp-notice-body { min-width: 0; }
+.vp-notice-body a { font-weight: var(--weight-semibold); }
+.vp-notice--info    { background: var(--info-tint);   border-color: color-mix(in srgb, var(--brand) 22%, transparent);  color: var(--ink-1); }
+.vp-notice--info .vp-notice-icon    { color: var(--brand); }
+.vp-notice--warning { background: var(--warn-tint);   border-color: color-mix(in srgb, var(--warn) 26%, transparent);   color: var(--ink-1); }
+.vp-notice--warning .vp-notice-icon { color: var(--warn); }
+.vp-notice--danger  { background: var(--danger-tint); border-color: color-mix(in srgb, var(--danger) 28%, transparent); color: var(--ink-1); }
+.vp-notice--danger .vp-notice-icon  { color: var(--danger); }
+.vp-notice--success { background: var(--ok-tint);     border-color: color-mix(in srgb, var(--ok) 26%, transparent);     color: var(--ink-1); }
+.vp-notice--success .vp-notice-icon { color: var(--ok); }
+
+/* ============================================================
+   Shared utilities
+   ============================================================ */
+.vp-stack { display: flex; flex-direction: column; gap: var(--space-4); }
+.vp-stack--sm { gap: var(--space-2); }
+.vp-muted { color: var(--ink-3); }
+.vp-prewrap { white-space: pre-wrap; }
+.vp-error-text { color: var(--danger); }
+.vp-warn-text { color: var(--warn); font-weight: var(--weight-medium); }
+.vp-ok-text { color: var(--ok); font-weight: var(--weight-medium); }
+.vp-mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.vp-mb-4 { margin-bottom: var(--space-4); }
+.vp-mt-4 { margin-top: var(--space-4); }
+
+/* A read-only monospace block for previewing generated text (emails, records). */
+.vp-preview {
+  margin: 0;
+  padding: var(--space-3);
+  background: var(--surface-2);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: var(--leading-body);
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-x: auto;
+}

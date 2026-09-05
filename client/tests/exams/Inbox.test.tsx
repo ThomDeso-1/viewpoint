@@ -30,6 +30,11 @@ function renderInbox({ ohipEnabled = false }: { ohipEnabled?: boolean } = {}) {
   );
 }
 
+/** The invoice / reminder / source editors live behind "Review details". */
+async function openReview() {
+  await userEvent.click(await screen.findByRole('button', { name: /review details/i }));
+}
+
 /**
  * Spec: the inbox drafts everything but commits nothing. Approve is the
  * only action that reaches a patient or the books, and a simulated OHIP
@@ -96,6 +101,7 @@ describe('Inbox', () => {
     await screen.findByText('Ada Lovelace');
     expect(api.getExamRequestSource).not.toHaveBeenCalled();
 
+    await openReview();
     await userEvent.click(screen.getByRole('button', { name: /show source record/i }));
 
     await waitFor(() => expect(api.getExamRequestSource).toHaveBeenCalledWith('req-1'));
@@ -107,6 +113,7 @@ describe('Inbox', () => {
     renderInbox();
 
     await screen.findByText('Ada Lovelace');
+    await openReview();
     expect(screen.queryByRole('button', { name: /source record/i })).not.toBeInTheDocument();
   });
 
@@ -179,7 +186,9 @@ describe('Inbox', () => {
     api.getExamRequests.mockResolvedValue([makeExamRequest()]);
     renderInbox();
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Preview' }));
+    await screen.findByText('Ada Lovelace');
+    await openReview();
+    await userEvent.click(screen.getByRole('button', { name: 'Preview' }));
     expect(screen.getByText(/This is a reminder/)).toBeInTheDocument();
   });
 
@@ -194,12 +203,13 @@ describe('Inbox', () => {
     expect(await screen.findByText(/Private pay \$180/)).toBeInTheDocument();
   });
 
-  it('overrides the reminder lead time from the card', async () => {
+  it('overrides the reminder lead time', async () => {
     api.getExamRequests.mockResolvedValue([makeExamRequest()]);
     api.updateExamReminder.mockResolvedValue({ success: true, request: makeExamRequest() });
     renderInbox();
 
     await screen.findByText('Ada Lovelace');
+    await openReview();
     await userEvent.selectOptions(screen.getByLabelText(/Remind/i), '72');
 
     await waitFor(() => expect(api.updateExamReminder).toHaveBeenCalledWith('req-1', 72));
@@ -219,7 +229,9 @@ describe('Inbox', () => {
       api.getExamRequests.mockResolvedValue([makeExamRequest()]);
       renderInbox();
 
-      expect(await screen.findByRole('button', { name: /Edit lines/i })).toBeInTheDocument();
+      await screen.findByText('Ada Lovelace');
+      await openReview();
+      expect(screen.getByRole('button', { name: /Edit lines/i })).toBeInTheDocument();
     });
 
     it('does not offer editing once the invoice exists in Wave', async () => {
@@ -233,6 +245,7 @@ describe('Inbox', () => {
       renderInbox();
 
       await screen.findByText('Ada Lovelace');
+      await openReview();
       expect(screen.queryByRole('button', { name: /Edit lines/i })).not.toBeInTheDocument();
     });
 
@@ -240,7 +253,9 @@ describe('Inbox', () => {
       api.getExamRequests.mockResolvedValue([makeExamRequest()]);
       renderInbox();
 
-      await userEvent.click(await screen.findByRole('button', { name: /Edit lines/i }));
+      await screen.findByText('Ada Lovelace');
+      await openReview();
+      await userEvent.click(screen.getByRole('button', { name: /Edit lines/i }));
 
       expect(screen.getByDisplayValue('Comprehensive eye examination')).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Save invoice' })).toBeInTheDocument();
@@ -251,7 +266,9 @@ describe('Inbox', () => {
       api.updateInvoiceLineItems.mockResolvedValue({ success: true, request: makeExamRequest() });
       renderInbox();
 
-      await userEvent.click(await screen.findByRole('button', { name: /Edit lines/i }));
+      await screen.findByText('Ada Lovelace');
+      await openReview();
+      await userEvent.click(screen.getByRole('button', { name: /Edit lines/i }));
       await userEvent.click(screen.getByRole('button', { name: 'Save invoice' }));
 
       await waitFor(() => expect(api.updateInvoiceLineItems).toHaveBeenCalled());
