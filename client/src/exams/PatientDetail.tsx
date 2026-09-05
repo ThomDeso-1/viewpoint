@@ -17,6 +17,7 @@ import { PageHeader } from '../ui/PageHeader';
 import { Button } from '../ui/Button';
 import { Pill } from '../ui/Pill';
 import { SkeletonRows } from '../ui/Skeleton';
+import { formatDateTime } from '../shared/format';
 
 type PatientDetailData = Patient & {
   appointments: Appointment[];
@@ -310,8 +311,7 @@ export function PatientDetail({ ohipEnabled = false }: { ohipEnabled?: boolean }
           <ul className="plain-list">
             {patient.appointments.map((appointment) => (
               <li key={appointment.id}>
-                {new Date(appointment.starts_at).toLocaleString('en-CA')} —{' '}
-                {appointment.title ?? 'Exam'}
+                {formatDateTime(appointment.starts_at)} — {appointment.title ?? 'Exam'}
               </li>
             ))}
           </ul>
@@ -327,7 +327,7 @@ export function PatientDetail({ ohipEnabled = false }: { ohipEnabled?: boolean }
             <ul className="plain-list">
               {patient.eligibility_history.map((check) => (
                 <li key={check.id}>
-                  <span className="muted">{new Date(check.checked_at).toLocaleString('en-CA')}</span>{' '}
+                  <span className="vp-muted">{formatDateTime(check.checked_at)}</span>{' '}
                   {check.error ? (
                     <span className="error-text">failed — {check.error}</span>
                   ) : (

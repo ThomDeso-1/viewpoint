@@ -10,6 +10,7 @@ import {
 } from '../shared/api';
 import { useToast } from '../shared/Toast';
 import { parseIsoDate } from '../shared/format';
+import { ConfirmDialog } from '../ui/Dialog';
 
 interface Props {
   appointment: Appointment;
@@ -31,6 +32,7 @@ interface Props {
  */
 export function AppointmentDetail({ appointment, patients, ohipEnabled, onEdit, onChanged, onClose }: Props) {
   const [busy, setBusy] = useState<'cancel' | 'delete' | 'check' | null>(null);
+  const [confirming, setConfirming] = useState<'cancel' | 'delete' | null>(null);
   const { showToast } = useToast();
 
   const run = async (kind: NonNullable<typeof busy>, fn: () => Promise<unknown>, ok: string) => {
@@ -72,20 +74,16 @@ export function AppointmentDetail({ appointment, patients, ohipEnabled, onEdit, 
     }
   };
 
-  const handleCancel = () => {
-    const who = appointment.patient?.full_name ?? appointment.title ?? 'this appointment';
-    if (!window.confirm(`Cancel ${who}? Outlook will show it as cancelled.`)) return;
-    run('cancel', () => cancelAppointment(appointment.id), 'Appointment cancelled.');
-  };
+  const who = appointment.patient?.full_name ?? appointment.title ?? 'this appointment';
 
-  const handleDelete = () => {
-    if (
-      !window.confirm(
-        'Delete this appointment permanently? It is removed from Outlook too (recoverable from Deleted Items). Use Cancel instead for a normal cancellation.',
-      )
-    )
-      return;
-    run('delete', () => deleteAppointment(appointment.id).then(onClose), 'Appointment deleted.');
+  const runConfirmed = async () => {
+    const kind = confirming;
+    setConfirming(null);
+    if (kind === 'cancel') {
+      await run('cancel', () => cancelAppointment(appointment.id), 'Appointment cancelled.');
+    } else if (kind === 'delete') {
+      await run('delete', () => deleteAppointment(appointment.id).then(onClose), 'Appointment deleted.');
+    }
   };
 
   const cancelled = appointment.status === 'cancelled';
@@ -155,7 +153,11 @@ export function AppointmentDetail({ appointment, patients, ohipEnabled, onEdit, 
               </button>
             )}
             {!cancelled && (
-              <button className="link-button" onClick={handleCancel} disabled={busy === 'cancel'}>
+              <button
+                className="link-button"
+                onClick={() => setConfirming('cancel')}
+                disabled={busy === 'cancel'}
+              >
                 {busy === 'cancel' ? 'Cancelling…' : 'Cancel appointment'}
               </button>
             )}
@@ -167,11 +169,37 @@ export function AppointmentDetail({ appointment, patients, ohipEnabled, onEdit, 
           </a>
         )}
         {!recurring && (
-          <button className="link-button link-danger" onClick={handleDelete} disabled={busy === 'delete'}>
+          <button
+            className="link-button link-danger"
+            onClick={() => setConfirming('delete')}
+            disabled={busy === 'delete'}
+          >
             {busy === 'delete' ? 'Deleting…' : 'Delete permanently'}
           </button>
         )}
       </div>
+
+      <ConfirmDialog
+        open={confirming === 'cancel'}
+        title={`Cancel ${who}?`}
+        message="Outlook will show the appointment as cancelled. The patient is not notified from here."
+        confirmLabel="Yes, cancel it"
+        cancelLabel="Keep it"
+        destructive
+        loading={busy === 'cancel'}
+        onConfirm={runConfirmed}
+        onClose={() => setConfirming(null)}
+      />
+      <ConfirmDialog
+        open={confirming === 'delete'}
+        title="Delete this appointment permanently?"
+        message="It is removed from Outlook too (recoverable from Deleted Items there). Use “Cancel appointment” instead for a normal cancellation."
+        confirmLabel="Yes, delete it"
+        destructive
+        loading={busy === 'delete'}
+        onConfirm={runConfirmed}
+        onClose={() => setConfirming(null)}
+      />
     </section>
   );
 }

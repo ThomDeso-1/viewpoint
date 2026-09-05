@@ -120,30 +120,30 @@ describe('AppointmentDetail', () => {
     });
 
     it('cancels after confirmation', async () => {
-      vi.spyOn(window, 'confirm').mockReturnValue(true);
       api.cancelAppointment.mockResolvedValue({ appointment: makeAppointment({ status: 'cancelled' }) });
       const { onChanged } = renderDetail(makeAppointment({ patient: makePatient() }));
 
       await userEvent.click(screen.getByRole('button', { name: /Cancel appointment/i }));
+      await userEvent.click(await screen.findByRole('button', { name: /yes, cancel it/i }));
       await waitFor(() => expect(api.cancelAppointment).toHaveBeenCalledWith('appt-1'));
       expect(onChanged).toHaveBeenCalled();
     });
 
     it('deletes permanently after a strong confirm', async () => {
-      vi.spyOn(window, 'confirm').mockReturnValue(true);
       api.deleteAppointment.mockResolvedValue({ success: true });
       const { onClose } = renderDetail(makeAppointment({ patient: makePatient() }));
 
       await userEvent.click(screen.getByRole('button', { name: /Delete permanently/i }));
+      await userEvent.click(await screen.findByRole('button', { name: /yes, delete it/i }));
       await waitFor(() => expect(api.deleteAppointment).toHaveBeenCalledWith('appt-1'));
       expect(onClose).toHaveBeenCalled();
     });
 
     it('does not cancel if the confirm is dismissed', async () => {
-      vi.spyOn(window, 'confirm').mockReturnValue(false);
       renderDetail(makeAppointment({ patient: makePatient() }));
 
       await userEvent.click(screen.getByRole('button', { name: /Cancel appointment/i }));
+      await userEvent.click(await screen.findByRole('button', { name: /keep it/i }));
       expect(api.cancelAppointment).not.toHaveBeenCalled();
     });
 

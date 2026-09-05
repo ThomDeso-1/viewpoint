@@ -49,6 +49,16 @@
 .vp-settings-body .vp-section > .vp-kv { margin: var(--space-2) 0 var(--space-3); }
 
 .vp-settings-lede { font-size: var(--text-sm); color: var(--ink-2); }
+
+/* ── migrated sub-panels (Claude, Microsoft, …) ── */
+.vp-subpanel { padding: var(--space-5) 0; }
+.vp-subpanel:first-of-type { padding-top: 0; }
+.vp-subpanel + .vp-subpanel { border-top: 1px solid var(--hairline); }
+.vp-subpanel-title { font-size: var(--text-sm); font-weight: var(--weight-semibold); margin-bottom: var(--space-3); }
+.vp-subpanel-lede { font-size: var(--text-sm); color: var(--ink-2); line-height: var(--leading-snug); }
+.vp-subpanel-form { display: flex; flex-direction: column; gap: var(--space-3); margin-top: var(--space-3); max-width: 26rem; }
+.vp-subpanel .vp-kv { margin-bottom: var(--space-3); }
+.vp-subpanel-form .vp-preview { max-width: 100%; }
 .vp-settings-subhead {
   font-size: var(--text-sm);
   font-weight: var(--weight-semibold);

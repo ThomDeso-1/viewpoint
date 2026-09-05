@@ -1,6 +1,10 @@
 import { useState, type FormEvent } from 'react';
 import { validateClaudeKey, saveClaudeKey, type Settings as SettingsData } from '../shared/api';
 import { useToast } from '../shared/Toast';
+import { Button } from '../ui/Button';
+import { TextField } from '../ui/Field';
+import { Notice } from '../ui/Notice';
+import { KeyValueList, KeyValue } from '../ui/KeyValue';
 
 interface Props {
   settings: SettingsData | null;
@@ -8,10 +12,8 @@ interface Props {
 }
 
 /**
- * Claude API key panel for the Settings page.
- *
- * The same validate-then-save the onboarding wizard runs, so a user who
- * skipped that step can add the key later without editing `.env` by hand.
+ * Claude API key panel. The same validate-then-save the onboarding wizard
+ * runs, so a user who skipped that step can add the key later.
  */
 export function ClaudeSettings({ settings, onSaved }: Props) {
   const [editing, setEditing] = useState(false);
@@ -50,50 +52,48 @@ export function ClaudeSettings({ settings, onSaved }: Props) {
   };
 
   return (
-    <section className="settings-section">
-      <h2 className="settings-section-title">Claude API</h2>
-      <div className="settings-row">
-        <span className="settings-label">API Key</span>
-        <span className="settings-value">
+    <section className="vp-subpanel">
+      <h3 className="vp-subpanel-title">Claude API</h3>
+
+      <KeyValueList>
+        <KeyValue label="API key">
           {settings?.hasClaudeKey ? (
-            <span className="settings-key-preview">{settings.claudeKeyPreview}</span>
+            <span className="vp-mono">{settings.claudeKeyPreview}</span>
           ) : (
-            <span className="settings-not-set">Not configured</span>
+            <span className="vp-muted">Not configured</span>
           )}
-        </span>
-      </div>
+        </KeyValue>
+      </KeyValueList>
 
       {!editing ? (
-        <button className="link-button" onClick={() => setEditing(true)}>
+        <Button variant="ghost" size="sm" onClick={() => setEditing(true)}>
           {settings?.hasClaudeKey ? 'Replace key' : 'Add key'}
-        </button>
+        </Button>
       ) : (
-        <form onSubmit={handleSubmit}>
-          <label className="wizard-field-label" htmlFor="claude-key">
-            API key
-          </label>
-          <input
-            id="claude-key"
-            className="auth-input"
+        <form onSubmit={handleSubmit} className="vp-subpanel-form">
+          <TextField
+            label="API key"
             type="password"
             value={key}
             onChange={(e) => setKey(e.target.value)}
             placeholder="sk-ant-…"
             autoComplete="off"
             autoFocus
+            help={
+              <>
+                Create one at <code>console.anthropic.com</code> under API keys. Used to read vendor,
+                date and totals off your receipt photos.
+              </>
+            }
           />
-          <p className="settings-help">
-            Create one at <code>console.anthropic.com</code> under API keys. Used to read vendor, date,
-            and totals off your receipt photos.
-          </p>
-          {error && <p className="auth-error">{error}</p>}
-          <div className="request-actions">
-            <button type="submit" className="btn-primary" disabled={saving || !key.trim()}>
-              {saving ? 'Validating…' : 'Validate & Save'}
-            </button>
-            <button type="button" className="btn-secondary" onClick={cancel} disabled={saving}>
+          {error && <Notice tone="danger">{error}</Notice>}
+          <div className="vp-form-actions">
+            <Button type="submit" variant="primary" loading={saving} disabled={!key.trim()}>
+              Validate &amp; Save
+            </Button>
+            <Button type="button" variant="secondary" onClick={cancel} disabled={saving}>
               Cancel
-            </button>
+            </Button>
           </div>
         </form>
       )}

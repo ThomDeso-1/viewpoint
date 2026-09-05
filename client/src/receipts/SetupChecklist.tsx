@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { getExamSettings, type Settings } from '../shared/api';
+import { Button } from '../ui/Button';
+import { Icon } from '../ui/Icon';
 
 const DISMISSED_KEY = 'viewpoint.setup-checklist.dismissed';
 
@@ -74,32 +75,22 @@ export function SetupChecklist({ settings }: Props) {
       <div className="setup-checklist-head">
         <span className="setup-checklist-title">Finish setting up ({remaining} left)</span>
         <button className="setup-checklist-dismiss" onClick={dismiss} aria-label="Dismiss">
-          <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M6 6l8 8M14 6l-8 8" strokeLinecap="round" />
-          </svg>
+          <Icon name="close" size={16} />
         </button>
       </div>
       <ul className="setup-checklist-items">
         {items.map((item) => (
           <li key={item.label} className={item.done ? 'is-done' : ''}>
             <span className="setup-checklist-check" aria-hidden="true">
-              {item.done ? (
-                <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <path d="M4 10.5l4 4 8-9" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              ) : (
-                <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <circle cx="10" cy="10" r="7" />
-                </svg>
-              )}
+              <Icon name={item.done ? 'check' : 'circle'} size={15} strokeWidth={item.done ? 2.4 : 1.6} />
             </span>
             <span className="setup-checklist-label">{item.label}</span>
           </li>
         ))}
       </ul>
-      <Link to="/settings" className="btn-secondary" style={{ width: '100%' }}>
+      <Button variant="secondary" block to="/settings">
         Open Settings
-      </Link>
+      </Button>
     </div>
   );
 }
