@@ -17,4 +17,5 @@
 @import './styles/screens/shell.css';
 @import './styles/screens/inbox.css';
 @import './styles/screens/settings.css';
+@import './styles/screens/schedule.css';
 @import './styles/legacy.css';

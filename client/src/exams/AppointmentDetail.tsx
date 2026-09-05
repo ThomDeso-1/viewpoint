@@ -101,9 +101,6 @@ export function AppointmentDetail({ appointment, patients, ohipEnabled, onEdit, 
             (appointment.title ?? 'Untitled appointment')
           )}
         </h2>
-        <button className="link-button" onClick={onClose} aria-label="Close">
-          Close
-        </button>
       </div>
 
       <p className="muted">{formatRange(appointment.starts_at, appointment.ends_at)}</p>

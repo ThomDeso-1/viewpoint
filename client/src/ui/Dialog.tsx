@@ -11,6 +11,7 @@ export function Dialog({
   open,
   onClose,
   title,
+  ariaLabel,
   description,
   children,
   footer,
@@ -19,7 +20,10 @@ export function Dialog({
 }: {
   open: boolean;
   onClose: () => void;
-  title: ReactNode;
+  /** Rendered as the dialog's heading. Omit and pass `ariaLabel` when the
+   *  content supplies its own heading. */
+  title?: ReactNode;
+  ariaLabel?: string;
   description?: ReactNode;
   children?: ReactNode;
   footer?: ReactNode;
@@ -95,17 +99,20 @@ export function Dialog({
     >
       <div
         ref={panelRef}
-        className={`vp-dialog vp-dialog--${size}`}
+        className={`vp-dialog vp-dialog--${size}${title == null ? ' vp-dialog--untitled' : ''}`}
         role="dialog"
         aria-modal="true"
-        aria-labelledby={labelId}
+        aria-labelledby={title != null ? labelId : undefined}
+        aria-label={title == null ? ariaLabel : undefined}
         aria-describedby={description ? descId : undefined}
         tabIndex={-1}
       >
         <div className="vp-dialog-head">
-          <h2 id={labelId} className="vp-dialog-title">
-            {title}
-          </h2>
+          {title != null && (
+            <h2 id={labelId} className="vp-dialog-title">
+              {title}
+            </h2>
+          )}
           <button type="button" className="vp-dialog-x" onClick={onClose} aria-label="Close">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" aria-hidden="true">
               <path d="M6 6l12 12M18 6L6 18" />

@@ -98,9 +98,7 @@ export function AppointmentForm({ patients, appointment, defaultStartIso, onSave
   };
 
   return (
-    <form className="card" onSubmit={handleSubmit}>
-      <h2>{editing ? 'Edit appointment' : 'New appointment'}</h2>
-
+    <form className="card vp-appt-form" onSubmit={handleSubmit}>
       <label>
         Date and time
         <input

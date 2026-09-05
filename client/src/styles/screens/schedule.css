@@ -1,0 +1,161 @@
+/* Schedule (exams/Schedule) + FullCalendar theming */
+
+.vp-schedule-sync {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--ink-2);
+}
+
+.schedule-calendar { margin-bottom: var(--space-4); }
+
+/* Appointment detail (rendered inside a dialog) */
+.appointment-detail.card { border: none; padding: 0; margin: 0; }
+.appointment-detail-head h2 { font-size: var(--text-lg); }
+.appointment-detail-head h2 a { color: inherit; text-decoration: none; }
+.appointment-detail-head h2 a:hover { text-decoration: underline; }
+.appointment-detail-badges { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: var(--space-3) 0; }
+.appointment-detail-ohip { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-3); margin: var(--space-3) 0; }
+.appointment-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--hairline);
+  font-size: var(--text-sm);
+}
+.link-danger { color: var(--danger); }
+
+/* Appointment form (rendered inside a dialog) */
+.vp-appt-form.card { border: none; padding: 0; margin: 0; }
+.vp-appt-form label { font-size: var(--text-sm); font-weight: var(--weight-medium); color: var(--ink-2); }
+.vp-appt-form input,
+.vp-appt-form select {
+  display: block;
+  width: 100%;
+  margin-top: var(--space-1);
+  padding: 0.5rem 0.65rem;
+  font-size: 16px;
+  font-family: inherit;
+  color: var(--ink-1);
+  background: var(--surface);
+  border: 1px solid var(--hairline-2);
+  border-radius: var(--radius-sm);
+}
+.vp-appt-form input:focus,
+.vp-appt-form select:focus {
+  outline: none;
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--brand-tint);
+}
+.vp-appt-form .request-actions { margin-top: var(--space-5); }
+.vp-appt-form .muted { display: block; margin-top: var(--space-1); }
+
+/* legacy .primary / .secondary buttons inside the schedule dialogs
+   (they used to rely on a .page ancestor that no longer exists) */
+.vp-dialog button.primary,
+.vp-dialog button.secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45em;
+  padding: 0.55rem 0.95rem;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+.vp-dialog button.primary { background: var(--brand); color: var(--on-brand); }
+.vp-dialog button.primary:hover:not(:disabled) { background: var(--brand-hover); }
+.vp-dialog button.primary:disabled { opacity: 0.5; cursor: not-allowed; }
+.vp-dialog button.secondary { background: var(--surface); border-color: var(--hairline-2); color: var(--ink-1); }
+.vp-dialog button.secondary:hover { background: var(--surface-2); }
+
+/* ── FullCalendar → app tokens ── */
+.fc {
+  --fc-border-color: var(--hairline);
+  --fc-page-bg-color: var(--surface);
+  --fc-neutral-bg-color: var(--surface-2);
+  --fc-neutral-text-color: var(--ink-2);
+  --fc-today-bg-color: var(--brass-tint);
+  --fc-event-bg-color: var(--brand);
+  --fc-event-border-color: var(--brand);
+  --fc-event-text-color: var(--on-brand);
+  --fc-list-event-hover-bg-color: var(--surface-2);
+  --fc-now-indicator-color: var(--danger);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+}
+
+.fc .fc-toolbar.fc-header-toolbar {
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-3);
+}
+.fc .fc-toolbar-title {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+}
+.fc .fc-button {
+  background: var(--surface);
+  border: 1px solid var(--hairline-2);
+  color: var(--ink-1);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  padding: 0.35rem 0.7rem;
+  box-shadow: none;
+  text-transform: none;
+  border-radius: var(--radius-sm);
+}
+.fc .fc-button:hover { background: var(--surface-2); }
+.fc .fc-button-primary:not(:disabled).fc-button-active,
+.fc .fc-button-primary:not(:disabled):active {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: var(--on-brand);
+}
+.fc .fc-button:focus,
+.fc .fc-button-primary:focus {
+  outline: 2px solid var(--brass);
+  outline-offset: 1px;
+  box-shadow: none;
+}
+.fc .fc-daygrid-day-number,
+.fc .fc-col-header-cell-cushion {
+  color: var(--ink-2);
+  text-decoration: none;
+}
+.fc .fc-col-header-cell-cushion { font-weight: var(--weight-semibold); }
+.fc .fc-daygrid-day.fc-day-today .fc-daygrid-day-number { color: var(--brass); font-weight: var(--weight-semibold); }
+.fc .fc-daygrid-event,
+.fc .fc-timegrid-event { cursor: pointer; font-weight: var(--weight-medium); }
+.fc .fc-daygrid-event { white-space: normal; }
+.fc .fc-daygrid-dot-event { align-items: flex-start; }
+.fc .fc-daygrid-event .fc-event-title { overflow: visible; overflow-wrap: break-word; }
+.fc .fc-daygrid-event-dot { margin-top: 4px; }
+.fc .fc-list-event:hover td { cursor: pointer; }
+.fc .fc-list-day-cushion { background: var(--surface-2); }
+
+/* Event state: cancelled struck through, unsynced amber, recurring grey. */
+.fc-appt-cancelled { opacity: 0.55; text-decoration: line-through; }
+.fc-appt-unsynced {
+  --fc-event-bg-color: var(--warn);
+  --fc-event-border-color: var(--warn);
+}
+.fc-appt-recurring {
+  --fc-event-bg-color: var(--ink-3);
+  --fc-event-border-color: var(--ink-3);
+}
+.fc-appt-cancelled.fc-list-event td,
+.fc-appt-unsynced.fc-list-event .fc-list-event-dot { border-color: var(--warn); }
+
+@media (max-width: 600px) {
+  .fc .fc-toolbar.fc-header-toolbar { justify-content: center; }
+  .fc .fc-toolbar-chunk { display: flex; justify-content: center; }
+}

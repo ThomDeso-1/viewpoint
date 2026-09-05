@@ -117,7 +117,7 @@ describe('AppointmentForm', () => {
       });
       const { onSaved } = renderEditForm(appointment);
 
-      expect(screen.getByRole('heading', { name: /Edit appointment/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Save changes/i })).toBeInTheDocument();
       expect(screen.getByLabelText('Title')).toHaveValue('Follow-up');
 
       await userEvent.clear(screen.getByLabelText('Title'));

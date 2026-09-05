@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
@@ -16,16 +17,22 @@ import {
   type Patient,
 } from '../shared/api';
 import { useToast } from '../shared/Toast';
+import { Screen } from '../ui/Screen';
+import { PageHeader } from '../ui/PageHeader';
+import { Button } from '../ui/Button';
+import { Dialog } from '../ui/Dialog';
+import { Icon } from '../ui/Icon';
 import { AppointmentForm } from './AppointmentForm';
 import { AppointmentDetail } from './AppointmentDetail';
 
 /**
- * The Outlook / Microsoft 365 calendar, as a real month / week / day /
+ * The Outlook / Microsoft 365 calendar as a real month / week / day /
  * agenda view (FullCalendar). Click a day to book; click an event for its
- * detail and the actions that reach Outlook. Rescheduling is form-based —
- * there is no drag.
+ * detail and the actions that reach Outlook. Booking and rescheduling are
+ * form-based (in a dialog) — there is no drag.
  */
 export function Schedule({ ohipEnabled = false }: { ohipEnabled?: boolean }) {
+  const calRef = useRef<FullCalendar>(null);
   const [rows, setRows] = useState<Appointment[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [syncStatus, setSyncStatus] = useState<CalendarSyncStatus | null>(null);
@@ -33,13 +40,12 @@ export function Schedule({ ohipEnabled = false }: { ohipEnabled?: boolean }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [mode, setMode] = useState<'closed' | 'create' | 'edit'>('closed');
   const [createStart, setCreateStart] = useState<string>('');
-  // The visible window (set by FullCalendar's datesSet) and a bump-to-refetch key.
   const [range, setRange] = useState<{ from: string; to: string } | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const { showToast } = useToast();
 
-  const initialView =
-    typeof window !== 'undefined' && window.innerWidth < 768 ? 'listWeek' : 'dayGridMonth';
+  const isNarrow = () => typeof window !== 'undefined' && window.innerWidth < 768;
+  const initialView = isNarrow() ? 'listWeek' : 'dayGridMonth';
 
   useEffect(() => {
     Promise.all([getPatients(), getCalendarSyncStatus().catch(() => null)])
@@ -62,6 +68,19 @@ export function Schedule({ ohipEnabled = false }: { ohipEnabled?: boolean }) {
       live = false;
     };
   }, [range, reloadKey]);
+
+  // Keep the view sensible when the window crosses the phone/desktop line.
+  useEffect(() => {
+    let wasNarrow = isNarrow();
+    const onResize = () => {
+      const narrow = isNarrow();
+      if (narrow === wasNarrow) return;
+      wasNarrow = narrow;
+      calRef.current?.getApi().changeView(narrow ? 'listWeek' : 'dayGridMonth');
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   const refetch = () => setReloadKey((k) => k + 1);
   const reloadSyncStatus = () => getCalendarSyncStatus().then(setSyncStatus).catch(() => {});
@@ -110,55 +129,63 @@ export function Schedule({ ohipEnabled = false }: { ohipEnabled?: boolean }) {
   const events = useMemo(() => rows.map(toFcEvent), [rows]);
 
   return (
-    <div className="page schedule-page">
-      <header className="screen-header">
-        <h1 className="screen-title">Schedule</h1>
-        <div className="screen-actions">
-          <button className="primary" onClick={() => (mode === 'create' ? setMode('closed') : openCreate())}>
-            {mode === 'create' ? 'Close' : 'Add'}
-          </button>
-        </div>
-      </header>
+    <Screen width="wide" className="vp-schedule">
+      <PageHeader
+        title="Schedule"
+        actions={
+          <Button variant="primary" onClick={() => openCreate()} icon={<Icon name="plus" size={15} />}>
+            Add
+          </Button>
+        }
+      />
 
-        <div className="schedule-sync">
-          <span className="muted">
-            {syncStatus?.connected ? (
-              <>Synced with Outlook · {formatSyncAge(syncStatus.lastSyncedAt)}</>
-            ) : (
-              <>Not connected to Outlook — sign in from Settings.</>
-            )}
-          </span>
-          {syncStatus?.connected && (
-            <button className="link-button" onClick={handleSyncNow} disabled={syncing}>
-              {syncing ? 'Syncing…' : 'Sync now'}
-            </button>
+      <div className="vp-schedule-sync">
+        <span>
+          {syncStatus?.connected ? (
+            <>Synced with Outlook · {formatSyncAge(syncStatus.lastSyncedAt)}</>
+          ) : (
+            <>
+              Not connected to Outlook — <Link to="/settings">sign in from Settings</Link>.
+            </>
           )}
-        </div>
+        </span>
+        {syncStatus?.connected && (
+          <Button size="sm" variant="ghost" onClick={handleSyncNow} loading={syncing}>
+            Sync now
+          </Button>
+        )}
+      </div>
 
-        <div className="schedule-calendar">
-          <FullCalendar
-            plugins={[dayGridPlugin, timeGridPlugin, listPlugin, interactionPlugin]}
-            initialView={initialView}
-            headerToolbar={{
-              left: 'prev,next today',
-              center: 'title',
-              right: 'dayGridMonth,timeGridWeek,timeGridDay,listWeek',
-            }}
-            buttonText={{ today: 'Today', month: 'Month', week: 'Week', day: 'Day', list: 'Agenda' }}
-            firstDay={1}
-            height="auto"
-            nowIndicator
-            displayEventEnd
-            eventTimeFormat={{ hour: 'numeric', minute: '2-digit', meridiem: 'short' }}
-            events={events}
-            eventContent={monthViewTimeOnly}
-            datesSet={handleDatesSet}
-            dateClick={handleDateClick}
-            eventClick={handleEventClick}
-            noEventsContent="No appointments in this range."
-          />
-        </div>
+      <div className="schedule-calendar">
+        <FullCalendar
+          ref={calRef}
+          plugins={[dayGridPlugin, timeGridPlugin, listPlugin, interactionPlugin]}
+          initialView={initialView}
+          headerToolbar={{
+            left: 'prev,next today',
+            center: 'title',
+            right: 'dayGridMonth,timeGridWeek,timeGridDay,listWeek',
+          }}
+          buttonText={{ today: 'Today', month: 'Month', week: 'Week', day: 'Day', list: 'Agenda' }}
+          firstDay={1}
+          height="auto"
+          nowIndicator
+          displayEventEnd
+          eventTimeFormat={{ hour: 'numeric', minute: '2-digit', meridiem: 'short' }}
+          events={events}
+          eventContent={monthViewTimeOnly}
+          datesSet={handleDatesSet}
+          dateClick={handleDateClick}
+          eventClick={handleEventClick}
+          noEventsContent="No appointments in this range."
+        />
+      </div>
 
+      <Dialog
+        open={mode === 'create' || mode === 'edit'}
+        onClose={() => setMode('closed')}
+        title={mode === 'edit' ? 'Edit appointment' : 'New appointment'}
+      >
         {mode === 'create' && (
           <AppointmentForm
             patients={patients}
@@ -171,7 +198,6 @@ export function Schedule({ ohipEnabled = false }: { ohipEnabled?: boolean }) {
             onCancel={() => setMode('closed')}
           />
         )}
-
         {mode === 'edit' && selected && (
           <AppointmentForm
             patients={patients}
@@ -183,8 +209,14 @@ export function Schedule({ ohipEnabled = false }: { ohipEnabled?: boolean }) {
             onCancel={() => setMode('closed')}
           />
         )}
+      </Dialog>
 
-        {mode === 'closed' && selected && (
+      <Dialog
+        open={mode === 'closed' && !!selected}
+        onClose={() => setSelectedId(null)}
+        ariaLabel="Appointment"
+      >
+        {selected && (
           <AppointmentDetail
             appointment={selected}
             patients={patients}
@@ -194,13 +226,13 @@ export function Schedule({ ohipEnabled = false }: { ohipEnabled?: boolean }) {
             onClose={() => setSelectedId(null)}
           />
         )}
-    </div>
+      </Dialog>
+    </Screen>
   );
 }
 
 // Month view is too cramped for a name — show just the time (with the usual
-// status dot) and let the click-through detail carry the rest. Other views
-// keep the default (time + title).
+// status dot) and let the click-through detail carry the rest.
 function monthViewTimeOnly(arg: EventContentArg) {
   if (arg.view.type !== 'dayGridMonth') return true;
   return (
