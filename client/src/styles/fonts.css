@@ -1,0 +1,38 @@
+/*
+  Self-hosted fonts — bundled as woff2 by Vite, precached by the service
+  worker (workbox globPatterns already includes woff2), so the app's type
+  renders identically offline and on every platform. No CDN, no CSP concern.
+
+  · Bricolage Grotesque — variable (opsz 12–48, wght 400–700). Display only.
+  · IBM Plex Sans        — variable (wght 400–600). All UI text.
+  · IBM Plex Mono        — static 400 / 500. Figures: money, dates, IDs, code.
+*/
+
+@font-face {
+  font-family: 'Bricolage Grotesque';
+  src: url('../fonts/BricolageGrotesque-var.woff2') format('woff2-variations');
+  font-weight: 400 700;
+  font-stretch: 75% 100%;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'IBM Plex Sans';
+  src: url('../fonts/IBMPlexSans-var.woff2') format('woff2-variations');
+  font-weight: 400 600;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'IBM Plex Mono';
+  src: url('../fonts/IBMPlexMono-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'IBM Plex Mono';
+  src: url('../fonts/IBMPlexMono-Medium.woff2') format('woff2');
+  font-weight: 500;
+  font-display: swap;
+}

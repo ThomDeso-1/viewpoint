@@ -1,0 +1,175 @@
+/*
+  Design tokens — the single source of truth for colour, type, space and
+  elevation. Structured for three theme states:
+
+    · bare :root                          → the full light palette
+    · @media (prefers-color-scheme: dark) → dark, unless an explicit light
+      :root:not([data-theme="light"])        choice overrides the OS
+    · :root[data-theme="dark"]            → the manual toggle, both ways
+
+  Legacy screens (legacy.css) still reference the old names — those are kept
+  as aliases at the bottom of the :root block and resolve to the new tokens,
+  so the old CSS picks up the new palette until each screen is migrated.
+*/
+
+:root {
+  /* ── brand ── */
+  --brand-ink:    #16202b;   /* sidebar, deepest text */
+  --brand-ink-2:  #1e2c3a;
+  --brand:        #0f5f63;   /* lens-teal — primary actions, links, active nav */
+  --brand-hover:  #0b4a4e;
+  --brand-tint:   #e4eeee;   /* teal wash — selected rows, info surfaces */
+  --brass:        #b8863b;   /* the one highlight — recall / attention / focus */
+  --brass-tint:   #f4ead8;
+
+  /* ── neutrals (warm, to offset the cool teal) ── */
+  --paper:      #fbfaf7;   /* app background */
+  --surface:    #ffffff;   /* cards, raised surfaces */
+  --surface-2:  #f4f2ec;   /* sunken wells, code blocks, zebra */
+  --hairline:   #e7e3db;
+  --hairline-2: #d8d3c8;   /* control borders, stronger dividers */
+
+  --ink-1: #1c2530;   /* primary text on paper */
+  --ink-2: #55606c;   /* secondary */
+  --ink-3: #8a929c;   /* tertiary, captions, placeholder */
+  --on-brand: #ffffff; /* text on --brand / --brand-ink fills */
+
+  /* ── semantic (separate from the brand hue) ── */
+  --ok:     #1e7a4c;  --ok-tint:     #e2f0e7;
+  --warn:   #a85a1a;  --warn-tint:   #f6e8da;
+  --danger: #b4322a;  --danger-tint: #f6e1de;
+  --info:   var(--brand);  --info-tint: var(--brand-tint);
+
+  --focus-ring: color-mix(in srgb, var(--brass) 45%, transparent);
+
+  /* ── type ── */
+  --font-display: 'Bricolage Grotesque', 'Familjen Grotesk', ui-sans-serif, system-ui, sans-serif;
+  --font-sans: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+
+  --text-xs:   0.75rem;    /* 12 */
+  --text-sm:   0.8125rem;  /* 13 — dense-data default */
+  --text-base: 0.9375rem;  /* 15 — body */
+  --text-lg:   1.125rem;   /* 18 */
+  --text-xl:   1.375rem;   /* 22 */
+  --text-2xl:  1.75rem;    /* 28 */
+  --text-3xl:  2.25rem;    /* 36 */
+
+  --leading-tight: 1.15;
+  --leading-snug:  1.35;
+  --leading-body:  1.55;
+
+  --weight-regular:  400;
+  --weight-medium:   500;
+  --weight-semibold: 600;
+
+  /* ── space (4px base) ── */
+  --space-0: 0;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-8: 3rem;
+  --space-10: 4rem;
+  --space-12: 6rem;
+
+  /* ── radius ── */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-pill: 999px;
+
+  /* ── elevation (spent sparingly) ── */
+  --shadow-sm: 0 1px 2px rgba(22, 32, 43, 0.06), 0 1px 1px rgba(22, 32, 43, 0.04);
+  --shadow-md: 0 4px 16px rgba(22, 32, 43, 0.10), 0 1px 3px rgba(22, 32, 43, 0.06);
+
+  /* ── z-index ladder ── */
+  --z-nav: 100;
+  --z-overlay: 300;
+  --z-toast: 400;
+
+  /* ── layout ── */
+  --content-wide: 1080px;  /* lists, tables, calendar */
+  --content-read: 720px;   /* forms, review, auth */
+  --rail-w: 216px;         /* desktop sidebar */
+
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+
+  /* ── aliases for not-yet-migrated legacy.css ── */
+  --accent:          var(--brand);
+  --accent-hover:    var(--brand-hover);
+  --bg:              var(--paper);
+  --bg-card:         var(--surface);
+  --bg-header:       var(--brand-ink);
+  --text-primary:    var(--ink-1);
+  --text-secondary:  var(--ink-2);
+  --text-tertiary:   var(--ink-3);
+  --border:          var(--hairline);
+  --radius:          var(--radius-md);
+  --content-max:     var(--content-read);
+  --status-captured:  var(--ink-2);
+  --status-extracted: var(--brand);
+  --status-reviewed:  var(--warn);
+  --status-uploaded:  var(--ok);
+  --status-failed:    var(--danger);
+  --status-attention: var(--warn);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --brand-ink:   #0c1319;
+    --brand-ink-2: #131e27;
+    --brand:       #3fb8b0;
+    --brand-hover: #5ac9c1;
+    --brand-tint:  #16302f;
+    --brass:       #d6a860;
+    --brass-tint:  #2e2716;
+
+    --paper:      #10161c;
+    --surface:    #172029;
+    --surface-2:  #1e2932;
+    --hairline:   #2a353f;
+    --hairline-2: #38434d;
+
+    --ink-1: #eaecee;
+    --ink-2: #a7b0b9;
+    --ink-3: #6c7681;
+
+    --ok:     #4fb07c;  --ok-tint:     #16281f;
+    --warn:   #d08a4c;  --warn-tint:   #2e2114;
+    --danger: #e0685e;  --danger-tint: #2e1917;
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-md: 0 6px 20px rgba(0, 0, 0, 0.5);
+  }
+}
+
+:root[data-theme="dark"] {
+  --brand-ink:   #0c1319;
+  --brand-ink-2: #131e27;
+  --brand:       #3fb8b0;
+  --brand-hover: #5ac9c1;
+  --brand-tint:  #16302f;
+  --brass:       #d6a860;
+  --brass-tint:  #2e2716;
+
+  --paper:      #10161c;
+  --surface:    #172029;
+  --surface-2:  #1e2932;
+  --hairline:   #2a353f;
+  --hairline-2: #38434d;
+
+  --ink-1: #eaecee;
+  --ink-2: #a7b0b9;
+  --ink-3: #6c7681;
+
+  --ok:     #4fb07c;  --ok-tint:     #16281f;
+  --warn:   #d08a4c;  --warn-tint:   #2e2114;
+  --danger: #e0685e;  --danger-tint: #2e1917;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 6px 20px rgba(0, 0, 0, 0.5);
+}

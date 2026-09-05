@@ -12,10 +12,9 @@ export default defineConfig({
         name: 'Viewpoint',
         short_name: 'Viewpoint',
         description: 'Capture receipts and manage exam bookings.',
-        theme_color: '#1a2332',
-        background_color: '#f5f3ef',
+        theme_color: '#16202b',
+        background_color: '#fbfaf7',
         display: 'standalone',
-        orientation: 'portrait',
         start_url: '/',
         icons: [
           { src: 'icon-192.png', sizes: '192x192', type: 'image/png' },
