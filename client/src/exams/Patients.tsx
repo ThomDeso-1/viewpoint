@@ -10,7 +10,6 @@ import {
   type FollowupDue,
 } from '../shared/api';
 import { useToast } from '../shared/Toast';
-import { AppNav } from '../shared/AppNav';
 import { FollowupEmailComposer } from './FollowupEmailComposer';
 
 type PatientRow = Patient & { followup: PatientFollowup };
@@ -83,12 +82,10 @@ export function Patients() {
   }
 
   return (
-    <>
-      <AppNav />
-      <div className="page">
-        <header className="screen-header">
-          <h1 className="screen-title">Patients</h1>
-        </header>
+    <div className="page">
+      <header className="screen-header">
+        <h1 className="screen-title">Patients</h1>
+      </header>
 
         <div className="filter-row">
           <button
@@ -127,8 +124,7 @@ export function Patients() {
             }}
           />
         )}
-      </div>
-    </>
+    </div>
   );
 }
 

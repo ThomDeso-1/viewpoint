@@ -1,6 +1,7 @@
 import { useEffect, useState, lazy, Suspense } from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { getAuthStatus, type AuthStatus } from './shared/api';
+import { AppShell } from './components/AppShell';
 import { Login } from './auth/Login';
 import { Setup } from './auth/Setup';
 import { Onboarding } from './auth/Onboarding';
@@ -103,7 +104,24 @@ export function App() {
           )
         }
       />
-      <Route path="/" element={authed ? <ReceiptList /> : <Navigate to={gateTarget(auth)} replace />} />
+      {/* Signed-in screens. The shell (nav + frame) is a layout route, so it
+          mounts once and never unmounts between screens. Detail screens
+          (review, settings, patient, audit) still carry their own back
+          header and move under this route as Phase 3 migrates them. */}
+      <Route element={authed ? <AppShell /> : <Navigate to={gateTarget(auth)} replace />}>
+        <Route path="/" element={<ReceiptList />} />
+        <Route path="/inbox" element={<Inbox ohipEnabled={ohipEnabled} />} />
+        <Route
+          path="/schedule"
+          element={
+            <Suspense fallback={<div className="loading-screen"><div className="loading-spinner" /></div>}>
+              <Schedule ohipEnabled={ohipEnabled} />
+            </Suspense>
+          }
+        />
+        <Route path="/patients" element={<Patients />} />
+      </Route>
+
       <Route
         path="/review/:id"
         element={authed ? <ReceiptReview /> : <Navigate to={gateTarget(auth)} replace />}
@@ -116,23 +134,6 @@ export function App() {
         path="/settings"
         element={authed ? <Settings ohipEnabled={ohipEnabled} /> : <Navigate to={gateTarget(auth)} replace />}
       />
-      <Route
-        path="/inbox"
-        element={authed ? <Inbox ohipEnabled={ohipEnabled} /> : <Navigate to={gateTarget(auth)} replace />}
-      />
-      <Route
-        path="/schedule"
-        element={
-          authed ? (
-            <Suspense fallback={<div className="loading-screen"><div className="loading-spinner" /></div>}>
-              <Schedule ohipEnabled={ohipEnabled} />
-            </Suspense>
-          ) : (
-            <Navigate to={gateTarget(auth)} replace />
-          )
-        }
-      />
-      <Route path="/patients" element={authed ? <Patients /> : <Navigate to={gateTarget(auth)} replace />} />
       <Route
         path="/patients/:id"
         element={authed ? <PatientDetail ohipEnabled={ohipEnabled} /> : <Navigate to={gateTarget(auth)} replace />}

@@ -5,14 +5,12 @@ import {
   deleteReceipt,
   getHealthStatus,
   getSettings,
-  logout,
   type ReceiptGroup,
   type QueueStatus,
   type HealthStatus,
   type Settings,
 } from '../shared/api';
 import { AddToHomeScreenTip } from '../shared/AddToHomeScreenTip';
-import { AppNav } from '../shared/AppNav';
 import { SetupChecklist } from '../receipts/SetupChecklist';
 import { CaptureButton } from '../receipts/CaptureButton';
 import { ReceiptRow } from '../receipts/ReceiptRow';
@@ -66,11 +64,6 @@ export function ReceiptList() {
     }
   };
 
-  const handleLogout = async () => {
-    await logout();
-    navigate('/login', { replace: true });
-  };
-
   const handleTap = (id: string) => {
     navigate(`/review/${id}`);
   };
@@ -83,8 +76,6 @@ export function ReceiptList() {
 
   return (
     <div className="receipt-list-page">
-      <AppNav />
-
       <header className="screen-header">
         <h1 className="screen-title">Receipts</h1>
       </header>

@@ -1,0 +1,181 @@
+/*
+  App shell — the frame around every signed-in screen (components/AppShell).
+
+  Authored mobile-first: the top bar is the default; the desktop left rail
+  and grid are one @media block at the end so its overrides always win on
+  source order.
+*/
+
+.vp-shell {
+  min-height: 100dvh;
+  background: var(--paper);
+}
+
+.vp-main {
+  min-width: 0; /* let a grid child shrink instead of overflowing */
+}
+
+/* ── content column ── */
+.vp-screen {
+  margin: 0 auto;
+  padding: var(--space-5) var(--space-4) var(--space-10);
+}
+.vp-screen--wide { max-width: var(--content-wide); }
+.vp-screen--read { max-width: var(--content-read); }
+
+/* ============================================================
+   Top bar (default — tablet / phone)
+   ============================================================ */
+.vp-topbar {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-nav);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: calc(var(--space-2) + var(--safe-top)) var(--space-3) var(--space-2);
+  background: var(--brand-ink);
+  color: #fff;
+}
+.vp-topbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  color: #fff;
+  text-decoration: none;
+  flex-shrink: 0;
+}
+.vp-topbar-brand .vp-sidebar-name { display: none; }
+@media (min-width: 480px) {
+  .vp-topbar-brand .vp-sidebar-name { display: inline; }
+}
+.vp-topbar-nav {
+  margin-left: auto;
+  display: flex;
+  gap: 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.vp-topbar-nav::-webkit-scrollbar { display: none; }
+.vp-topbar-settings {
+  flex-shrink: 0;
+  display: inline-flex;
+  padding: 0.4rem;
+  border-radius: var(--radius-sm);
+  color: rgba(255, 255, 255, 0.7);
+}
+.vp-topbar-settings:hover,
+.vp-topbar-settings.is-active { color: #fff; background: rgba(255, 255, 255, 0.12); }
+
+/* ── left rail: hidden until the desktop breakpoint ── */
+.vp-sidebar { display: none; }
+.vp-sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  color: #fff;
+  padding: var(--space-2) var(--space-2) var(--space-4);
+}
+.vp-sidebar-name {
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  font-size: var(--text-base);
+  letter-spacing: -0.02em;
+}
+.vp-sidebar-nav { display: flex; flex-direction: column; gap: 2px; }
+.vp-sidebar-foot {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-top: var(--space-3);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* ── nav item (shared shape, per-variant sizing) ── */
+.vp-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+  font-weight: var(--weight-medium);
+  text-decoration: none;
+  color: inherit;
+  border-radius: var(--radius-sm);
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.vp-nav-item--bar {
+  padding: 0.4rem 0.7rem;
+  border-radius: var(--radius-pill);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  white-space: nowrap;
+  color: rgba(255, 255, 255, 0.62);
+}
+.vp-nav-item--bar svg { display: none; }
+.vp-nav-item--bar:hover { color: #fff; }
+.vp-nav-item--bar.is-active { background: rgba(255, 255, 255, 0.16); color: #fff; }
+
+.vp-nav-item--rail {
+  padding: 0.5rem 0.6rem;
+  font-size: var(--text-sm);
+  color: #c3ccd4;
+}
+.vp-nav-item--rail svg { opacity: 0.85; flex-shrink: 0; }
+.vp-nav-item--rail:hover { background: rgba(255, 255, 255, 0.06); color: #fff; }
+.vp-nav-item--rail.is-active {
+  background: rgba(255, 255, 255, 0.10);
+  color: #fff;
+  box-shadow: inset 2px 0 0 var(--brass);
+}
+.vp-nav-item--rail.is-active svg { opacity: 1; }
+
+.vp-sync {
+  font-size: var(--text-xs);
+  padding: var(--space-2) var(--space-2) 0;
+  display: flex;
+  align-items: center;
+  gap: 0.45em;
+  color: #8b96a0;
+}
+.vp-sync::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: currentColor;
+}
+.vp-sync--ok::before { background: var(--ok); }
+.vp-sync--off::before { background: #8b96a0; }
+.vp-sync--idle::before { background: transparent; box-shadow: inset 0 0 0 1px currentColor; }
+
+/* ============================================================
+   Desktop (≥1024px) — one block, last, so it wins on order
+   ============================================================ */
+@media (min-width: 1024px) {
+  .vp-shell {
+    display: grid;
+    grid-template-columns: var(--rail-w) minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .vp-topbar { display: none; }
+
+  .vp-sidebar {
+    grid-column: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    position: sticky;
+    top: 0;
+    height: 100dvh;
+    overflow-y: auto;
+    padding: var(--space-4) var(--space-3);
+    background: var(--brand-ink);
+    color: #c3ccd4;
+  }
+
+  .vp-main { grid-column: 2; }
+
+  .vp-screen { padding: var(--space-6) var(--space-6) var(--space-10); }
+}

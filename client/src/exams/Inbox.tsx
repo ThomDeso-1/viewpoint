@@ -13,7 +13,6 @@ import {
   type ExamRequestCounts,
 } from '../shared/api';
 import { useToast } from '../shared/Toast';
-import { AppNav } from '../shared/AppNav';
 import { StatusBadge } from '../shared/StatusBadge';
 import { parseIsoDate } from '../shared/format';
 import { InvoiceEditor } from '../exams/InvoiceEditor';
@@ -118,9 +117,7 @@ export function Inbox({ ohipEnabled = false }: { ohipEnabled?: boolean }) {
   }
 
   return (
-    <>
-      <AppNav />
-      <div className="page">
+    <div className="page">
       <header className="screen-header">
         <h1 className="screen-title">Exam requests</h1>
         <div className="screen-actions">
@@ -169,8 +166,7 @@ export function Inbox({ ohipEnabled = false }: { ohipEnabled?: boolean }) {
           ))}
         </div>
       )}
-      </div>
-    </>
+    </div>
   );
 }
 

@@ -1,6 +1,7 @@
 export { Button, type ButtonProps } from './Button';
 export { Field, Input, Select, Textarea, TextField } from './Field';
 export { Card, Section } from './Card';
+export { Screen } from './Screen';
 export { PageHeader } from './PageHeader';
 export { Dialog, ConfirmDialog } from './Dialog';
 export { EmptyState } from './EmptyState';

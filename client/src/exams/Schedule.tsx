@@ -16,7 +16,6 @@ import {
   type Patient,
 } from '../shared/api';
 import { useToast } from '../shared/Toast';
-import { AppNav } from '../shared/AppNav';
 import { AppointmentForm } from './AppointmentForm';
 import { AppointmentDetail } from './AppointmentDetail';
 
@@ -111,17 +110,15 @@ export function Schedule({ ohipEnabled = false }: { ohipEnabled?: boolean }) {
   const events = useMemo(() => rows.map(toFcEvent), [rows]);
 
   return (
-    <>
-      <AppNav />
-      <div className="page schedule-page">
-        <header className="screen-header">
-          <h1 className="screen-title">Schedule</h1>
-          <div className="screen-actions">
-            <button className="primary" onClick={() => (mode === 'create' ? setMode('closed') : openCreate())}>
-              {mode === 'create' ? 'Close' : 'Add'}
-            </button>
-          </div>
-        </header>
+    <div className="page schedule-page">
+      <header className="screen-header">
+        <h1 className="screen-title">Schedule</h1>
+        <div className="screen-actions">
+          <button className="primary" onClick={() => (mode === 'create' ? setMode('closed') : openCreate())}>
+            {mode === 'create' ? 'Close' : 'Add'}
+          </button>
+        </div>
+      </header>
 
         <div className="schedule-sync">
           <span className="muted">
@@ -197,8 +194,7 @@ export function Schedule({ ohipEnabled = false }: { ohipEnabled?: boolean }) {
             onClose={() => setSelectedId(null)}
           />
         )}
-      </div>
-    </>
+    </div>
   );
 }
 
