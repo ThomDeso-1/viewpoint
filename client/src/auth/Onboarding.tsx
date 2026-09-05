@@ -10,6 +10,7 @@ import {
   getMicrosoftStatus,
   type MicrosoftStatus,
 } from '../shared/api';
+import { Logo } from '../ui/Icon';
 
 interface Props {
   onComplete: () => void;
@@ -41,6 +42,8 @@ export function Onboarding({ onComplete, ohipEnabled = false }: Props) {
   const navigate = useNavigate();
   const [step, setStep] = useState<OuterStep>('claude');
   const totalSteps = ohipEnabled ? 5 : 4;
+  // Setup was step 1; these follow.
+  const stepIndex = { claude: 2, wave: 3, microsoft: 4, ohip: 5 }[step];
 
   // ── Claude API key ──
   const [claudeKey, setClaudeKey] = useState('');
@@ -186,12 +189,17 @@ export function Onboarding({ onComplete, ohipEnabled = false }: Props) {
     <div className="auth-page">
       <div className="auth-card">
         <div className="auth-logo">
-          <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
-            <rect width="48" height="48" rx="12" fill="var(--accent)" />
-            <path d="M14 34V18L24 12L34 18V34" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-            <path d="M20 34V26H28V34" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-            <circle cx="24" cy="21" r="2.5" stroke="white" strokeWidth="2" />
-          </svg>
+          <Logo size={44} />
+        </div>
+
+        <div
+          className="vp-wizard-progress"
+          role="progressbar"
+          aria-valuemin={1}
+          aria-valuemax={totalSteps}
+          aria-valuenow={stepIndex}
+        >
+          <span style={{ width: `${(stepIndex / totalSteps) * 100}%` }} />
         </div>
 
         {step === 'claude' && (

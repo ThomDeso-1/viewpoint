@@ -1,0 +1,37 @@
+/* Access log (exams/AuditLog) */
+
+.vp-audit-table-wrap {
+  margin-top: var(--space-4);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+  overflow-x: auto;
+}
+.vp-audit-table {
+  width: 100%;
+  min-width: 32rem;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+.vp-audit-table th {
+  position: sticky;
+  top: 0;
+  text-align: left;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  background: var(--surface-2);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--hairline);
+}
+.vp-audit-table td {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--hairline);
+  vertical-align: top;
+}
+.vp-audit-table tr:last-child td { border-bottom: none; }
+.vp-audit-table tbody tr:hover { background: var(--surface-2); }
+.vp-audit-time { color: var(--ink-3); white-space: nowrap; font-variant-numeric: tabular-nums; width: 7rem; }
+.vp-audit-action { font-weight: var(--weight-medium); white-space: nowrap; width: 12rem; }
+.vp-audit-detail { color: var(--ink-2); overflow-wrap: anywhere; }

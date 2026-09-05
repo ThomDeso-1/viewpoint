@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { getAuditLog, verifyAuditChain, type AuditEntry } from '../shared/api';
 import { useToast } from '../shared/Toast';
+import { Screen } from '../ui/Screen';
+import { PageHeader } from '../ui/PageHeader';
+import { Notice } from '../ui/Notice';
+import { EmptyState } from '../ui/EmptyState';
+import { SkeletonRows } from '../ui/Skeleton';
+import { maskId } from '../shared/format';
 
 /**
- * The access trail.
- *
- * PHIPA expects a record of who touched personal health information and
- * of anything sent to a patient. This is the read side of that.
+ * The access trail. PHIPA expects a record of who touched personal health
+ * information and of anything sent to a patient. This is the read side.
  */
 
 const ACTION_LABELS: Record<string, string> = {
@@ -31,7 +34,6 @@ const ACTION_LABELS: Record<string, string> = {
   'oauth.disconnect': 'Disconnected account',
 };
 
-/** Entries worth being able to isolate quickly. */
 const FILTERS = [
   { id: 'all', label: 'All' },
   { id: 'phi', label: 'Patient data', match: (a: string) => a.startsWith('patient.') || a.startsWith('health_card.') },
@@ -44,7 +46,6 @@ export function AuditLog() {
   const [filter, setFilter] = useState('all');
   const [loading, setLoading] = useState(true);
   const [chain, setChain] = useState<{ ok: boolean; brokenAtId: number | null } | null>(null);
-  const navigate = useNavigate();
   const { showToast } = useToast();
 
   useEffect(() => {
@@ -61,40 +62,29 @@ export function AuditLog() {
     return entries.filter((e) => active.match!(e.action));
   }, [entries, filter]);
 
-  if (loading) {
-    return (
-      <div className="loading-screen">
-        <div className="loading-spinner" />
-      </div>
-    );
-  }
-
   return (
-    <div className="page">
-      <header className="page-header">
-        <h1>Access log</h1>
-        <button type="button" className="button-link" onClick={() => navigate(-1)}>
-          Back
-        </button>
-      </header>
+    <Screen width="wide" className="vp-audit">
+      <PageHeader title="Access log" back />
 
-      <p className="settings-help">
+      <p className="vp-settings-lede">
         Every time patient data is read or changed, and everything sent to a patient. Kept locally,
-        newest first. Showing the most recent 500 entries.
+        newest first — the most recent 500 entries.
       </p>
 
       {chain && !chain.ok && (
-        <div className="banner banner-error">
+        <Notice tone="danger" className="vp-mt-4">
           The audit log's integrity check failed near entry #{chain.brokenAtId} — a row may have been
           edited or removed outside the app.
-        </div>
+        </Notice>
       )}
 
-      <div className="filter-row">
+      <div className="vp-segmented vp-mt-4">
         {FILTERS.map((f) => (
           <button
             key={f.id}
-            className={`filter-chip${filter === f.id ? ' filter-chip-active' : ''}`}
+            type="button"
+            aria-pressed={filter === f.id}
+            className={filter === f.id ? 'is-active' : ''}
             onClick={() => setFilter(f.id)}
           >
             {f.label}
@@ -102,31 +92,44 @@ export function AuditLog() {
         ))}
       </div>
 
-      {filtered.length === 0 ? (
-        <p className="empty-state">Nothing recorded yet.</p>
+      {loading ? (
+        <SkeletonRows rows={8} />
+      ) : filtered.length === 0 ? (
+        <EmptyState icon="info" title="Nothing recorded yet" />
       ) : (
-        <div className="audit-list">
-          {filtered.map((entry) => (
-            <div key={entry.id} className="audit-row">
-              <span className="audit-time">
-                {new Date(entry.at).toLocaleString('en-CA', {
-                  month: 'short',
-                  day: 'numeric',
-                  hour: 'numeric',
-                  minute: '2-digit',
-                })}
-              </span>
-              <span className="audit-action">{ACTION_LABELS[entry.action] ?? entry.action}</span>
-              <span className="muted audit-detail">
-                {entry.entity_type && entry.entity_id
-                  ? `${entry.entity_type} ${entry.entity_id.slice(0, 8)}`
-                  : ''}
-                {entry.detail ? ` · ${entry.detail}` : ''}
-              </span>
-            </div>
-          ))}
+        <div className="vp-audit-table-wrap">
+          <table className="vp-audit-table">
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Action</th>
+                <th>Detail</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((entry) => (
+                <tr key={entry.id}>
+                  <td className="vp-audit-time">
+                    {new Date(entry.at).toLocaleString('en-CA', {
+                      month: 'short',
+                      day: 'numeric',
+                      hour: 'numeric',
+                      minute: '2-digit',
+                    })}
+                  </td>
+                  <td className="vp-audit-action">{ACTION_LABELS[entry.action] ?? entry.action}</td>
+                  <td className="vp-audit-detail">
+                    {entry.entity_type && entry.entity_id
+                      ? `${entry.entity_type} ${maskId(entry.entity_id)}`
+                      : ''}
+                    {entry.detail ? ` · ${entry.detail}` : ''}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
-    </div>
+    </Screen>
   );
 }

@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { setup } from '../shared/api';
+import { Logo } from '../ui/Icon';
 
 interface Props {
   onComplete: () => Promise<void>;
@@ -39,14 +40,9 @@ export function Setup({ onComplete }: Props) {
     <div className="auth-page">
       <div className="auth-card">
         <div className="auth-logo">
-          <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
-            <rect width="48" height="48" rx="12" fill="var(--accent)" />
-            <path d="M14 34V18L24 12L34 18V34" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-            <path d="M20 34V26H28V34" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-            <circle cx="24" cy="21" r="2.5" stroke="white" strokeWidth="2" />
-          </svg>
+          <Logo size={52} />
         </div>
-        <p className="wizard-steps">Step 1 of 4</p>
+        <p className="wizard-steps">Step 1</p>
         <h1>Welcome to Viewpoint</h1>
         <p className="auth-subtitle">Set a password to protect your receipts</p>
 

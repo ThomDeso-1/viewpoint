@@ -20,4 +20,6 @@
 @import './styles/screens/schedule.css';
 @import './styles/screens/receipts.css';
 @import './styles/screens/patients.css';
+@import './styles/screens/audit.css';
+@import './styles/screens/auth.css';
 @import './styles/legacy.css';
