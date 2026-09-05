@@ -26,12 +26,14 @@ export function Card({
 }
 
 export function Section({
+  id,
   title,
   description,
   actions,
   children,
   className,
 }: {
+  id?: string;
   title?: ReactNode;
   description?: ReactNode;
   actions?: ReactNode;
@@ -39,7 +41,7 @@ export function Section({
   className?: string;
 }) {
   return (
-    <section className={['vp-section', className].filter(Boolean).join(' ')}>
+    <section id={id} className={['vp-section', className].filter(Boolean).join(' ')}>
       {(title != null || actions != null) && (
         <div className="vp-section-head">
           <div className="vp-section-heading">

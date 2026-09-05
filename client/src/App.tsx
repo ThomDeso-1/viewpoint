@@ -120,6 +120,7 @@ export function App() {
           }
         />
         <Route path="/patients" element={<Patients />} />
+        <Route path="/settings" element={<Settings ohipEnabled={ohipEnabled} />} />
       </Route>
 
       <Route
@@ -129,10 +130,6 @@ export function App() {
       <Route
         path="/review-batch"
         element={authed ? <BatchReview /> : <Navigate to={gateTarget(auth)} replace />}
-      />
-      <Route
-        path="/settings"
-        element={authed ? <Settings ohipEnabled={ohipEnabled} /> : <Navigate to={gateTarget(auth)} replace />}
       />
       <Route
         path="/patients/:id"

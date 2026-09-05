@@ -106,7 +106,7 @@
 }
 .vp-card--padded { padding: var(--space-5); }
 
-.vp-section { display: flex; flex-direction: column; gap: var(--space-4); }
+.vp-section { display: flow-root; }
 .vp-section + .vp-section {
   margin-top: var(--space-6);
   padding-top: var(--space-6);
@@ -117,6 +117,7 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--space-3);
+  margin-bottom: var(--space-4);
 }
 .vp-section-heading { display: flex; flex-direction: column; gap: 2px; }
 .vp-section-title { font-size: var(--text-lg); }

@@ -92,7 +92,6 @@ export function EmailTemplateSettings() {
 
   return (
     <div className="email-templates">
-      <h3 className="settings-subheading">Email templates</h3>
       <p className="settings-help">
         The wording of the emails the app drafts to patients. Use the {'{{'}placeholder{'}}'} tokens
         below — the app fills them in for each patient. You still review every message before it is
