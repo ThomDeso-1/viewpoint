@@ -1,8 +1,10 @@
+import { Pill, type Tone } from '../ui/Pill';
+
 interface Props {
   status: string;
 }
 
-const labels: Record<string, string> = {
+const LABELS: Record<string, string> = {
   // Receipts
   captured: 'Captured',
   extracted: 'Extracted',
@@ -20,10 +22,20 @@ const labels: Record<string, string> = {
   failed: 'Failed',
 };
 
+const TONES: Record<string, Tone> = {
+  captured: 'neutral',
+  extracted: 'progress',
+  reviewed: 'attention',
+  uploaded: 'done',
+  received: 'neutral',
+  drafted: 'progress',
+  approved: 'done',
+  completed: 'done',
+  rejected: 'neutral',
+  needsAttention: 'attention',
+  failed: 'failed',
+};
+
 export function StatusBadge({ status }: Props) {
-  return (
-    <span className={`status-badge status-${status}`}>
-      {labels[status] || status}
-    </span>
-  );
+  return <Pill tone={TONES[status] ?? 'neutral'}>{LABELS[status] || status}</Pill>;
 }
