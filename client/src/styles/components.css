@@ -95,6 +95,7 @@
   background-position: right 0.6rem center;
 }
 .vp-textarea { min-height: 5rem; resize: vertical; line-height: var(--leading-body); }
+.vp-input--mono { font-family: var(--font-mono); font-size: var(--text-sm); }
 
 /* ============================================================
    Card / Section
@@ -397,6 +398,10 @@
 .vp-notice--danger .vp-notice-icon  { color: var(--danger); }
 .vp-notice--success { background: var(--ok-tint);     border-color: color-mix(in srgb, var(--ok) 26%, transparent);     color: var(--ink-1); }
 .vp-notice--success .vp-notice-icon { color: var(--ok); }
+
+.vp-home-tip .vp-notice-body { display: flex; align-items: flex-start; gap: var(--space-2); }
+.vp-home-tip-x { flex-shrink: 0; display: inline-flex; margin-top: 1px; color: var(--ink-3); padding: 2px; border-radius: var(--radius-xs); }
+.vp-home-tip-x:hover { color: var(--ink-1); }
 
 /* ============================================================
    Shared utilities

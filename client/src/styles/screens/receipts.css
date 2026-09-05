@@ -37,6 +37,31 @@
   box-shadow: 0 0 0 3px var(--brand-tint);
 }
 
+/* ── alert group (3+ notices collapse) ── */
+.vp-alert-group { border: 1px solid var(--warn); border-radius: var(--radius-sm); background: var(--warn-tint); }
+.vp-alert-group > summary {
+  cursor: pointer;
+  padding: var(--space-3);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--ink-1);
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.vp-alert-group > summary::-webkit-details-marker { display: none; }
+.vp-alert-group > summary::before {
+  content: '';
+  width: 7px; height: 7px;
+  border-right: 1.5px solid var(--warn);
+  border-bottom: 1.5px solid var(--warn);
+  transform: rotate(-45deg);
+  transition: transform 0.15s;
+}
+.vp-alert-group[open] > summary::before { transform: rotate(45deg); }
+.vp-alert-group > div { padding: 0 var(--space-3) var(--space-3); }
+
 /* ── queue pills ── */
 .vp-queue-bar {
   display: flex;

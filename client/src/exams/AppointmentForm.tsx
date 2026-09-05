@@ -1,6 +1,8 @@
 import { useState, type FormEvent } from 'react';
 import { createAppointment, updateAppointment, type Appointment, type Patient } from '../shared/api';
 import { useToast } from '../shared/Toast';
+import { Button } from '../ui/Button';
+import { Field, Input, Select } from '../ui/Field';
 
 interface Props {
   patients: Patient[];
@@ -98,60 +100,62 @@ export function AppointmentForm({ patients, appointment, defaultStartIso, onSave
   };
 
   return (
-    <form className="card vp-appt-form" onSubmit={handleSubmit}>
-      <label>
-        Date and time
-        <input
+    <form className="vp-appt-form" onSubmit={handleSubmit}>
+      <Field label="Date and time" htmlFor="appt-start">
+        <Input
+          id="appt-start"
           type="datetime-local"
           value={startsAt}
           onChange={(e) => setStartsAt(e.target.value)}
           required
         />
-      </label>
+      </Field>
 
-      <label>
-        Length
-        <select value={duration} onChange={(e) => setDuration(Number(e.target.value))}>
+      <Field label="Length" htmlFor="appt-length">
+        <Select id="appt-length" value={duration} onChange={(e) => setDuration(Number(e.target.value))}>
           {durationOptions.map((mins) => (
             <option key={mins} value={mins}>
               {mins === 60 ? '1 hour' : `${mins} minutes`}
             </option>
           ))}
-        </select>
-      </label>
+        </Select>
+      </Field>
 
-      <label>
-        Patient
-        <select value={patientId} onChange={(e) => setPatientId(e.target.value)}>
+      <Field
+        label="Patient"
+        htmlFor="appt-patient"
+        help="Linking a patient is what allows a reminder for this appointment."
+      >
+        <Select id="appt-patient" value={patientId} onChange={(e) => setPatientId(e.target.value)}>
           <option value="">Not linked yet</option>
           {patients.map((p) => (
             <option key={p.id} value={p.id}>
               {p.full_name}
             </option>
           ))}
-        </select>
-        <small className="muted">
-          Linking a patient is what allows a reminder for this appointment.
-        </small>
-      </label>
+        </Select>
+      </Field>
 
-      <label>
-        Title
-        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Eye exam" />
-      </label>
+      <Field label="Title" htmlFor="appt-title">
+        <Input id="appt-title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Eye exam" />
+      </Field>
 
-      <label>
-        Location
-        <input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Optional" />
-      </label>
+      <Field label="Location" htmlFor="appt-location">
+        <Input
+          id="appt-location"
+          value={location}
+          onChange={(e) => setLocation(e.target.value)}
+          placeholder="Optional"
+        />
+      </Field>
 
-      <div className="request-actions">
-        <button type="submit" className="primary" disabled={saving}>
-          {saving ? 'Saving…' : editing ? 'Save changes' : 'Add appointment'}
-        </button>
-        <button type="button" className="secondary" onClick={onCancel}>
+      <div className="vp-form-actions">
+        <Button type="submit" variant="primary" loading={saving}>
+          {editing ? 'Save changes' : 'Add appointment'}
+        </Button>
+        <Button type="button" variant="secondary" onClick={onCancel}>
           Cancel
-        </button>
+        </Button>
       </div>
     </form>
   );

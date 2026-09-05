@@ -123,7 +123,17 @@ export function ReceiptList() {
 
       <AddToHomeScreenTip />
 
-      {alerts.length > 0 && <div className="vp-stack vp-stack--sm vp-mb-4">{alerts}</div>}
+      {alerts.length > 0 &&
+        (alerts.length <= 2 ? (
+          <div className="vp-stack vp-stack--sm vp-mb-4">{alerts}</div>
+        ) : (
+          <details className="vp-alert-group vp-mb-4">
+            <summary>
+              {alerts.length} things need your attention
+            </summary>
+            <div className="vp-stack vp-stack--sm">{alerts}</div>
+          </details>
+        ))}
 
       <SetupChecklist settings={settings} />
 

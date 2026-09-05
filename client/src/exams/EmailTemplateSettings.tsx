@@ -8,6 +8,8 @@ import {
   type EmailTemplate,
 } from '../shared/api';
 import { useToast } from '../shared/Toast';
+import { Button } from '../ui/Button';
+import { Field, Input, Textarea } from '../ui/Field';
 
 /**
  * Lets the operator edit the wording of the two emails the app drafts to
@@ -91,8 +93,8 @@ export function EmailTemplateSettings() {
   };
 
   return (
-    <div className="email-templates">
-      <p className="settings-help">
+    <div className="vp-email-templates">
+      <p className="vp-subpanel-lede">
         The wording of the emails the app drafts to patients. Use the {'{{'}placeholder{'}}'} tokens
         below — the app fills them in for each patient. You still review every message before it is
         sent.
@@ -102,33 +104,32 @@ export function EmailTemplateSettings() {
         const draft = drafts[kind];
         const isCustom = data.templates[kind].customised;
         return (
-          <section key={kind} className="email-template" aria-label={LABELS[kind].title}>
-            <h4 className="settings-subheading">
+          <section key={kind} className="vp-email-template" aria-label={LABELS[kind].title}>
+            <h4 className="vp-email-template-title">
               {LABELS[kind].title}
-              {isCustom && <span className="muted"> · customised</span>}
+              {isCustom && <span className="vp-muted"> · customised</span>}
             </h4>
-            <p className="settings-help">{LABELS[kind].blurb}</p>
+            <p className="vp-subpanel-lede">{LABELS[kind].blurb}</p>
 
-            <label className="wizard-field-label">
-              Subject
-              <input
-                className="auth-input"
+            <Field label="Subject" htmlFor={`tpl-${kind}-subject`}>
+              <Input
+                id={`tpl-${kind}-subject`}
                 value={draft.subject}
                 onChange={(e) => setDraft(kind, { subject: e.target.value })}
               />
-            </label>
+            </Field>
 
-            <label className="wizard-field-label">
-              Message
-              <textarea
-                className="auth-input"
+            <Field label="Message" htmlFor={`tpl-${kind}-body`}>
+              <Textarea
+                id={`tpl-${kind}-body`}
+                className="vp-input--mono"
                 rows={12}
                 value={draft.body}
                 onChange={(e) => setDraft(kind, { body: e.target.value })}
               />
-            </label>
+            </Field>
 
-            <details className="email-template-tokens">
+            <details className="vp-email-tokens">
               <summary>Placeholders</summary>
               <ul>
                 {data.placeholders[kind].map((p) => (
@@ -139,24 +140,24 @@ export function EmailTemplateSettings() {
               </ul>
             </details>
 
-            <div className="request-actions">
-              <button
-                className="btn-primary"
+            <div className="vp-form-actions">
+              <Button
+                variant="primary"
                 aria-label={`Save ${LABELS[kind].title} template`}
                 onClick={() => save(kind)}
-                disabled={busy === kind}
+                loading={busy === kind}
               >
-                {busy === kind ? 'Saving…' : 'Save wording'}
-              </button>
+                Save wording
+              </Button>
               {isCustom && (
-                <button
-                  className="btn-secondary"
+                <Button
+                  variant="secondary"
                   aria-label={`Reset ${LABELS[kind].title} template to default`}
                   onClick={() => reset(kind)}
                   disabled={busy === kind}
                 >
                   Reset to default
-                </button>
+                </Button>
               )}
             </div>
           </section>

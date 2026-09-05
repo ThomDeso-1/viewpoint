@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { Notice } from '../ui/Notice';
+import { Icon } from '../ui/Icon';
 
 const DISMISSED_KEY = 'vp_hide_add_home_tip';
 
@@ -34,15 +36,15 @@ export function AddToHomeScreenTip() {
   if (!visible) return null;
 
   return (
-    <div className="banner banner-tip home-screen-tip">
+    <Notice tone="info" className="vp-mb-4 vp-home-tip">
       <span>
         {isIOS()
           ? "Tip: tap the Share button below, then \"Add to Home Screen\" — it's faster than opening Safari every time."
           : 'Tip: open your browser menu and choose "Add to Home Screen" — it\'s faster than opening your browser every time.'}
       </span>
-      <button className="home-screen-tip-dismiss" onClick={dismiss} aria-label="Dismiss">
-        ✕
+      <button type="button" className="vp-home-tip-x" onClick={dismiss} aria-label="Dismiss">
+        <Icon name="close" size={14} />
       </button>
-    </div>
+    </Notice>
   );
 }

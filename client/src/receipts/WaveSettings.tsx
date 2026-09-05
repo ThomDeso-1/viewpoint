@@ -8,6 +8,10 @@ import {
   type Settings as SettingsData,
 } from '../shared/api';
 import { useToast } from '../shared/Toast';
+import { Button } from '../ui/Button';
+import { Field, Select, TextField } from '../ui/Field';
+import { Notice } from '../ui/Notice';
+import { KeyValueList, KeyValue } from '../ui/KeyValue';
 
 interface Props {
   settings: SettingsData | null;
@@ -134,167 +138,150 @@ export function WaveSettings({ settings, waveHealthy, onSaved }: Props) {
   };
 
   return (
-    <section className="settings-section">
-      <h2 className="settings-section-title">Wave Accounting</h2>
-      <div className="settings-row">
-        <span className="settings-label">Access Token</span>
-        <span className="settings-value">
+    <section className="vp-subpanel">
+      <h3 className="vp-subpanel-title">Wave Accounting</h3>
+
+      <KeyValueList>
+        <KeyValue label="Access token">
           {settings?.hasWaveToken ? (
-            <span className="settings-key-preview">{settings.waveTokenPreview}</span>
+            <span className="vp-mono">{settings.waveTokenPreview}</span>
           ) : (
-            <span className="settings-not-set">Not configured</span>
+            <span className="vp-muted">Not configured</span>
           )}
-        </span>
-      </div>
-      <div className="settings-row">
-        <span className="settings-label">Connection</span>
-        <span className="settings-value">
+        </KeyValue>
+        <KeyValue label="Connection">
           {waveHealthy === null ? (
             '…'
           ) : waveHealthy ? (
-            <span className="settings-healthy">Connected</span>
+            <span className="vp-ok-text">Connected</span>
           ) : (
-            <span className="settings-unhealthy">Disconnected</span>
+            <span className="vp-error-text">Disconnected</span>
           )}
-        </span>
-      </div>
-      {settings?.waveBusinessName && (
-        <div className="settings-row">
-          <span className="settings-label">Business</span>
-          <span className="settings-value">{settings.waveBusinessName}</span>
-        </div>
-      )}
+        </KeyValue>
+        {settings?.waveBusinessName && (
+          <KeyValue label="Business">{settings.waveBusinessName}</KeyValue>
+        )}
+      </KeyValueList>
 
       {stage === 'idle' && (
-        <button className="link-button" onClick={() => setStage('token')}>
+        <Button variant="ghost" size="sm" onClick={() => setStage('token')}>
           {settings?.hasWaveToken ? 'Reconnect Wave' : 'Connect Wave'}
-        </button>
+        </Button>
       )}
 
       {stage === 'token' && (
-        <form onSubmit={handleTokenSubmit}>
-          <label className="wizard-field-label" htmlFor="wave-token">
-            Access token
-          </label>
-          <input
-            id="wave-token"
-            className="auth-input"
+        <form onSubmit={handleTokenSubmit} className="vp-subpanel-form">
+          <TextField
+            label="Access token"
             type="password"
             value={token}
             onChange={(e) => setToken(e.target.value)}
             placeholder="Wave access token"
             autoComplete="off"
             autoFocus
+            error={error || undefined}
+            help={
+              <>
+                Create a full-access token at <code>developer.waveapps.com</code> under Manage
+                Applications. Used to upload approved receipts as expenses.
+              </>
+            }
           />
-          <p className="settings-help">
-            Create a full-access token at <code>developer.waveapps.com</code> under Manage Applications.
-            Used to upload approved receipts as expenses.
-          </p>
-          {error && <p className="auth-error">{error}</p>}
-          <div className="request-actions">
-            <button type="submit" className="btn-primary" disabled={busy || !token.trim()}>
-              {busy ? 'Connecting…' : 'Connect'}
-            </button>
-            <button type="button" className="btn-secondary" onClick={reset} disabled={busy}>
+          <div className="vp-form-actions">
+            <Button type="submit" variant="primary" loading={busy} disabled={!token.trim()}>
+              Connect
+            </Button>
+            <Button type="button" variant="secondary" onClick={reset} disabled={busy}>
               Cancel
-            </button>
+            </Button>
           </div>
         </form>
       )}
 
       {stage === 'business' && (
-        <>
-          <p className="settings-help">Which Wave business should receipts upload to?</p>
-          {error && <p className="auth-error">{error}</p>}
-          <div className="wizard-list">
+        <div className="vp-subpanel-form">
+          <p className="vp-subpanel-lede">Which Wave business should receipts upload to?</p>
+          {error && <Notice tone="danger">{error}</Notice>}
+          <div className="vp-choice-list">
             {businesses.map((b) => (
               <button
                 key={b.id}
-                className="wizard-list-item"
+                type="button"
+                className="vp-choice"
                 onClick={() => handleSelectBusiness(b)}
                 disabled={busy}
               >
                 <span>{b.name}</span>
-                {b.isPersonal && <span className="settings-not-set">Personal</span>}
+                {b.isPersonal && <span className="vp-muted">Personal</span>}
               </button>
             ))}
           </div>
-          <button className="wizard-back" onClick={() => setStage('token')} disabled={busy}>
+          <Button variant="ghost" size="sm" onClick={() => setStage('token')} disabled={busy}>
             ← Back
-          </button>
-        </>
+          </Button>
+        </div>
       )}
 
       {stage === 'accounts' && (
-        <form onSubmit={handleAccountsSubmit}>
-          <label className="wizard-field-label" htmlFor="wave-expense-account">
-            Expense account
-          </label>
-          <select
-            id="wave-expense-account"
-            className="wizard-select"
-            value={expenseAccountId}
-            onChange={(e) => setExpenseAccountId(e.target.value)}
-          >
-            <option value="">Select…</option>
-            {expenseAccounts.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
-              </option>
-            ))}
-          </select>
+        <form onSubmit={handleAccountsSubmit} className="vp-subpanel-form">
+          <Field label="Expense account" htmlFor="wave-expense-account">
+            <Select
+              id="wave-expense-account"
+              value={expenseAccountId}
+              onChange={(e) => setExpenseAccountId(e.target.value)}
+            >
+              <option value="">Select…</option>
+              {expenseAccounts.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
 
-          <label className="wizard-field-label" htmlFor="wave-anchor-account">
-            Paid from
-          </label>
-          <select
-            id="wave-anchor-account"
-            className="wizard-select"
-            value={anchorAccountId}
-            onChange={(e) => setAnchorAccountId(e.target.value)}
-          >
-            <option value="">Select…</option>
-            {anchorAccounts.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
-              </option>
-            ))}
-          </select>
+          <Field label="Paid from" htmlFor="wave-anchor-account">
+            <Select
+              id="wave-anchor-account"
+              value={anchorAccountId}
+              onChange={(e) => setAnchorAccountId(e.target.value)}
+            >
+              <option value="">Select…</option>
+              {anchorAccounts.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
 
-          <label className="wizard-field-label" htmlFor="wave-sales-tax">
-            Sales tax (optional)
-          </label>
-          <select
-            id="wave-sales-tax"
-            className="wizard-select"
-            value={salesTaxId}
-            onChange={(e) => setSalesTaxId(e.target.value)}
-          >
-            <option value="">None</option>
-            {taxes.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name} ({(t.rate * 100).toFixed(1)}%)
-              </option>
-            ))}
-          </select>
+          <Field label="Sales tax (optional)" htmlFor="wave-sales-tax">
+            <Select
+              id="wave-sales-tax"
+              value={salesTaxId}
+              onChange={(e) => setSalesTaxId(e.target.value)}
+            >
+              <option value="">None</option>
+              {taxes.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name} ({(t.rate * 100).toFixed(1)}%)
+                </option>
+              ))}
+            </Select>
+          </Field>
 
-          {error && <p className="auth-error">{error}</p>}
-          <div className="request-actions">
-            <button
+          {error && <Notice tone="danger">{error}</Notice>}
+          <div className="vp-form-actions">
+            <Button
               type="submit"
-              className="btn-primary"
-              disabled={busy || !expenseAccountId || !anchorAccountId}
+              variant="primary"
+              loading={busy}
+              disabled={!expenseAccountId || !anchorAccountId}
             >
-              {busy ? 'Saving…' : 'Save'}
-            </button>
-            <button
-              type="button"
-              className="btn-secondary"
-              onClick={() => setStage('business')}
-              disabled={busy}
-            >
+              Save
+            </Button>
+            <Button type="button" variant="secondary" onClick={() => setStage('business')} disabled={busy}>
               ← Back
-            </button>
+            </Button>
           </div>
         </form>
       )}

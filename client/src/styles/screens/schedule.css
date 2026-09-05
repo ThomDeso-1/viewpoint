@@ -31,49 +31,24 @@
 .link-danger { color: var(--danger); }
 
 /* Appointment form (rendered inside a dialog) */
-.vp-appt-form.card { border: none; padding: 0; margin: 0; }
-.vp-appt-form label { font-size: var(--text-sm); font-weight: var(--weight-medium); color: var(--ink-2); }
-.vp-appt-form input,
-.vp-appt-form select {
-  display: block;
-  width: 100%;
-  margin-top: var(--space-1);
-  padding: 0.5rem 0.65rem;
-  font-size: 16px;
-  font-family: inherit;
-  color: var(--ink-1);
-  background: var(--surface);
-  border: 1px solid var(--hairline-2);
-  border-radius: var(--radius-sm);
-}
-.vp-appt-form input:focus,
-.vp-appt-form select:focus {
-  outline: none;
-  border-color: var(--brand);
-  box-shadow: 0 0 0 3px var(--brand-tint);
-}
-.vp-appt-form .request-actions { margin-top: var(--space-5); }
-.vp-appt-form .muted { display: block; margin-top: var(--space-1); }
+.vp-appt-form { display: flex; flex-direction: column; gap: var(--space-3); }
+.vp-appt-form .vp-form-actions { margin-top: var(--space-4); }
 
-/* legacy .primary / .secondary buttons inside the schedule dialogs
-   (they used to rely on a .page ancestor that no longer exists) */
-.vp-dialog button.primary,
+/* AppointmentDetail's one legacy .secondary button ("Check OHIP") */
 .vp-dialog button.secondary {
   display: inline-flex;
   align-items: center;
-  gap: 0.45em;
-  padding: 0.55rem 0.95rem;
-  font-size: var(--text-sm);
+  padding: 0.35rem 0.65rem;
+  font-size: var(--text-xs);
   font-weight: var(--weight-semibold);
   border-radius: var(--radius-sm);
-  border: 1px solid transparent;
+  border: 1px solid var(--hairline-2);
+  background: var(--surface);
+  color: var(--ink-1);
   cursor: pointer;
 }
-.vp-dialog button.primary { background: var(--brand); color: var(--on-brand); }
-.vp-dialog button.primary:hover:not(:disabled) { background: var(--brand-hover); }
-.vp-dialog button.primary:disabled { opacity: 0.5; cursor: not-allowed; }
-.vp-dialog button.secondary { background: var(--surface); border-color: var(--hairline-2); color: var(--ink-1); }
 .vp-dialog button.secondary:hover { background: var(--surface-2); }
+.vp-dialog button.secondary:disabled { opacity: 0.5; }
 
 /* ── FullCalendar → app tokens ── */
 .fc {

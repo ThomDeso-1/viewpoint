@@ -9,6 +9,9 @@ import {
   type WaveInvoiceTargets,
 } from '../shared/api';
 import { useToast } from '../shared/Toast';
+import { Button } from '../ui/Button';
+import { Field, Select, TextField } from '../ui/Field';
+import { Notice } from '../ui/Notice';
 
 /**
  * The exam-request workflow settings: which folder to scan for patient
@@ -92,36 +95,36 @@ export function ExamSettings() {
       : '';
 
   return (
-    <section className="settings-section">
-      <h2 className="settings-section-title">Exam Requests</h2>
+    <section className="vp-subpanel">
+      <h3 className="vp-subpanel-title">Exam requests</h3>
 
-      <p className="settings-help">
+      <p className="vp-subpanel-lede">
         Files in the patient files folder are read every minute, drafted automatically, and held for
         your approval. Nothing is sent to a patient or posted to Wave until you approve it.
       </p>
 
-      <label className="wizard-field-label">
-        Patient files folder
-        <input
-          className="auth-input"
-          value={form.sourceFolder}
-          onChange={(e) => setForm({ ...form, sourceFolder: e.target.value })}
-          placeholder="/Users/you/Dropbox/Viewpoint/patient-files"
-        />
-        <small className="muted">
-          An absolute path to a folder on this computer — typically one a Dropbox, iCloud or Google
-          Drive desktop app keeps synced. Scanned recursively for .docx, .xlsx, .csv, .pdf, .txt and
-          .eml files; a file is re-read only if its contents change. Nothing is scanned while this is
-          empty.
-        </small>
-      </label>
+      <div className="vp-subpanel-form">
+      <TextField
+        label="Patient files folder"
+        value={form.sourceFolder}
+        onChange={(e) => setForm({ ...form, sourceFolder: e.target.value })}
+        placeholder="/Users/you/Dropbox/Viewpoint/patient-files"
+        help="An absolute path to a folder on this computer — typically one a Dropbox, iCloud or Google Drive desktop app keeps synced. Scanned recursively for .docx, .xlsx, .csv, .pdf, .txt and .eml files; a file is re-read only if its contents change. Nothing is scanned while this is empty."
+      />
 
-      <button className="btn-secondary" onClick={handleTestFolder} disabled={testing || !form.sourceFolder}>
-        {testing ? 'Testing…' : 'Test folder'}
-      </button>
+      <div className="vp-form-actions">
+        <Button
+          variant="secondary"
+          onClick={handleTestFolder}
+          loading={testing}
+          disabled={!form.sourceFolder}
+        >
+          Test folder
+        </Button>
+      </div>
 
       {folderTest && (
-        <div className={`banner ${folderTest.ok ? 'banner-info' : 'banner-warning'}`}>
+        <Notice tone={folderTest.ok ? 'info' : 'warning'}>
           {folderTest.ok ? (
             <>
               Found {folderTest.fileCount} file{folderTest.fileCount === 1 ? '' : 's'}
@@ -145,46 +148,40 @@ export function ExamSettings() {
           ) : (
             <>Couldn't read that folder: {folderTest.error}</>
           )}
-        </div>
+        </Notice>
       )}
 
-      <label className="wizard-field-label">
-        Minimum confidence
-        <input
-          className="auth-input"
-          type="number"
-          min="0"
-          max="1"
-          step="0.05"
-          value={form.minConfidence}
-          onChange={(e) => setForm({ ...form, minConfidence: Number(e.target.value) })}
-        />
-        <small className="muted">
-          Between 0 and 1. Below this, a request is held for manual review instead of being drafted —
-          usually meaning the email wasn't really a booking. Default 0.6.
-        </small>
-      </label>
+      <TextField
+        label="Minimum confidence"
+        type="number"
+        min="0"
+        max="1"
+        step="0.05"
+        value={form.minConfidence}
+        onChange={(e) => setForm({ ...form, minConfidence: Number(e.target.value) })}
+        help="Between 0 and 1. Below this, a request is held for manual review instead of being drafted — usually meaning the email wasn't really a booking. Default 0.6."
+      />
 
-      <h3 className="settings-subheading">Invoicing</h3>
+      <h4 className="vp-subpanel-subhead">Invoicing</h4>
 
       {!form.invoicingReady && (
-        <div className="banner banner-warning">
+        <Notice tone="warning">
           Choose a service product or income account below — invoices cannot be created without one.
-        </div>
+        </Notice>
       )}
 
       {targetsError ? (
-        <p className="settings-help">
+        <p className="vp-subpanel-lede">
           Couldn't load your Wave products and accounts: {targetsError}
         </p>
       ) : (
-        <>
-          <label className="wizard-field-label" htmlFor="invoice-target">
-            Invoice line comes from
-          </label>
-          <select
+        <Field
+          label="Invoice line comes from"
+          htmlFor="invoice-target"
+          help="A saved Wave product carries its own name and price; an income account is the plainer option if you don't keep products. One or the other, not both."
+        >
+          <Select
             id="invoice-target"
-            className="wizard-select"
             value={selectedTarget}
             onChange={(e) => chooseInvoiceTarget(e.target.value)}
           >
@@ -208,58 +205,45 @@ export function ExamSettings() {
                 ))}
               </optgroup>
             )}
-          </select>
-          <small className="muted">
-            A saved Wave product carries its own name and price; an income account is the plainer
-            option if you don't keep products. One or the other, not both.
-          </small>
-        </>
+          </Select>
+        </Field>
       )}
 
-      <label className="wizard-field-label">
-        Default exam fee
-        <input
-          className="auth-input"
-          type="number"
-          min="0"
-          step="0.01"
-          value={form.examFeeAmount}
-          onChange={(e) => setForm({ ...form, examFeeAmount: Number(e.target.value) })}
-        />
-        <small className="muted">
-          Used for the first line of a drafted invoice. You can edit the lines on any request before
-          approving it.
-        </small>
-      </label>
+      <TextField
+        label="Default exam fee"
+        type="number"
+        min="0"
+        step="0.01"
+        value={form.examFeeAmount}
+        onChange={(e) => setForm({ ...form, examFeeAmount: Number(e.target.value) })}
+        help="Used for the first line of a drafted invoice. You can edit the lines on any request before approving it."
+      />
 
-      <h3 className="settings-subheading">Reminders</h3>
+      <h4 className="vp-subpanel-subhead">Reminders</h4>
 
-      <label className="wizard-field-label">
-        Business name
-        <input
-          className="auth-input"
-          value={form.businessName}
-          onChange={(e) => setForm({ ...form, businessName: e.target.value })}
-          placeholder="Viewpoint Vision Care"
-        />
-        <small className="muted">Appears in the reminder email sent to patients.</small>
-      </label>
+      <TextField
+        label="Business name"
+        value={form.businessName}
+        onChange={(e) => setForm({ ...form, businessName: e.target.value })}
+        placeholder="Viewpoint Vision Care"
+        help="Appears in the reminder email sent to patients."
+      />
 
-      <label className="wizard-field-label">
-        Timezone
-        <input
-          className="auth-input"
-          value={form.businessTimezone}
-          onChange={(e) => setForm({ ...form, businessTimezone: e.target.value })}
-          placeholder="America/Toronto"
-        />
-        <small className="muted">Used to write appointment times in reminder emails.</small>
-      </label>
+      <TextField
+        label="Timezone"
+        value={form.businessTimezone}
+        onChange={(e) => setForm({ ...form, businessTimezone: e.target.value })}
+        placeholder="America/Toronto"
+        help="Used to write appointment times in reminder emails."
+      />
 
-      <label className="wizard-field-label">
-        Default reminder time
-        <select
-          className="wizard-select"
+      <Field
+        label="Default reminder time"
+        htmlFor="reminder-lead"
+        help="When patient reminder emails go out. You can override this per patient on the request card before approving."
+      >
+        <Select
+          id="reminder-lead"
           value={
             [24, 48, 72, 168, 336].includes(form.reminderLeadHours)
               ? String(form.reminderLeadHours)
@@ -275,16 +259,15 @@ export function ExamSettings() {
           <option value="72">3 days before</option>
           <option value="168">1 week before</option>
           <option value="336">2 weeks before</option>
-        </select>
-        <small className="muted">
-          When patient reminder emails go out. You can override this per patient on the request card
-          before approving.
-        </small>
-      </label>
+        </Select>
+      </Field>
 
-      <button className="btn-primary" onClick={handleSave} disabled={saving}>
-        {saving ? 'Saving…' : 'Save'}
-      </button>
+      <div className="vp-form-actions">
+        <Button variant="primary" onClick={handleSave} loading={saving}>
+          Save
+        </Button>
+      </div>
+      </div>
     </section>
   );
 }

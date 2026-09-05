@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { updateInvoiceLineItems, type InvoiceLineItem } from '../shared/api';
 import { useToast } from '../shared/Toast';
+import { Button } from '../ui/Button';
+import { Icon } from '../ui/Icon';
 
 interface Props {
   examRequestId: string;
@@ -106,12 +108,13 @@ export function InvoiceEditor({ examRequestId, lineItems, currency, onSaved }: P
               </td>
               <td>
                 <button
-                  className="link-button"
+                  type="button"
+                  className="vp-invoice-remove"
                   onClick={() => removeLine(index)}
                   disabled={items.length === 1}
                   aria-label={`Remove line ${index + 1}`}
                 >
-                  ×
+                  <Icon name="close" size={14} />
                 </button>
               </td>
             </tr>
@@ -132,13 +135,13 @@ export function InvoiceEditor({ examRequestId, lineItems, currency, onSaved }: P
         </tfoot>
       </table>
 
-      <div className="request-actions">
-        <button className="secondary" onClick={addLine}>
+      <div className="vp-form-actions">
+        <Button size="sm" variant="secondary" onClick={addLine} icon={<Icon name="plus" size={13} />}>
           Add line
-        </button>
-        <button className="primary" onClick={handleSave} disabled={saving}>
-          {saving ? 'Saving…' : 'Save invoice'}
-        </button>
+        </Button>
+        <Button size="sm" variant="primary" onClick={handleSave} loading={saving}>
+          Save invoice
+        </Button>
       </div>
     </div>
   );
