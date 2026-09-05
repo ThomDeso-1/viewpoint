@@ -12,16 +12,18 @@ export function PageHeader({
   actions,
   back,
   backTo,
+  onBack,
   backLabel = 'Back',
 }: {
   title: ReactNode;
   actions?: ReactNode;
   back?: boolean;
   backTo?: string;
+  onBack?: () => void;
   backLabel?: string;
 }) {
   const navigate = useNavigate();
-  const showBack = back || backTo != null;
+  const showBack = back || backTo != null || onBack != null;
 
   return (
     <header className="vp-page-header">
@@ -29,7 +31,7 @@ export function PageHeader({
         <button
           type="button"
           className="vp-page-back"
-          onClick={() => (backTo != null ? navigate(backTo) : navigate(-1))}
+          onClick={() => (onBack ? onBack() : backTo != null ? navigate(backTo) : navigate(-1))}
           aria-label={backLabel}
         >
           <Icon name="chevron-left" size={20} />

@@ -1,4 +1,5 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, type ReactNode } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   listReceipts,
   getQueueStatus,
@@ -16,7 +17,15 @@ import { CaptureButton } from '../receipts/CaptureButton';
 import { ReceiptRow } from '../receipts/ReceiptRow';
 import { UploadStatusBar } from '../receipts/UploadStatusBar';
 import { useToast } from '../shared/Toast';
-import { useNavigate } from 'react-router-dom';
+import { Screen } from '../ui/Screen';
+import { PageHeader } from '../ui/PageHeader';
+import { Button } from '../ui/Button';
+import { Notice } from '../ui/Notice';
+import { EmptyState } from '../ui/EmptyState';
+import { SkeletonRows } from '../ui/Skeleton';
+import { ConfirmDialog } from '../ui/Dialog';
+import { Icon } from '../ui/Icon';
+import { formatMonthFolder } from '../shared/format';
 
 export function ReceiptList() {
   const [groups, setGroups] = useState<ReceiptGroup[]>([]);
@@ -25,6 +34,8 @@ export function ReceiptList() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const navigate = useNavigate();
   const { showToast } = useToast();
 
@@ -49,23 +60,21 @@ export function ReceiptList() {
 
   useEffect(() => {
     getHealthStatus().then(setHealth).catch(() => {});
-    // Demo mode is a property of how the server was started, so it only
-    // needs fetching once.
     getSettings().then(setSettings).catch(() => {});
   }, []);
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Delete this receipt?')) return;
+  const confirmDelete = async () => {
+    if (!pendingDelete) return;
+    setDeleting(true);
     try {
-      await deleteReceipt(id);
+      await deleteReceipt(pendingDelete);
+      setPendingDelete(null);
       refresh();
-    } catch (err: any) {
-      showToast(err.message || 'Could not delete this receipt.');
+    } catch (err) {
+      showToast((err as Error).message || 'Could not delete this receipt.');
+    } finally {
+      setDeleting(false);
     }
-  };
-
-  const handleTap = (id: string) => {
-    navigate(`/review/${id}`);
   };
 
   const totalReceipts = groups.reduce((n, g) => n + g.receipts.length, 0);
@@ -74,107 +83,113 @@ export function ReceiptList() {
     0,
   );
 
+  const alerts: ReactNode[] = [];
+  if (settings?.demoMode) {
+    alerts.push(
+      <Notice key="demo" tone="warning">
+        <strong>Demo mode.</strong> Claude, Wave and Outlook are local fakes — nothing is sent to
+        anyone and no invoice is real.{' '}
+        <a href="http://localhost:4000" target="_blank" rel="noreferrer">
+          See what they captured
+        </a>
+      </Notice>,
+    );
+  }
+  if (health?.claudeConfigured && health.claudeHealthy === false) {
+    alerts.push(
+      <Notice key="claude" tone="danger">
+        Claude API key is invalid — receipts won't extract automatically. Check Settings.
+      </Notice>,
+    );
+  }
+  if (health?.waveConfigured && health.waveHealthy === false) {
+    alerts.push(
+      <Notice key="wave" tone="danger">
+        Wave connection has expired — uploads are paused. Reconnect in Settings.
+      </Notice>,
+    );
+  }
+
   return (
-    <div className="receipt-list-page">
-      <header className="screen-header">
-        <h1 className="screen-title">Receipts</h1>
-      </header>
+    <Screen width="read" className="vp-receipts">
+      <PageHeader
+        title="Receipts"
+        actions={
+          <span className="vp-only-desktop">
+            <CaptureButton mode="inline" onCapture={refresh} />
+          </span>
+        }
+      />
 
       <AddToHomeScreenTip />
 
-      {/* Demo mode — must be impossible to mistake for the real thing */}
-      {settings?.demoMode && (
-        <div className="banner banner-demo">
-          <strong>Demo mode.</strong> Claude, Wave and Outlook are local fakes — nothing is
-          sent to anyone and no invoice is real.{' '}
-          <a href="http://localhost:4000" target="_blank" rel="noreferrer">
-            See what they captured
-          </a>
-        </div>
-      )}
+      {alerts.length > 0 && <div className="vp-stack vp-stack--sm vp-mb-4">{alerts}</div>}
 
-      {/* Health banners */}
-      {health?.claudeConfigured && health.claudeHealthy === false && (
-        <div className="banner banner-low health-banner">
-          Claude API key is invalid — receipts won't extract automatically. Check Settings.
-        </div>
-      )}
-      {health?.waveConfigured && health.waveHealthy === false && (
-        <div className="banner banner-low health-banner">
-          Wave connection has expired — uploads are paused. Reconnect in Settings.
-        </div>
-      )}
-
-      {/* Finish-setup checklist — hides itself once done or dismissed */}
       <SetupChecklist settings={settings} />
 
-      {/* Queue status bar */}
       {queue && <UploadStatusBar queue={queue} />}
 
-      {/* Review all */}
       {reviewableCount > 1 && (
-        <div className="health-banner">
-          <button className="btn-secondary" style={{ width: '100%' }} onClick={() => navigate('/review-batch')}>
-            Review All ({reviewableCount})
-          </button>
-        </div>
+        <Button
+          variant="secondary"
+          block
+          className="vp-mb-4"
+          onClick={() => navigate('/review-batch')}
+        >
+          Review All ({reviewableCount})
+        </Button>
       )}
 
-      {/* Search */}
-      <div className="search-bar">
-        <svg className="search-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-          <circle cx="7" cy="7" r="4.5" />
-          <path d="M10.5 10.5L14 14" strokeLinecap="round" />
-        </svg>
+      <div className="vp-search">
+        <Icon name="search" size={16} />
         <input
           type="search"
           placeholder="Search receipts…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="search-input"
         />
       </div>
 
-      {/* Receipt list */}
-      <main className="receipt-list">
-        {loading ? (
-          <div className="empty-state">
-            <div className="loading-spinner" />
-          </div>
-        ) : totalReceipts === 0 ? (
-          <div className="empty-state">
-            <div className="empty-icon">
-              <svg width="48" height="48" viewBox="0 0 48 48" fill="none" stroke="var(--text-tertiary)" strokeWidth="1.5">
-                <rect x="10" y="6" width="28" height="36" rx="3" />
-                <path d="M18 16h12M18 22h12M18 28h8" strokeLinecap="round" />
-              </svg>
-            </div>
-            <p className="empty-title">No receipts yet</p>
-            <p className="empty-subtitle">Tap the camera button to capture your first receipt</p>
-          </div>
-        ) : (
-          groups.map((group) => (
-            <section key={group.month} className="month-group">
-              <h2 className="month-header">{formatMonth(group.month)}</h2>
-              <div className="receipt-cards">
+      {loading ? (
+        <SkeletonRows rows={4} />
+      ) : totalReceipts === 0 ? (
+        <EmptyState icon="receipt" title="No receipts yet">
+          Capture a photo of a receipt to get started.
+        </EmptyState>
+      ) : (
+        <div className="vp-receipt-months">
+          {groups.map((group) => (
+            <section key={group.month} className="vp-receipt-month">
+              <h2 className="vp-receipt-month-label">{formatMonthFolder(group.month)}</h2>
+              <div className="vp-stack vp-stack--sm">
                 {group.receipts.map((r) => (
-                  <ReceiptRow key={r.id} receipt={r} onTap={() => handleTap(r.id)} onDelete={() => handleDelete(r.id)} />
+                  <ReceiptRow
+                    key={r.id}
+                    receipt={r}
+                    onTap={() => navigate(`/review/${r.id}`)}
+                    onDelete={() => setPendingDelete(r.id)}
+                  />
                 ))}
               </div>
             </section>
-          ))
-        )}
-      </main>
+          ))}
+        </div>
+      )}
 
-      {/* Capture FAB */}
-      <CaptureButton onCapture={refresh} />
-    </div>
+      <span className="vp-only-mobile">
+        <CaptureButton onCapture={refresh} />
+      </span>
+
+      <ConfirmDialog
+        open={pendingDelete != null}
+        title="Delete this receipt?"
+        message="The photo and its extracted data are removed. This can't be undone."
+        confirmLabel="Delete"
+        destructive
+        loading={deleting}
+        onConfirm={confirmDelete}
+        onClose={() => setPendingDelete(null)}
+      />
+    </Screen>
   );
-}
-
-function formatMonth(folder: string): string {
-  // folder is "YYYY-MM"
-  const [year, month] = folder.split('-');
-  const date = new Date(parseInt(year), parseInt(month) - 1);
-  return date.toLocaleDateString('en-CA', { year: 'numeric', month: 'long' });
 }

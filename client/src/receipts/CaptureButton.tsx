@@ -1,12 +1,17 @@
 import { useRef, useState } from 'react';
 import { uploadImages } from '../shared/api';
 import { useToast } from '../shared/Toast';
+import { Button } from '../ui/Button';
+import { Icon } from '../ui/Icon';
 
 interface Props {
   onCapture: () => void;
+  /** 'fab' — the floating button (mobile). 'inline' — a normal button that
+   *  opens the photo library (desktop, where there's no camera). */
+  mode?: 'fab' | 'inline';
 }
 
-export function CaptureButton({ onCapture }: Props) {
+export function CaptureButton({ onCapture, mode = 'fab' }: Props) {
   const cameraRef = useRef<HTMLInputElement>(null);
   const galleryRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -30,6 +35,29 @@ export function CaptureButton({ onCapture }: Props) {
       if (galleryRef.current) galleryRef.current.value = '';
     }
   };
+
+  if (mode === 'inline') {
+    return (
+      <>
+        <Button
+          variant="secondary"
+          icon={<Icon name="camera" size={15} />}
+          loading={uploading}
+          onClick={() => galleryRef.current?.click()}
+        >
+          Capture
+        </Button>
+        <input
+          ref={galleryRef}
+          type="file"
+          accept="image/*"
+          multiple
+          onChange={(e) => handleFiles(e.target.files)}
+          hidden
+        />
+      </>
+    );
+  }
 
   return (
     <>

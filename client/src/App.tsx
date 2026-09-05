@@ -121,21 +121,11 @@ export function App() {
         />
         <Route path="/patients" element={<Patients />} />
         <Route path="/settings" element={<Settings ohipEnabled={ohipEnabled} />} />
+        <Route path="/review/:id" element={<ReceiptReview />} />
+        <Route path="/review-batch" element={<BatchReview />} />
+        <Route path="/patients/:id" element={<PatientDetail ohipEnabled={ohipEnabled} />} />
+        <Route path="/audit" element={<AuditLog />} />
       </Route>
-
-      <Route
-        path="/review/:id"
-        element={authed ? <ReceiptReview /> : <Navigate to={gateTarget(auth)} replace />}
-      />
-      <Route
-        path="/review-batch"
-        element={authed ? <BatchReview /> : <Navigate to={gateTarget(auth)} replace />}
-      />
-      <Route
-        path="/patients/:id"
-        element={authed ? <PatientDetail ohipEnabled={ohipEnabled} /> : <Navigate to={gateTarget(auth)} replace />}
-      />
-      <Route path="/audit" element={authed ? <AuditLog /> : <Navigate to={gateTarget(auth)} replace />} />
       <Route path="*" element={<Navigate to={gateTarget(auth)} replace />} />
     </Routes>
   );

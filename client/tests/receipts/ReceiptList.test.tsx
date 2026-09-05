@@ -127,7 +127,6 @@ describe('ReceiptList', () => {
   });
 
   it('asks for confirmation before deleting, and does nothing if declined', async () => {
-    vi.stubGlobal('confirm', vi.fn(() => false));
     api.listReceipts.mockResolvedValue([
       { month: '2026-01', receipts: [makeReceipt({ id: 'r1', vendor: 'Costco' })] },
     ]);
@@ -135,6 +134,7 @@ describe('ReceiptList', () => {
     await waitFor(() => expect(screen.getByText('Costco')).toBeInTheDocument());
 
     await userEvent.click(screen.getByTitle(/delete receipt/i));
+    await userEvent.click(await screen.findByRole('button', { name: /^cancel$/i }));
     expect(api.deleteReceipt).not.toHaveBeenCalled();
   });
 
@@ -147,6 +147,7 @@ describe('ReceiptList', () => {
     await waitFor(() => expect(screen.getByText('Costco')).toBeInTheDocument());
 
     await userEvent.click(screen.getByTitle(/delete receipt/i));
+    await userEvent.click(await screen.findByRole('button', { name: /^delete$/i }));
     expect(api.deleteReceipt).toHaveBeenCalledWith('r1');
     await waitFor(() => expect(screen.getByText(/no receipts yet/i)).toBeInTheDocument());
   });
@@ -160,6 +161,7 @@ describe('ReceiptList', () => {
     await waitFor(() => expect(screen.getByText('Costco')).toBeInTheDocument());
 
     await userEvent.click(screen.getByTitle(/delete receipt/i));
+    await userEvent.click(await screen.findByRole('button', { name: /^delete$/i }));
     expect(await screen.findByText('Receipt not found.')).toBeInTheDocument();
   });
 });

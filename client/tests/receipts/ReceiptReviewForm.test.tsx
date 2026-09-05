@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
+import type { ReactNode } from 'react';
 import { makeReceipt } from '../helpers/fixtures';
 import { ReceiptReviewForm } from '../../src/receipts/ReceiptReviewForm';
 
@@ -45,12 +47,14 @@ afterEach(() => {
 });
 
 function noop() {}
+const wrapper = ({ children }: { children: ReactNode }) => <MemoryRouter>{children}</MemoryRouter>;
 
 describe('ReceiptReviewForm', () => {
   it('shows a loading spinner while the receipt is being fetched', async () => {
     api.getReceipt.mockReturnValue(new Promise(() => {})); // never resolves
     const { container } = render(
       <ReceiptReviewForm id="r1" headerTitle="Review" onBack={noop} onApproved={noop} />,
+      { wrapper },
     );
     expect(container.querySelector('.loading-spinner')).toBeInTheDocument();
   });
@@ -61,7 +65,7 @@ describe('ReceiptReviewForm', () => {
     let resolveExtract: (v: unknown) => void;
     api.extractReceipt.mockReturnValue(new Promise((r) => (resolveExtract = r)));
 
-    render(<ReceiptReviewForm id="r1" headerTitle="Review" onBack={noop} onApproved={noop} />);
+    render(<ReceiptReviewForm id="r1" headerTitle="Review" onBack={noop} onApproved={noop} />, { wrapper });
 
     await waitFor(() => expect(api.extractReceipt).toHaveBeenCalledWith('r1'));
     expect(screen.getByText(/extracting receipt data/i)).toBeInTheDocument();
@@ -72,7 +76,7 @@ describe('ReceiptReviewForm', () => {
       makeReceipt({ status: 'extracted', vendor: 'Costco', total_amount: 55.5 }),
     );
 
-    render(<ReceiptReviewForm id="r1" headerTitle="Review" onBack={noop} onApproved={noop} />);
+    render(<ReceiptReviewForm id="r1" headerTitle="Review" onBack={noop} onApproved={noop} />, { wrapper });
 
     await waitFor(() => expect(screen.getByLabelText('Vendor')).toHaveValue('Costco'));
     expect(api.extractReceipt).not.toHaveBeenCalled();
@@ -92,7 +96,7 @@ describe('ReceiptReviewForm', () => {
       }),
     );
 
-    render(<ReceiptReviewForm id="r1" headerTitle="Review" onBack={noop} onApproved={noop} />);
+    render(<ReceiptReviewForm id="r1" headerTitle="Review" onBack={noop} onApproved={noop} />, { wrapper });
 
     await waitFor(() => expect(screen.getByLabelText('Vendor')).toHaveValue('The Coffee Spot'));
     // "Total"/"Tax" labels wrap a "$" prefix too, so match by substring.
@@ -104,7 +108,7 @@ describe('ReceiptReviewForm', () => {
     api.getReceipt.mockResolvedValue(makeReceipt({ status: 'captured' }));
     api.extractReceipt.mockRejectedValue(new Error('No Claude API key configured. Add it in Settings.'));
 
-    render(<ReceiptReviewForm id="r1" headerTitle="Review" onBack={noop} onApproved={noop} />);
+    render(<ReceiptReviewForm id="r1" headerTitle="Review" onBack={noop} onApproved={noop} />, { wrapper });
 
     await waitFor(() => expect(screen.getByText(/no claude api key/i)).toBeInTheDocument());
     await userEvent.click(screen.getByRole('button', { name: /enter manually/i }));
@@ -117,7 +121,7 @@ describe('ReceiptReviewForm', () => {
     api.getReceipt.mockResolvedValue(makeReceipt({ status: 'captured' }));
     api.extractReceipt.mockRejectedValueOnce(new Error('Claude API rate limit reached.'));
 
-    render(<ReceiptReviewForm id="r1" headerTitle="Review" onBack={noop} onApproved={noop} />);
+    render(<ReceiptReviewForm id="r1" headerTitle="Review" onBack={noop} onApproved={noop} />, { wrapper });
 
     await waitFor(() => expect(screen.getByText(/extraction failed/i)).toBeInTheDocument());
     expect(screen.getByText(/rate limit reached/i)).toBeInTheDocument();
@@ -137,7 +141,7 @@ describe('ReceiptReviewForm', () => {
       }),
     );
 
-    render(<ReceiptReviewForm id="r1" headerTitle="Review" onBack={noop} onApproved={noop} />);
+    render(<ReceiptReviewForm id="r1" headerTitle="Review" onBack={noop} onApproved={noop} />, { wrapper });
 
     await waitFor(() => expect(screen.getByText(/low confidence/i)).toBeInTheDocument());
   });
@@ -152,7 +156,7 @@ describe('ReceiptReviewForm', () => {
       }),
     );
 
-    render(<ReceiptReviewForm id="r1" headerTitle="Review" onBack={noop} onApproved={noop} />);
+    render(<ReceiptReviewForm id="r1" headerTitle="Review" onBack={noop} onApproved={noop} />, { wrapper });
 
     await waitFor(() =>
       expect(screen.getByText(/doesn't match total/i)).toBeInTheDocument(),
@@ -168,7 +172,7 @@ describe('ReceiptReviewForm', () => {
       }),
     );
 
-    render(<ReceiptReviewForm id="r1" headerTitle="Review" onBack={noop} onApproved={noop} />);
+    render(<ReceiptReviewForm id="r1" headerTitle="Review" onBack={noop} onApproved={noop} />, { wrapper });
 
     await waitFor(() => expect(screen.getByLabelText('Vendor')).toBeInTheDocument());
     expect(screen.queryByText(/doesn't match total/i)).not.toBeInTheDocument();
@@ -177,25 +181,25 @@ describe('ReceiptReviewForm', () => {
   describe('validation warnings', () => {
     it('warns when the receipt date is in the future', async () => {
       api.getReceipt.mockResolvedValue(makeReceipt({ status: 'extracted', receipt_date: '2026-12-25T00:00:00.000Z' }));
-      render(<ReceiptReviewForm id="r1" headerTitle="Review" onBack={noop} onApproved={noop} />);
+      render(<ReceiptReviewForm id="r1" headerTitle="Review" onBack={noop} onApproved={noop} />, { wrapper });
       await waitFor(() => expect(screen.getByText(/date is in the future/i)).toBeInTheDocument());
     });
 
     it('warns when the receipt date is more than a year old', async () => {
       api.getReceipt.mockResolvedValue(makeReceipt({ status: 'extracted', receipt_date: '2024-01-01T00:00:00.000Z' }));
-      render(<ReceiptReviewForm id="r1" headerTitle="Review" onBack={noop} onApproved={noop} />);
+      render(<ReceiptReviewForm id="r1" headerTitle="Review" onBack={noop} onApproved={noop} />, { wrapper });
       await waitFor(() => expect(screen.getByText(/more than a year old/i)).toBeInTheDocument());
     });
 
     it('warns when the currency is not CAD', async () => {
       api.getReceipt.mockResolvedValue(makeReceipt({ status: 'extracted', currency: 'USD' }));
-      render(<ReceiptReviewForm id="r1" headerTitle="Review" onBack={noop} onApproved={noop} />);
+      render(<ReceiptReviewForm id="r1" headerTitle="Review" onBack={noop} onApproved={noop} />, { wrapper });
       await waitFor(() => expect(screen.getByText(/currency is usd, not cad/i)).toBeInTheDocument());
     });
 
     it('warns when the total is zero or negative', async () => {
       api.getReceipt.mockResolvedValue(makeReceipt({ status: 'extracted', total_amount: 0 }));
-      render(<ReceiptReviewForm id="r1" headerTitle="Review" onBack={noop} onApproved={noop} />);
+      render(<ReceiptReviewForm id="r1" headerTitle="Review" onBack={noop} onApproved={noop} />, { wrapper });
       await waitFor(() => expect(screen.getByText(/zero or negative/i)).toBeInTheDocument());
     });
 
@@ -203,7 +207,7 @@ describe('ReceiptReviewForm', () => {
       api.getReceipt.mockResolvedValue(
         makeReceipt({ status: 'extracted', vendor: 'V', receipt_date: '2026-06-10T00:00:00.000Z', currency: 'CAD', total_amount: 10 }),
       );
-      render(<ReceiptReviewForm id="r1" headerTitle="Review" onBack={noop} onApproved={noop} />);
+      render(<ReceiptReviewForm id="r1" headerTitle="Review" onBack={noop} onApproved={noop} />, { wrapper });
       await waitFor(() => expect(screen.getByLabelText('Vendor')).toBeInTheDocument());
       expect(screen.queryByText(/date is in the future/i)).not.toBeInTheDocument();
       expect(screen.queryByText(/year old/i)).not.toBeInTheDocument();
@@ -216,7 +220,7 @@ describe('ReceiptReviewForm', () => {
     api.getReceipt.mockResolvedValue(makeReceipt({ status: 'extracted' }));
     api.checkDuplicates.mockResolvedValue({ warnings: ['This image matches an existing receipt (Costco).'] });
 
-    render(<ReceiptReviewForm id="r1" headerTitle="Review" onBack={noop} onApproved={noop} />);
+    render(<ReceiptReviewForm id="r1" headerTitle="Review" onBack={noop} onApproved={noop} />, { wrapper });
 
     await waitFor(() => expect(screen.getByText(/matches an existing receipt/i)).toBeInTheDocument());
   });
@@ -228,7 +232,7 @@ describe('ReceiptReviewForm', () => {
     api.updateReceipt.mockResolvedValue(makeReceipt({ status: 'reviewed', vendor: 'New Vendor' }));
     const onApproved = vi.fn();
 
-    render(<ReceiptReviewForm id="r1" headerTitle="Review" onBack={noop} onApproved={onApproved} />);
+    render(<ReceiptReviewForm id="r1" headerTitle="Review" onBack={noop} onApproved={onApproved} />, { wrapper });
     await waitFor(() => expect(screen.getByLabelText('Vendor')).toHaveValue('Old Vendor'));
 
     const vendorInput = screen.getByLabelText('Vendor');
@@ -251,20 +255,20 @@ describe('ReceiptReviewForm', () => {
     let resolveUpdate: (v: unknown) => void;
     api.updateReceipt.mockReturnValue(new Promise((r) => (resolveUpdate = r)));
 
-    render(<ReceiptReviewForm id="r1" headerTitle="Review" onBack={noop} onApproved={noop} />);
+    render(<ReceiptReviewForm id="r1" headerTitle="Review" onBack={noop} onApproved={noop} />, { wrapper });
     await waitFor(() => expect(screen.getByLabelText('Vendor')).toHaveValue('V'));
 
     const approveBtn = screen.getByRole('button', { name: /approve & upload/i });
     await userEvent.click(approveBtn);
 
-    expect(screen.getByRole('button', { name: /saving/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /approve & upload/i })).toBeDisabled();
     resolveUpdate!(makeReceipt({ status: 'reviewed' }));
   });
 
   it('a non-editable (already uploaded) receipt shows disabled fields, no Approve button, and a status banner', async () => {
     api.getReceipt.mockResolvedValue(makeReceipt({ status: 'uploaded', vendor: 'Done Co' }));
 
-    render(<ReceiptReviewForm id="r1" headerTitle="Review" onBack={noop} onApproved={noop} />);
+    render(<ReceiptReviewForm id="r1" headerTitle="Review" onBack={noop} onApproved={noop} />, { wrapper });
 
     await waitFor(() => expect(screen.getByLabelText('Vendor')).toHaveValue('Done Co'));
     expect(screen.getByLabelText('Vendor')).toBeDisabled();
@@ -277,7 +281,7 @@ describe('ReceiptReviewForm', () => {
       makeReceipt({ status: 'failed', vendor: 'V', last_error: 'Wave token expired' }),
     );
 
-    render(<ReceiptReviewForm id="r1" headerTitle="Review" onBack={noop} onApproved={noop} />);
+    render(<ReceiptReviewForm id="r1" headerTitle="Review" onBack={noop} onApproved={noop} />, { wrapper });
 
     await waitFor(() => expect(screen.getByText(/upload failed: wave token expired/i)).toBeInTheDocument());
   });

@@ -2,6 +2,9 @@ import { useEffect, useRef, useState, type TouchEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { listReceipts } from '../shared/api';
 import { ReceiptReviewForm } from '../receipts/ReceiptReviewForm';
+import { Screen } from '../ui/Screen';
+import { Button } from '../ui/Button';
+import { EmptyState } from '../ui/EmptyState';
 
 const SWIPE_THRESHOLD = 70;
 
@@ -14,8 +17,8 @@ export function BatchReview() {
   useEffect(() => {
     listReceipts()
       .then((groups) => {
-        const flat = groups.flatMap((g) => g.receipts);
-        const reviewable = flat
+        const reviewable = groups
+          .flatMap((g) => g.receipts)
           .filter((r) => r.status === 'captured' || r.status === 'extracted')
           .map((r) => r.id);
         setIds(reviewable);
@@ -25,6 +28,16 @@ export function BatchReview() {
 
   const goNext = () => setIndex((i) => i + 1);
   const goPrev = () => setIndex((i) => Math.max(0, i - 1));
+
+  // Keyboard: left / right arrows step through the queue.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowLeft') goPrev();
+      if (e.key === 'ArrowRight') goNext();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   const handleTouchStart = (e: TouchEvent) => {
     const t = e.touches[0];
@@ -46,23 +59,26 @@ export function BatchReview() {
 
   if (ids === null) {
     return (
-      <div className="review-page">
-        <div className="loading-screen"><div className="loading-spinner" /></div>
-      </div>
+      <Screen width="read">
+        <div className="loading-screen">
+          <div className="loading-spinner" />
+        </div>
+      </Screen>
     );
   }
 
   if (ids.length === 0 || index >= ids.length) {
     return (
-      <div className="review-page">
-        <div className="batch-done">
-          <p className="empty-title">All caught up</p>
-          <p className="empty-subtitle">Every receipt has been reviewed.</p>
-          <button className="btn-primary" onClick={() => navigate('/', { replace: true })}>
-            Back to Receipts
-          </button>
-        </div>
-      </div>
+      <Screen width="read">
+        <EmptyState icon="check" title="All caught up">
+          Every receipt has been reviewed.
+          <span className="vp-empty-action">
+            <Button variant="primary" onClick={() => navigate('/', { replace: true })}>
+              Back to Receipts
+            </Button>
+          </span>
+        </EmptyState>
+      </Screen>
     );
   }
 
@@ -75,23 +91,23 @@ export function BatchReview() {
         id={currentId}
         headerTitle="Review Receipt"
         headerRight={
-          <span className="batch-progress">
+          <span className="vp-batch-progress">
             {index + 1} of {ids.length}
           </span>
+        }
+        footer={
+          <div className="vp-batch-nav">
+            <Button variant="secondary" onClick={goPrev} disabled={index === 0}>
+              ← Previous
+            </Button>
+            <Button variant="secondary" onClick={goNext}>
+              Skip →
+            </Button>
+          </div>
         }
         onBack={() => navigate('/', { replace: true })}
         onApproved={goNext}
       />
-      <div className="review-content" style={{ paddingTop: 0 }}>
-        <div className="batch-nav">
-          <button className="btn-secondary" onClick={goPrev} disabled={index === 0}>
-            ← Previous
-          </button>
-          <button className="btn-secondary" onClick={goNext}>
-            Skip →
-          </button>
-        </div>
-      </div>
     </div>
   );
 }

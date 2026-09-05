@@ -28,9 +28,8 @@ describe('ReceiptRow', () => {
   it('calls onTap when the card is clicked', async () => {
     const onTap = vi.fn();
     const { container } = render(<ReceiptRow receipt={makeReceipt()} onTap={onTap} onDelete={vi.fn()} />);
-    // Both the card and the delete button have role="button"; target the
-    // card itself (not the nested delete button) by its class.
-    await userEvent.click(container.querySelector('.receipt-card')!);
+    // The row is two sibling buttons; target the main one, not delete.
+    await userEvent.click(container.querySelector('.vp-receipt-row-main')!);
     expect(onTap).toHaveBeenCalled();
   });
 

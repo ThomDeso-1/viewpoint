@@ -6,6 +6,10 @@ import {
   checkDuplicates,
   type ReceiptRow,
 } from '../shared/api';
+import { Screen } from '../ui/Screen';
+import { PageHeader } from '../ui/PageHeader';
+import { Button } from '../ui/Button';
+import { Notice } from '../ui/Notice';
 
 type ExtractionState = 'loading' | 'extracting' | 'ready' | 'error' | 'no-key';
 
@@ -13,6 +17,8 @@ interface Props {
   id: string;
   headerTitle: string;
   headerRight?: ReactNode;
+  /** Extra controls below the form (the batch flow's prev / skip). */
+  footer?: ReactNode;
   onBack: () => void;
   onApproved: (receipt: ReceiptRow) => void;
 }
@@ -21,7 +27,7 @@ interface Props {
  * The extract → review → approve form for a single receipt.
  * Shared by the single-receipt review page and the batch review flow.
  */
-export function ReceiptReviewForm({ id, headerTitle, headerRight, onBack, onApproved }: Props) {
+export function ReceiptReviewForm({ id, headerTitle, headerRight, footer, onBack, onApproved }: Props) {
   const [receipt, setReceipt] = useState<ReceiptRow | null>(null);
   const [state, setState] = useState<ExtractionState>('loading');
   const [errorMsg, setErrorMsg] = useState('');
@@ -200,216 +206,190 @@ export function ReceiptReviewForm({ id, headerTitle, headerRight, onBack, onAppr
 
   if (state === 'loading') {
     return (
-      <div className="review-page">
+      <Screen width="read" className="vp-review">
         <div className="loading-screen"><div className="loading-spinner" /></div>
-      </div>
+      </Screen>
     );
   }
 
   return (
-    <div className="review-page">
-      <header className="review-header">
-        <button className="review-back" onClick={onBack}>
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M12 4l-6 6 6 6" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </button>
-        <h1 className="review-title">{headerTitle}</h1>
-        {headerRight ?? <div style={{ width: 36 }} />}
-      </header>
+    <Screen width="read" className="vp-review">
+      <PageHeader title={headerTitle} onBack={onBack} actions={headerRight} />
 
-      <main className="review-content">
-        {/* Image preview */}
-        {receipt && (
-          <div className="review-image">
-            <img
-              src={`/images/${receipt.primary_image}`}
-              alt="Receipt"
-            />
-          </div>
-        )}
+      {receipt && (
+        <div className="vp-review-image">
+          <img src={`/images/${receipt.primary_image}`} alt="Receipt" />
+        </div>
+      )}
 
-        {/* Extracting state */}
-        {state === 'extracting' && (
-          <div className="review-extracting">
-            <div className="loading-spinner" />
-            <p className="review-extracting-text">Extracting receipt data…</p>
-            <p className="review-extracting-sub">This usually takes a few seconds.</p>
-          </div>
-        )}
+      {state === 'extracting' && (
+        <div className="vp-review-extracting">
+          <div className="loading-spinner" />
+          <p className="vp-review-extracting-text">Extracting receipt data…</p>
+          <p className="vp-muted">This usually takes a few seconds.</p>
+        </div>
+      )}
 
-        {/* Error state */}
-        {state === 'error' && (
-          <div className="review-error-block">
-            <p className="review-error-title">Extraction Failed</p>
-            <p className="review-error-msg">{errorMsg}</p>
-            <div className="review-error-actions">
-              <button className="btn-secondary" onClick={populateDefaults}>
-                Enter Manually
-              </button>
-              <button className="btn-primary" onClick={handleRetryExtraction}>
-                Retry
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* No API key */}
-        {state === 'no-key' && (
-          <div className="review-error-block">
-            <p className="review-error-title">No Claude API Key</p>
-            <p className="review-error-msg">
-              Add your Claude API key in Settings to enable automatic extraction,
-              or enter the receipt data manually.
-            </p>
-            <button className="btn-primary" onClick={populateDefaults}>
+      {state === 'error' && (
+        <div className="vp-review-blocked">
+          <p className="vp-review-blocked-title">Extraction Failed</p>
+          <p className="vp-muted">{errorMsg}</p>
+          <div className="vp-review-blocked-actions">
+            <Button variant="secondary" onClick={populateDefaults}>
               Enter Manually
-            </button>
+            </Button>
+            <Button variant="primary" onClick={handleRetryExtraction}>
+              Retry
+            </Button>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Ready — form */}
-        {state === 'ready' && (
-          <>
-            {/* Confidence banner */}
+      {state === 'no-key' && (
+        <div className="vp-review-blocked">
+          <p className="vp-review-blocked-title">No Claude API Key</p>
+          <p className="vp-muted">
+            Add your Claude API key in Settings to enable automatic extraction, or enter the receipt
+            data manually.
+          </p>
+          <Button variant="primary" onClick={populateDefaults}>
+            Enter Manually
+          </Button>
+        </div>
+      )}
+
+      {state === 'ready' && (
+        <>
+          <div className="vp-stack vp-stack--sm vp-mb-4">
             {confidence && (
-              <div className={`banner banner-${confidence}`}>
+              <Notice tone={confidence === 'high' ? 'success' : confidence === 'medium' ? 'warning' : 'danger'}>
                 {confidence === 'high'
-                  ? 'High confidence — fields look good'
+                  ? 'High confidence — fields look good.'
                   : confidence === 'medium'
-                    ? 'Medium confidence — please double-check the fields'
-                    : 'Low confidence — image was hard to read'}
-              </div>
+                    ? 'Medium confidence — please double-check the fields.'
+                    : 'Low confidence — the image was hard to read.'}
+              </Notice>
             )}
-
-            {/* Reconciliation warning */}
             {!reconciled && (
-              <div className="banner banner-warning">
-                Subtotal + tax doesn't match total — check the amounts
-              </div>
+              <Notice tone="warning">Subtotal + tax doesn't match total — check the amounts.</Notice>
             )}
-
-            {/* Duplicate warnings */}
             {duplicateWarnings.map((w, i) => (
-              <div key={i} className="banner banner-warning">{w}</div>
+              <Notice key={i} tone="warning">
+                {w}
+              </Notice>
             ))}
-
-            {/* Validation warnings */}
             {validationWarnings.map((w, i) => (
-              <div key={`v${i}`} className="banner banner-caution">{w}</div>
+              <Notice key={`v${i}`} tone="warning">
+                {w}
+              </Notice>
             ))}
+            {errorMsg && <Notice tone="danger">{errorMsg}</Notice>}
+          </div>
 
-            {errorMsg && <div className="banner banner-low">{errorMsg}</div>}
+          <div className="vp-review-fields">
+            <label className="vp-review-field">
+              <span>Date</span>
+              <input
+                type="date"
+                value={receiptDate}
+                onChange={(e) => setReceiptDate(e.target.value)}
+                disabled={!isEditable}
+              />
+            </label>
 
-            {/* Editable fields */}
-            <div className="review-fields">
-              <label className="field-row">
-                <span className="field-label">Date</span>
+            <label className="vp-review-field">
+              <span>Vendor</span>
+              <input
+                type="text"
+                value={vendor}
+                onChange={(e) => setVendor(e.target.value)}
+                placeholder="Business name"
+                disabled={!isEditable}
+              />
+            </label>
+
+            <label className="vp-review-field">
+              <span>Description</span>
+              <input
+                type="text"
+                value={summary}
+                onChange={(e) => setSummary(e.target.value)}
+                placeholder="What was purchased"
+                disabled={!isEditable}
+              />
+            </label>
+
+            <label className="vp-review-field">
+              <span>Total</span>
+              <span className="vp-review-money">
+                <span aria-hidden="true">$</span>
                 <input
-                  type="date"
-                  value={receiptDate}
-                  onChange={(e) => setReceiptDate(e.target.value)}
+                  type="number"
+                  inputMode="decimal"
+                  step="0.01"
+                  value={totalAmount}
+                  onChange={(e) => setTotalAmount(e.target.value)}
+                  placeholder="0.00"
                   disabled={!isEditable}
-                  className="field-input"
                 />
-              </label>
+              </span>
+            </label>
 
-              <label className="field-row">
-                <span className="field-label">Vendor</span>
+            <label className="vp-review-field">
+              <span>Tax</span>
+              <span className="vp-review-money">
+                <span aria-hidden="true">$</span>
                 <input
-                  type="text"
-                  value={vendor}
-                  onChange={(e) => setVendor(e.target.value)}
-                  placeholder="Business name"
+                  type="number"
+                  inputMode="decimal"
+                  step="0.01"
+                  value={taxAmount}
+                  onChange={(e) => setTaxAmount(e.target.value)}
+                  placeholder="0.00"
                   disabled={!isEditable}
-                  className="field-input"
                 />
-              </label>
+              </span>
+            </label>
 
-              <label className="field-row">
-                <span className="field-label">Description</span>
-                <input
-                  type="text"
-                  value={summary}
-                  onChange={(e) => setSummary(e.target.value)}
-                  placeholder="What was purchased"
-                  disabled={!isEditable}
-                  className="field-input"
-                />
-              </label>
+            <label className="vp-review-field">
+              <span>Currency</span>
+              <input
+                type="text"
+                className="vp-review-short"
+                value={currency}
+                onChange={(e) => setCurrency(e.target.value.toUpperCase())}
+                placeholder="CAD"
+                maxLength={3}
+                disabled={!isEditable}
+              />
+            </label>
+          </div>
 
-              <label className="field-row">
-                <span className="field-label">Total</span>
-                <div className="field-money">
-                  <span className="field-currency-sign">$</span>
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    step="0.01"
-                    value={totalAmount}
-                    onChange={(e) => setTotalAmount(e.target.value)}
-                    placeholder="0.00"
-                    disabled={!isEditable}
-                    className="field-input"
-                  />
-                </div>
-              </label>
+          {isEditable && (
+            <Button
+              variant="primary"
+              block
+              className="vp-review-approve"
+              onClick={handleApprove}
+              loading={submitting}
+            >
+              Approve &amp; Upload
+            </Button>
+          )}
 
-              <label className="field-row">
-                <span className="field-label">Tax</span>
-                <div className="field-money">
-                  <span className="field-currency-sign">$</span>
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    step="0.01"
-                    value={taxAmount}
-                    onChange={(e) => setTaxAmount(e.target.value)}
-                    placeholder="0.00"
-                    disabled={!isEditable}
-                    className="field-input"
-                  />
-                </div>
-              </label>
+          {!isEditable && receipt && (
+            <Notice tone={receipt.status === 'uploaded' ? 'success' : 'warning'}>
+              {receipt.status === 'uploaded'
+                ? 'This receipt has been uploaded to Wave.'
+                : receipt.status === 'failed'
+                  ? `Upload failed: ${receipt.last_error || 'Unknown error'}`
+                  : `Status: ${receipt.status}`}
+            </Notice>
+          )}
+        </>
+      )}
 
-              <label className="field-row">
-                <span className="field-label">Currency</span>
-                <input
-                  type="text"
-                  value={currency}
-                  onChange={(e) => setCurrency(e.target.value.toUpperCase())}
-                  placeholder="CAD"
-                  maxLength={3}
-                  disabled={!isEditable}
-                  className="field-input field-input-short"
-                />
-              </label>
-            </div>
-
-            {/* Approve button */}
-            {isEditable && (
-              <button
-                className="approve-button"
-                onClick={handleApprove}
-                disabled={submitting}
-              >
-                {submitting ? 'Saving…' : 'Approve & Upload'}
-              </button>
-            )}
-
-            {/* Status info for non-editable */}
-            {!isEditable && receipt && (
-              <div className={`banner banner-${receipt.status === 'uploaded' ? 'high' : 'warning'}`}>
-                {receipt.status === 'uploaded'
-                  ? 'This receipt has been uploaded to Wave.'
-                  : receipt.status === 'failed'
-                    ? `Upload failed: ${receipt.last_error || 'Unknown error'}`
-                    : `Status: ${receipt.status}`}
-              </div>
-            )}
-          </>
-        )}
-      </main>
-    </div>
+      {footer}
+    </Screen>
   );
 }

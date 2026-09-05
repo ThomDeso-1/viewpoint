@@ -18,4 +18,5 @@
 @import './styles/screens/inbox.css';
 @import './styles/screens/settings.css';
 @import './styles/screens/schedule.css';
+@import './styles/screens/receipts.css';
 @import './styles/legacy.css';
