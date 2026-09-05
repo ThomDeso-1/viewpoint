@@ -1,0 +1,113 @@
+/* Patients directory + patient detail (exams/Patients, exams/PatientDetail) */
+
+/* ── directory ── */
+.vp-patient-list { display: flex; flex-direction: column; gap: var(--space-2); }
+.vp-patient-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  width: 100%;
+  text-align: left;
+  padding: var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+  color: inherit;
+}
+.vp-patient-row:hover { border-color: var(--hairline-2); background: var(--surface-2); }
+.vp-patient-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.vp-patient-name { font-weight: var(--weight-semibold); font-size: var(--text-sm); }
+.vp-patient-row .vp-muted { font-size: var(--text-xs); }
+.vp-patient-row > span:last-child { flex-shrink: 0; font-size: var(--text-xs); white-space: nowrap; }
+
+/* ── follow-ups-due cards ── */
+.vp-due-card {
+  padding: var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+}
+.vp-due-head { display: flex; flex-direction: column; gap: var(--space-1); }
+.vp-due-head .vp-muted { font-size: var(--text-xs); }
+.vp-due-name {
+  align-self: flex-start;
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  font-size: var(--text-base);
+  color: var(--brand);
+}
+.vp-due-name:hover { text-decoration: underline; }
+.vp-due-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-3); }
+
+/* ── patient detail ── */
+.vp-patient-summary { font-size: var(--text-sm); margin-bottom: var(--space-4); display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+
+.vp-patient-detail .card {
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+  padding: var(--space-5);
+  margin-bottom: var(--space-4);
+}
+.vp-patient-detail .card h2 {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  margin-bottom: var(--space-3);
+}
+.vp-patient-detail .card label {
+  display: block;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--ink-2);
+  margin-bottom: var(--space-3);
+}
+.vp-patient-detail .card input,
+.vp-patient-detail .card select,
+.vp-patient-detail .followup-block select {
+  display: block;
+  width: 100%;
+  margin-top: var(--space-1);
+  padding: 0.5rem 0.65rem;
+  font-size: 16px;
+  font-family: inherit;
+  color: var(--ink-1);
+  background: var(--surface);
+  border: 1px solid var(--hairline-2);
+  border-radius: var(--radius-sm);
+}
+.vp-patient-detail .card input:focus,
+.vp-patient-detail .card select:focus {
+  outline: none;
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--brand-tint);
+}
+.vp-patient-detail .card small { display: block; margin-top: var(--space-1); font-size: var(--text-xs); color: var(--ink-3); }
+.vp-patient-detail .followup-block { border-top: 1px solid var(--hairline); margin-top: var(--space-2); padding-top: var(--space-4); }
+
+.vp-patient-detail .plain-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+}
+.vp-patient-detail .plain-list li { color: var(--ink-1); }
+.vp-patient-detail .error-text { color: var(--danger); }
+
+/* follow-up composer (also used from the due list) */
+.followup-composer label { display: block; font-size: var(--text-sm); font-weight: var(--weight-medium); color: var(--ink-2); margin-bottom: var(--space-3); }
+.followup-composer input,
+.followup-composer textarea {
+  display: block;
+  width: 100%;
+  margin-top: var(--space-1);
+  padding: 0.5rem 0.65rem;
+  font-size: 16px;
+  font-family: inherit;
+  color: var(--ink-1);
+  background: var(--surface);
+  border: 1px solid var(--hairline-2);
+  border-radius: var(--radius-sm);
+}
+.followup-composer textarea { resize: vertical; line-height: var(--leading-body); font-family: var(--font-mono); font-size: var(--text-sm); }

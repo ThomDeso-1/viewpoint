@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import {
   getPatient,
   updatePatient,
@@ -12,6 +12,11 @@ import {
 } from '../shared/api';
 import { useToast } from '../shared/Toast';
 import { FollowupEmailComposer } from './FollowupEmailComposer';
+import { Screen } from '../ui/Screen';
+import { PageHeader } from '../ui/PageHeader';
+import { Button } from '../ui/Button';
+import { Pill } from '../ui/Pill';
+import { SkeletonRows } from '../ui/Skeleton';
 
 type PatientDetailData = Patient & {
   appointments: Appointment[];
@@ -136,9 +141,10 @@ export function PatientDetail({ ohipEnabled = false }: { ohipEnabled?: boolean }
 
   if (loading || !patient) {
     return (
-      <div className="loading-screen">
-        <div className="loading-spinner" />
-      </div>
+      <Screen width="read" className="vp-patient-detail">
+        <PageHeader title="Patient" back />
+        <SkeletonRows rows={5} />
+      </Screen>
     );
   }
 
@@ -152,15 +158,10 @@ export function PatientDetail({ ohipEnabled = false }: { ohipEnabled?: boolean }
         : null;
 
   return (
-    <div className="page">
-      <header className="page-header">
-        <h1>{patient.full_name}</h1>
-        <Link to="/inbox" className="button-link">
-          Back
-        </Link>
-      </header>
+    <Screen width="read" className="vp-patient-detail">
+      <PageHeader title={patient.full_name} back />
 
-      <p className="muted">
+      <p className="vp-muted vp-patient-summary">
         {lastExam ? `Last appointment: ${lastExam}` : 'No past appointments'}
         {upcoming && upcoming.value
           ? ` · ${upcoming.label}: ${upcoming.value}${
@@ -169,7 +170,7 @@ export function PatientDetail({ ohipEnabled = false }: { ohipEnabled?: boolean }
                 : ''
             }`
           : ''}
-        {f?.due ? <span className="tag tag-warn">follow-up due</span> : null}
+        {f?.due ? <Pill tone="attention"> follow-up due</Pill> : null}
       </p>
 
       <section className="card">
@@ -251,18 +252,19 @@ export function PatientDetail({ ohipEnabled = false }: { ohipEnabled?: boolean }
           </label>
         </div>
 
-        <div className="request-actions">
-          <button className="primary" onClick={handleSave} disabled={saving}>
-            {saving ? 'Saving…' : 'Save'}
-          </button>
+        <div className="vp-form-actions">
+          <Button variant="primary" onClick={handleSave} loading={saving}>
+            Save
+          </Button>
           {ohipEnabled && (
-            <button
-              className="secondary"
+            <Button
+              variant="secondary"
               onClick={handleCheck}
-              disabled={checking || !patient.has_health_card}
+              loading={checking}
+              disabled={!patient.has_health_card}
             >
-              {checking ? 'Checking…' : 'Check OHIP now'}
-            </button>
+              Check OHIP now
+            </Button>
           )}
         </div>
       </section>
@@ -282,21 +284,19 @@ export function PatientDetail({ ohipEnabled = false }: { ohipEnabled?: boolean }
             />
           ) : (
             <>
-              <p className="muted">
+              <p className="vp-muted vp-mb-3">
                 This patient is due for a follow-up{' '}
                 {f.followup_date ? `(${fmtDay(f.followup_date)})` : ''} and has no upcoming
                 appointment booked.
                 {f.last_emailed_at ? ` Last emailed ${fmtDay(f.last_emailed_at)}.` : ''}
               </p>
-              <div className="request-actions">
-                <button
-                  className="secondary"
-                  onClick={() => setComposingEmail(true)}
-                  disabled={!patient.email}
-                >
-                  {patient.email ? 'Draft follow-up email' : 'No email on file'}
-                </button>
-              </div>
+              <Button
+                variant="secondary"
+                onClick={() => setComposingEmail(true)}
+                disabled={!patient.email}
+              >
+                {patient.email ? 'Draft follow-up email' : 'No email on file'}
+              </Button>
             </>
           )}
         </section>
@@ -336,13 +336,13 @@ export function PatientDetail({ ohipEnabled = false }: { ohipEnabled?: boolean }
                       {check.response_code ? ` (${check.response_code})` : ''}
                     </>
                   )}
-                  {check.mode === 'mock' && <span className="tag tag-mock">mock</span>}
+                  {check.mode === 'mock' && <span className="vp-pill vp-pill--attention"> mock</span>}
                 </li>
               ))}
             </ul>
           )}
         </section>
       )}
-    </div>
+    </Screen>
   );
 }

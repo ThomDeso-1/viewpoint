@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getFollowupDraft, sendFollowupEmail, type PatientFollowup } from '../shared/api';
 import { useToast } from '../shared/Toast';
+import { Button } from '../ui/Button';
 
 /**
  * Loads a prefilled recall email for a patient, lets the operator edit it,
@@ -79,13 +80,13 @@ export function FollowupEmailComposer({
           onChange={(e) => setDraft({ ...draft, body: e.target.value })}
         />
       </label>
-      <div className="request-actions">
-        <button className="primary" onClick={send} disabled={sending}>
-          {sending ? 'Sending…' : 'Send from Outlook'}
-        </button>
-        <button className="secondary" onClick={onCancel} disabled={sending}>
+      <div className="vp-form-actions">
+        <Button variant="primary" onClick={send} loading={sending}>
+          Send from Outlook
+        </Button>
+        <Button variant="secondary" onClick={onCancel} disabled={sending}>
           Cancel
-        </button>
+        </Button>
       </div>
     </div>
   );

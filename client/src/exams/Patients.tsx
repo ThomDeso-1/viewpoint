@@ -11,6 +11,12 @@ import {
 } from '../shared/api';
 import { useToast } from '../shared/Toast';
 import { FollowupEmailComposer } from './FollowupEmailComposer';
+import { Screen } from '../ui/Screen';
+import { PageHeader } from '../ui/PageHeader';
+import { EmptyState } from '../ui/EmptyState';
+import { SkeletonRows } from '../ui/Skeleton';
+import { Button } from '../ui/Button';
+import { Icon } from '../ui/Icon';
 
 type PatientRow = Patient & { followup: PatientFollowup };
 
@@ -75,34 +81,35 @@ export function Patients() {
 
   if (loading) {
     return (
-      <div className="loading-screen">
-        <div className="loading-spinner" />
-      </div>
+      <Screen width="wide" className="vp-patients">
+        <PageHeader title="Patients" />
+        <SkeletonRows rows={6} />
+      </Screen>
     );
   }
 
   return (
-    <div className="page">
-      <header className="screen-header">
-        <h1 className="screen-title">Patients</h1>
-      </header>
+    <Screen width="wide" className="vp-patients">
+      <PageHeader title="Patients" />
 
-        <div className="filter-row">
-          <button
-            aria-pressed={view === 'all'}
-            className={`filter-chip${view === 'all' ? ' filter-chip-active' : ''}`}
-            onClick={() => setView('all')}
-          >
-            All patients
-          </button>
-          <button
-            aria-pressed={view === 'due'}
-            className={`filter-chip${view === 'due' ? ' filter-chip-active' : ''}`}
-            onClick={() => setView('due')}
-          >
-            Follow-ups due{due.length > 0 ? ` (${due.length})` : ''}
-          </button>
-        </div>
+      <div className="vp-segmented">
+        <button
+          type="button"
+          aria-pressed={view === 'all'}
+          className={view === 'all' ? 'is-active' : ''}
+          onClick={() => setView('all')}
+        >
+          All patients
+        </button>
+        <button
+          type="button"
+          aria-pressed={view === 'due'}
+          className={view === 'due' ? 'is-active' : ''}
+          onClick={() => setView('due')}
+        >
+          Follow-ups due{due.length > 0 ? ` (${due.length})` : ''}
+        </button>
+      </div>
 
         {view === 'all' ? (
           <AllPatients
@@ -124,7 +131,7 @@ export function Patients() {
             }}
           />
         )}
-    </div>
+    </Screen>
   );
 }
 
@@ -156,44 +163,46 @@ function AllPatients({
 }) {
   if (patients.length === 0) {
     return (
-      <p className="empty-state">
-        No patients yet. Records are created automatically when an exam request comes in.
-      </p>
+      <EmptyState icon="users" title="No patients yet">
+        Records are created automatically when an exam request comes in.
+      </EmptyState>
     );
   }
 
   return (
     <>
-      <input
-        className="auth-input"
-        type="search"
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        placeholder="Search by name, email, or phone"
-        aria-label="Search patients"
-      />
+      <div className="vp-search vp-mb-2">
+        <Icon name="search" size={16} />
+        <input
+          type="search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search by name, email, or phone"
+          aria-label="Search patients"
+        />
+      </div>
 
-      <p className="muted" style={{ margin: '10px 0' }}>
+      <p className="vp-count">
         {filtered.length} of {patients.length}
       </p>
 
       {filtered.length === 0 ? (
-        <p className="empty-state">No patients match “{search}”.</p>
+        <EmptyState icon="search" title={`No patients match “${search}”`} />
       ) : (
-        <div className="patient-list">
+        <div className="vp-patient-list">
           {filtered.map((patient) => (
-            <button key={patient.id} className="patient-row" onClick={() => onOpen(patient.id)}>
-              <div className="patient-row-main">
-                <span className="patient-row-name">{patient.full_name}</span>
-                <span className="muted">
+            <button key={patient.id} className="vp-patient-row" onClick={() => onOpen(patient.id)}>
+              <span className="vp-patient-main">
+                <span className="vp-patient-name">{patient.full_name}</span>
+                <span className="vp-muted">
                   {patient.email ?? patient.phone ?? 'No contact details'}
                 </span>
-                <span className="muted">
+                <span className="vp-muted">
                   {appointmentSummary(patient.followup)}
-                  {patient.followup.due ? <span className="tag tag-warn">due</span> : null}
+                  {patient.followup.due ? <span className="vp-pill vp-pill--attention vp-pill--dot"> due</span> : null}
                 </span>
-              </div>
-              <span className={patient.has_health_card ? 'eligibility-ok' : 'muted'}>
+              </span>
+              <span className={patient.has_health_card ? 'vp-mono vp-ok-text' : 'vp-muted'}>
                 {patient.has_health_card ? patient.health_card_masked : 'No health card'}
               </span>
             </button>
@@ -218,7 +227,11 @@ function DueList({
   const [busy, setBusy] = useState<string | null>(null);
 
   if (due.length === 0) {
-    return <p className="empty-state">No follow-ups due. Nice and clear.</p>;
+    return (
+      <EmptyState icon="check" title="No follow-ups due">
+        Everyone who's due back has an appointment booked.
+      </EmptyState>
+    );
   }
 
   const act = async (id: string, fn: () => Promise<unknown>, done: string) => {
@@ -235,14 +248,14 @@ function DueList({
   };
 
   return (
-    <div className="patient-list">
+    <div className="vp-stack">
       {due.map((row) => (
-        <div key={row.patient_id} className="card">
-          <div className="patient-row-main">
-            <button className="link-button followup-due-name" onClick={() => onOpen(row.patient_id)}>
+        <div key={row.patient_id} className="vp-due-card">
+          <div className="vp-due-head">
+            <button className="vp-due-name" onClick={() => onOpen(row.patient_id)}>
               {row.full_name}
             </button>
-            <span className="muted">
+            <span className="vp-muted">
               {overdueLabel(row.followup_date)}
               {row.last_appointment_at ? ` · last exam ${fmtDay(row.last_appointment_at)}` : ''}
               {row.followup_last_emailed_at
@@ -250,7 +263,7 @@ function DueList({
                 : ''}
             </span>
             {!row.email && row.mode === 'followup' ? (
-              <span className="muted">No email on file — can't send a recall.</span>
+              <span className="vp-muted">No email on file — can't send a recall.</span>
             ) : null}
           </div>
 
@@ -264,34 +277,37 @@ function DueList({
               onCancel={() => setComposingFor(null)}
             />
           ) : (
-            <div className="request-actions">
+            <div className="vp-due-actions">
               {row.mode === 'followup' && row.email ? (
-                <button
-                  className="secondary"
+                <Button
+                  size="sm"
+                  variant="secondary"
                   onClick={() => setComposingFor(row.patient_id)}
                   disabled={busy === row.patient_id}
                 >
                   Draft email
-                </button>
+                </Button>
               ) : null}
-              <button
-                className="secondary"
+              <Button
+                size="sm"
+                variant="secondary"
                 onClick={() =>
                   act(row.patient_id, () => snoozeFollowup(row.patient_id, 1), 'Snoozed 1 month.')
                 }
                 disabled={busy === row.patient_id}
               >
                 Snooze 1 month
-              </button>
-              <button
-                className="secondary"
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
                 onClick={() =>
                   act(row.patient_id, () => dismissFollowup(row.patient_id), 'Marked done.')
                 }
                 disabled={busy === row.patient_id}
               >
                 Done
-              </button>
+              </Button>
             </div>
           )}
         </div>

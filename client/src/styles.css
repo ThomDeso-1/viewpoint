@@ -19,4 +19,5 @@
 @import './styles/screens/settings.css';
 @import './styles/screens/schedule.css';
 @import './styles/screens/receipts.css';
+@import './styles/screens/patients.css';
 @import './styles/legacy.css';
