@@ -3,9 +3,11 @@ import * as examRequests from '../exams/exam-requests.js';
 import * as patientsService from '../exams/patients.js';
 import * as appointmentsService from '../exams/appointments.js';
 import * as remindersService from '../exams/reminders.js';
+import * as followups from '../exams/followups.js';
 import * as queue from '../exams/queue.js';
 import * as calendarSync from '../exams/calendar-sync.js';
 import * as calendar from '../integrations/microsoft/calendar.js';
+import { sendMail } from '../integrations/microsoft/graph.js';
 import { isMicrosoftConnected, MicrosoftAuthError } from '../integrations/microsoft/auth.js';
 import * as processedFiles from '../exams/processed-files.js';
 import { sourceDir } from '../exams/file-source.js';
@@ -288,7 +290,29 @@ export function examsRoutes(): Router {
   // ── Patients ──
 
   router.get('/patients', (_req: Request, res: Response): void => {
-    res.json(patientsService.listPatients().map(patientsService.toPatientDto));
+    const now = new Date();
+    const boundary = now.toISOString();
+    // Two grouped queries for the whole directory rather than a per-row lookup.
+    const lastByPatient = appointmentsService.lastAppointmentByPatient(boundary);
+    const currentByPatient = appointmentsService.currentAppointmentByPatient(boundary);
+
+    res.json(
+      patientsService.listPatients().map((row) => ({
+        ...patientsService.toPatientDto(row),
+        followup: followups.summariseFollowup(
+          row,
+          lastByPatient.get(row.id) ?? null,
+          currentByPatient.get(row.id) ?? null,
+          null,
+          now,
+        ),
+      })),
+    );
+  });
+
+  // ── Follow-ups due — the recall worklist ──
+  router.get('/followups', (_req: Request, res: Response): void => {
+    res.json({ due: followups.listDueFollowups() });
   });
 
   router.post('/patients', (req: Request, res: Response): void => {
@@ -315,6 +339,7 @@ export function examsRoutes(): Router {
       ...patientsService.toPatientDto(patient),
       appointments: appointmentsService.listForPatient(patient.id),
       eligibility_history: checksForPatient(patient.id).map(toEligibilityDto),
+      followup: followups.followupForPatient(patient.id),
     });
   });
 
@@ -353,6 +378,103 @@ export function examsRoutes(): Router {
     });
 
     res.json(outcome);
+  });
+
+  // ── Patient follow-ups ──
+
+  /** Loads the patient or 404s — shared by the follow-up action routes. */
+  const requirePatient = (req: Request, res: Response) => {
+    const patient = patientsService.getPatient(req.params.id);
+    if (!patient) {
+      res.status(404).json({ error: 'Patient not found.' });
+      return undefined;
+    }
+    return patient;
+  };
+
+  // Prefilled recall email for the operator to review before sending.
+  router.get('/patients/:id/followup/draft', (req: Request, res: Response): void => {
+    const patient = requirePatient(req, res);
+    if (!patient) return;
+
+    if (!patient.email) {
+      res.status(400).json({ error: 'This patient has no email address on file.' });
+      return;
+    }
+
+    const summary = followups.followupForPatient(patient.id);
+    if (!summary || summary.followup_source === 'booked' || !summary.followup_date) {
+      res.status(400).json({ error: 'This patient has no follow-up due — nothing to draft.' });
+      return;
+    }
+
+    const { subject, body } = followups.composeFollowupEmail({
+      patient,
+      lastAppointmentAt: summary.last_appointment_at,
+    });
+    res.json({ to: patient.email, subject, body });
+  });
+
+  // Sends the (possibly edited) recall email from the Outlook mailbox.
+  router.post(
+    '/patients/:id/followup/email',
+    rateLimited('followup-email', 30, 5 * 60_000),
+    async (req: Request, res: Response): Promise<void> => {
+      const patient = requirePatient(req, res);
+      if (!patient) return;
+
+      if (!isMicrosoftConnected()) {
+        res.status(503).json({ error: 'Connect Outlook in Settings before sending email.' });
+        return;
+      }
+      if (!patient.email) {
+        res.status(400).json({ error: 'This patient has no email address on file.' });
+        return;
+      }
+
+      const subject = String(req.body?.subject ?? '').trim();
+      const body = String(req.body?.body ?? '').trim();
+      if (!subject || !body) {
+        res.status(400).json({ error: 'A follow-up email needs a subject and a message.' });
+        return;
+      }
+
+      try {
+        await sendMail({ to: patient.email, subject, body });
+      } catch (err) {
+        res.status(502).json({ error: (err as Error).message });
+        return;
+      }
+
+      followups.recordFollowupEmail(patient.id);
+      auditRequest(req, { action: 'followup.email', entityType: 'patient', entityId: patient.id });
+      res.json({ followup: followups.followupForPatient(patient.id) });
+    },
+  );
+
+  // "Done" — acknowledge this recall cycle.
+  router.post('/patients/:id/followup/dismiss', (req: Request, res: Response): void => {
+    const patient = requirePatient(req, res);
+    if (!patient) return;
+
+    followups.dismissFollowup(patient.id);
+    auditRequest(req, { action: 'followup.dismiss', entityType: 'patient', entityId: patient.id });
+    res.json({ followup: followups.followupForPatient(patient.id) });
+  });
+
+  // "Snooze" — push the follow-up date out.
+  router.post('/patients/:id/followup/snooze', (req: Request, res: Response): void => {
+    const patient = requirePatient(req, res);
+    if (!patient) return;
+
+    const months = req.body?.months === undefined ? 1 : Number(req.body.months);
+    if (!Number.isFinite(months) || months < 1 || months > 12) {
+      res.status(400).json({ error: 'Snooze must be between 1 and 12 months.' });
+      return;
+    }
+
+    followups.snoozeFollowup(patient.id, months);
+    res.json({ followup: followups.followupForPatient(patient.id) });
   });
 
   // ── Schedule ──

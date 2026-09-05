@@ -1,8 +1,10 @@
 import { v4 as uuid } from 'uuid';
 import { getDb } from '../db/db.js';
-import type { PatientRow } from './types.js';
+import type { PatientRow, FollowupMode } from './types.js';
 import { encryptOptional, decryptOptional } from '../platform/crypto.js';
 import { audit } from '../platform/audit.js';
+
+const FOLLOWUP_MODES: readonly FollowupMode[] = ['off', 'remind', 'followup'];
 
 /**
  * Patient records — the app's only store of personal health information.
@@ -23,6 +25,8 @@ export interface PatientInput {
   health_card_number?: string | null;
   health_card_version?: string | null;
   notes?: string | null;
+  followup_mode?: FollowupMode;
+  followup_date_override?: string | null;
 }
 
 /** What the API returns: never the card number, only whether one is on file. */
@@ -40,6 +44,10 @@ export interface PatientDto {
   notes: string | null;
   created_at: string;
   updated_at: string;
+  followup_mode: FollowupMode;
+  followup_date_override: string | null;
+  followup_dismissed_at: string | null;
+  followup_last_emailed_at: string | null;
 }
 
 // ── Reads ──
@@ -136,6 +144,18 @@ export function updatePatient(id: string, input: Partial<PatientInput>): Patient
       ? existing.health_card_enc
       : encryptOptional(input.health_card_number);
 
+  const followupOverride =
+    input.followup_date_override === undefined
+      ? existing.followup_date_override
+      : input.followup_date_override || null;
+
+  // Moving the follow-up date by hand reopens it — a "Done" from the old
+  // cycle shouldn't keep the new date hidden.
+  const followupDismissedAt =
+    followupOverride === existing.followup_date_override
+      ? existing.followup_dismissed_at
+      : null;
+
   getDb()
     .prepare(
       `UPDATE patients SET
@@ -146,6 +166,9 @@ export function updatePatient(id: string, input: Partial<PatientInput>): Patient
          health_card_enc = @health_card_enc,
          health_card_version = @health_card_version,
          notes = @notes,
+         followup_mode = @followup_mode,
+         followup_date_override = @followup_date_override,
+         followup_dismissed_at = @followup_dismissed_at,
          updated_at = @updated_at
        WHERE id = @id`,
     )
@@ -161,6 +184,14 @@ export function updatePatient(id: string, input: Partial<PatientInput>): Patient
           ? existing.health_card_version
           : input.health_card_version,
       notes: input.notes === undefined ? existing.notes : input.notes,
+      followup_mode:
+        input.followup_mode === undefined
+          ? existing.followup_mode
+          : FOLLOWUP_MODES.includes(input.followup_mode)
+            ? input.followup_mode
+            : existing.followup_mode,
+      followup_date_override: followupOverride,
+      followup_dismissed_at: followupDismissedAt,
       updated_at: new Date().toISOString(),
     });
 
@@ -173,6 +204,39 @@ export function setWaveCustomerId(patientId: string, waveCustomerId: string): vo
   getDb()
     .prepare(`UPDATE patients SET wave_customer_id = ?, updated_at = ? WHERE id = ?`)
     .run(waveCustomerId, new Date().toISOString(), patientId);
+}
+
+/**
+ * Partial write of just the recall fields — used by the follow-up service
+ * for dismiss / snooze / "email sent", none of which touch the rest of the
+ * record. `undefined` leaves a column alone.
+ */
+export function setFollowupState(
+  patientId: string,
+  fields: {
+    followup_date_override?: string | null;
+    followup_dismissed_at?: string | null;
+    followup_last_emailed_at?: string | null;
+  },
+): void {
+  const sets: string[] = [];
+  const params: Record<string, unknown> = { id: patientId, updated_at: new Date().toISOString() };
+
+  for (const key of [
+    'followup_date_override',
+    'followup_dismissed_at',
+    'followup_last_emailed_at',
+  ] as const) {
+    if (fields[key] !== undefined) {
+      sets.push(`${key} = @${key}`);
+      params[key] = fields[key];
+    }
+  }
+  if (sets.length === 0) return;
+
+  getDb()
+    .prepare(`UPDATE patients SET ${sets.join(', ')}, updated_at = @updated_at WHERE id = @id`)
+    .run(params);
 }
 
 /**
@@ -243,5 +307,9 @@ export function toPatientDto(row: PatientRow): PatientDto {
     notes: row.notes,
     created_at: row.created_at,
     updated_at: row.updated_at,
+    followup_mode: row.followup_mode,
+    followup_date_override: row.followup_date_override,
+    followup_dismissed_at: row.followup_dismissed_at,
+    followup_last_emailed_at: row.followup_last_emailed_at,
   };
 }

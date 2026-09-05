@@ -479,6 +479,133 @@ describe('exams API', () => {
     });
   });
 
+  describe('patient follow-ups', () => {
+    /** A patient whose last exam was ~2 years ago, with nothing booked since. */
+    async function overduePatient(over: Record<string, unknown> = {}) {
+      const appts = await import('../../server/exams/appointments.js');
+      const patient = patients.createPatient({
+        full_name: 'Grace Hopper',
+        email: 'grace@example.com',
+        date_of_birth: '1980-01-01',
+        ...over,
+      });
+      appts.createAppointment({
+        patientId: patient.id,
+        startsAt: new Date(Date.now() - 25 * 30 * 86_400_000).toISOString(),
+        title: 'Eye exam',
+      });
+      return patient;
+    }
+
+    it('lists a due patient on GET /followups', async () => {
+      const patient = await overduePatient();
+
+      const res = await request(ctx.app).get('/api/exams/followups').set(auth());
+      expect(res.status).toBe(200);
+      expect(res.body.due.map((f: any) => f.patient_id)).toContain(patient.id);
+    });
+
+    it('attaches the follow-up summary to the patient directory and record', async () => {
+      const patient = await overduePatient();
+
+      const list = await request(ctx.app).get('/api/exams/patients').set(auth());
+      const row = list.body.find((p: any) => p.id === patient.id);
+      expect(row.followup).toMatchObject({ followup_source: 'computed', due: true });
+
+      const detail = await request(ctx.app).get(`/api/exams/patients/${patient.id}`).set(auth());
+      expect(detail.body.followup.due).toBe(true);
+    });
+
+    it('dismiss takes the patient off the list and is audited', async () => {
+      const patient = await overduePatient();
+
+      const res = await request(ctx.app)
+        .post(`/api/exams/patients/${patient.id}/followup/dismiss`)
+        .set(auth());
+      expect(res.status).toBe(200);
+      expect(res.body.followup.due).toBe(false);
+
+      const list = await request(ctx.app).get('/api/exams/followups').set(auth());
+      expect(list.body.due.map((f: any) => f.patient_id)).not.toContain(patient.id);
+    });
+
+    it('snooze pushes the follow-up date out', async () => {
+      const patient = await overduePatient();
+
+      const res = await request(ctx.app)
+        .post(`/api/exams/patients/${patient.id}/followup/snooze`)
+        .set(auth())
+        .send({ months: 2 });
+      expect(res.status).toBe(200);
+
+      const after = patients.getPatient(patient.id)!;
+      expect(after.followup_date_override).toBeTruthy();
+    });
+
+    it('rejects an out-of-range snooze', async () => {
+      const patient = await overduePatient();
+      const res = await request(ctx.app)
+        .post(`/api/exams/patients/${patient.id}/followup/snooze`)
+        .set(auth())
+        .send({ months: 99 });
+      expect(res.status).toBe(400);
+    });
+
+    it('drafts a recall email', async () => {
+      const patient = await overduePatient();
+      const res = await request(ctx.app)
+        .get(`/api/exams/patients/${patient.id}/followup/draft`)
+        .set(auth());
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({ to: 'grace@example.com' });
+      expect(res.body.body).toMatch(/Hello Grace,/);
+    });
+
+    it('will not draft for a patient with no email', async () => {
+      const patient = await overduePatient({ email: null });
+      const res = await request(ctx.app)
+        .get(`/api/exams/patients/${patient.id}/followup/draft`)
+        .set(auth());
+      expect(res.status).toBe(400);
+    });
+
+    it('needs Outlook connected to send', async () => {
+      const patient = await overduePatient();
+      const res = await request(ctx.app)
+        .post(`/api/exams/patients/${patient.id}/followup/email`)
+        .set(auth())
+        .send({ subject: 'Time for your exam', body: 'Hello Grace,' });
+      expect(res.status).toBe(503);
+    });
+
+    it('sends the recall email from Outlook and records it', async () => {
+      const patient = await overduePatient();
+      connectMicrosoft();
+      const mock = installFetchMock();
+      mock.mockResolvedValueOnce(new Response(null, { status: 202 })); // Graph sendMail
+
+      const res = await request(ctx.app)
+        .post(`/api/exams/patients/${patient.id}/followup/email`)
+        .set(auth())
+        .send({ subject: 'Time for your exam', body: 'Hello Grace,' });
+
+      expect(res.status).toBe(200);
+      const sendCall = mock.mock.calls.find((c) => String(c[0]).includes('/me/sendMail'))!;
+      expect(sendCall).toBeTruthy();
+      expect(patients.getPatient(patient.id)!.followup_last_emailed_at).toBeTruthy();
+    });
+
+    it('rejects an empty email body', async () => {
+      const patient = await overduePatient();
+      connectMicrosoft();
+      const res = await request(ctx.app)
+        .post(`/api/exams/patients/${patient.id}/followup/email`)
+        .set(auth())
+        .send({ subject: '', body: '' });
+      expect(res.status).toBe(400);
+    });
+  });
+
   describe('calendar sync', () => {
     beforeEach(() => connectMicrosoft());
 
@@ -628,6 +755,75 @@ describe('exams API', () => {
 
       expect(res.status).toBe(400);
       expect(res.body.ok).toBe(false);
+    });
+
+    describe('email templates', () => {
+      it('serves the default wording, defaults and placeholder hints', async () => {
+        const res = await request(ctx.app).get('/api/settings/exams/email-templates').set(auth());
+
+        expect(res.status).toBe(200);
+        expect(res.body.templates.reminder.customised).toBe(false);
+        expect(res.body.templates.reminder.body).toContain('{{firstName}}');
+        expect(res.body.defaults.followup.subject).toBe(res.body.templates.followup.subject);
+        expect(res.body.placeholders.followup.map((p: any) => p.token)).toContain('cadence');
+      });
+
+      it('saves an override and reflects it in a drafted follow-up email', async () => {
+        const save = await request(ctx.app)
+          .post('/api/settings/exams/email-templates')
+          .set(auth())
+          .send({ kind: 'followup', subject: 'Book again, {{firstName}}', body: 'It is time, {{firstName}}. — {{business}}' });
+        expect(save.status).toBe(200);
+        expect(save.body.customised).toBe(true);
+
+        const patient = await request(ctx.app)
+          .post('/api/exams/patients')
+          .set(auth())
+          .send({ full_name: 'Grace Hopper', email: 'grace@example.com', date_of_birth: '1980-01-01' });
+        await request(ctx.app)
+          .post('/api/exams/appointments')
+          .set(auth())
+          .send({
+            startsAt: new Date(Date.now() - 800 * 86_400_000).toISOString(),
+            patientId: patient.body.id,
+          });
+
+        const draft = await request(ctx.app)
+          .get(`/api/exams/patients/${patient.body.id}/followup/draft`)
+          .set(auth());
+        expect(draft.body.subject).toBe('Book again, Grace');
+        expect(draft.body.body).toContain('It is time, Grace.');
+        expect(draft.body.body).not.toContain('{{');
+      });
+
+      it('resets back to the built-in wording', async () => {
+        await request(ctx.app)
+          .post('/api/settings/exams/email-templates')
+          .set(auth())
+          .send({ kind: 'reminder', subject: 'x', body: 'y' });
+
+        const res = await request(ctx.app)
+          .post('/api/settings/exams/email-templates')
+          .set(auth())
+          .send({ kind: 'reminder', reset: true });
+
+        expect(res.body.customised).toBe(false);
+        const after = await request(ctx.app).get('/api/settings/exams/email-templates').set(auth());
+        expect(after.body.templates.reminder.customised).toBe(false);
+      });
+
+      it.each([
+        [{ kind: 'nope', subject: 'a', body: 'b' }, /Unknown template/i],
+        [{ kind: 'reminder', subject: '  ', body: 'b' }, /subject/i],
+        [{ kind: 'reminder', subject: 'a', body: '' }, /body/i],
+      ])('rejects bad input (%#)', async (body, expected) => {
+        const res = await request(ctx.app)
+          .post('/api/settings/exams/email-templates')
+          .set(auth())
+          .send(body);
+        expect(res.status).toBe(400);
+        expect(res.body.error).toMatch(expected);
+      });
     });
   });
 

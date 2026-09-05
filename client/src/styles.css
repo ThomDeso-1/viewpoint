@@ -1572,6 +1572,58 @@ img {
   font-weight: 600;
 }
 
+/* ── Patient follow-ups / recall ── */
+
+.followup-due-name {
+  font-size: 15px;
+}
+
+.followup-composer {
+  margin-top: 12px;
+}
+.followup-composer label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+}
+.followup-composer input,
+.followup-composer textarea {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  padding: 10px 12px;
+  font-size: 16px; /* 16px stops iOS Safari zooming on focus */
+  font-family: inherit;
+  color: var(--text-primary);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.followup-composer textarea {
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.followup-block {
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+  padding-top: 12px;
+}
+.followup-block select {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  padding: 10px 12px;
+  font-size: 16px;
+  font-family: inherit;
+  color: var(--text-primary);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
 /* ── Audit log ── */
 
 .filter-row {
@@ -1720,6 +1772,35 @@ img {
 }
 .settings-instructions p:last-child {
   margin-bottom: 0;
+}
+
+/* Editable patient-email templates. Each template block gets a divider so
+   the two (reminder / follow-up) read as separate cards within the panel. */
+.email-template + .email-template {
+  margin-top: 8px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+}
+.email-template textarea.auth-input {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  line-height: 1.5;
+  resize: vertical;
+}
+.email-template-tokens {
+  margin-top: 10px;
+  font-size: 13px;
+}
+.email-template-tokens summary {
+  cursor: pointer;
+  color: var(--text-tertiary);
+}
+.email-template-tokens ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  line-height: 1.6;
+}
+.email-template-tokens code {
+  font-size: 12px;
 }
 
 /* Settings uses .btn-* rather than the .page button vocabulary, so the

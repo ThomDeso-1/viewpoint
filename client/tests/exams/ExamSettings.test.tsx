@@ -39,6 +39,30 @@ beforeEach(() => {
     income: [{ id: 'income-1', name: 'Professional Fees' }],
     products: [{ id: 'prod-1', name: 'Eye Exam', unitPrice: 120 }],
   });
+  api.getEmailTemplates.mockResolvedValue({
+    templates: {
+      reminder: { subject: 'Reminder: {{appointmentTime}}', body: 'Hello {{firstName}},', customised: false },
+      followup: { subject: 'Time for your exam', body: 'Hello {{firstName}},', customised: false },
+    },
+    defaults: {
+      reminder: { subject: 'Reminder: {{appointmentTime}}', body: 'Hello {{firstName}},' },
+      followup: { subject: 'Time for your exam', body: 'Hello {{firstName}},' },
+    },
+    placeholders: {
+      reminder: [{ token: 'firstName', description: "The patient's first name" }],
+      followup: [{ token: 'firstName', description: "The patient's first name" }],
+    },
+  });
+  api.saveEmailTemplate.mockResolvedValue({
+    success: true,
+    template: { subject: 'x', body: 'y' },
+    customised: true,
+  });
+  api.resetEmailTemplate.mockResolvedValue({
+    success: true,
+    template: { subject: 'Reminder: {{appointmentTime}}', body: 'Hello {{firstName}},' },
+    customised: false,
+  });
 });
 
 function renderPanel() {

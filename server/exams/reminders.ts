@@ -3,6 +3,7 @@ import { getDb } from '../db/db.js';
 import type { ReminderRow, ReminderChannelName, AppointmentRow, PatientRow } from './types.js';
 import { sendMail } from '../integrations/microsoft/graph.js';
 import { audit } from '../platform/audit.js';
+import { renderEmailTemplate } from './email-templates.js';
 import { applyFailure } from '../platform/failure.js';
 import { DEFAULT_MAX_RETRIES } from '../platform/backoff.js';
 
@@ -86,7 +87,9 @@ function formatAppointmentTime(startsAt: string): string {
  * Drafts the reminder text.
  *
  * Kept plain and factual — it is sent from the business's own mailbox and
- * the operator reads it before it goes out.
+ * the operator reads it before it goes out. The wording comes from the
+ * `reminder` email template (built-in default unless the operator edited
+ * it in Settings); this fills in the per-appointment placeholders.
  */
 export function composeReminder(
   appointment: AppointmentRow,
@@ -96,33 +99,12 @@ export function composeReminder(
   const when = formatAppointmentTime(appointment.starts_at);
   const firstName = patient.full_name.split(/\s+/)[0];
 
-  // Locale time formats can already end in a period ("1:00 a.m."), which
-  // would otherwise produce a doubled one mid-sentence.
-  const sentenceEnd = when.endsWith('.') ? '' : '.';
-
-  const lines = [
-    `Hello ${firstName},`,
-    '',
-    `This is a reminder of your eye exam at ${business} on ${when}${sentenceEnd}`,
-  ];
-
-  if (appointment.location) {
-    lines.push('', `Location: ${appointment.location}`);
-  }
-
-  lines.push(
-    '',
-    'Please bring your health card and your current glasses or contact lenses.',
-    '',
-    'If you need to reschedule, just reply to this message.',
-    '',
-    `— ${business}`,
-  );
-
-  return {
-    subject: `Reminder: your eye exam on ${when}`,
-    body: lines.join('\n'),
-  };
+  return renderEmailTemplate('reminder', {
+    firstName,
+    business,
+    appointmentTime: when,
+    locationBlock: appointment.location ? `\n\nLocation: ${appointment.location}` : '',
+  });
 }
 
 // ── Persistence ──

@@ -9,6 +9,7 @@ import {
   type WaveInvoiceTargets,
 } from '../shared/api';
 import { useToast } from '../shared/Toast';
+import { EmailTemplateSettings } from './EmailTemplateSettings';
 
 /**
  * The exam-request workflow settings: which folder to scan for patient
@@ -285,6 +286,8 @@ export function ExamSettings() {
       <button className="btn-primary" onClick={handleSave} disabled={saving}>
         {saving ? 'Saving…' : 'Save'}
       </button>
+
+      <EmailTemplateSettings />
     </section>
   );
 }

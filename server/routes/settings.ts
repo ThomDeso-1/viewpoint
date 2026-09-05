@@ -17,6 +17,16 @@ import { isConnected } from '../platform/oauth-store.js';
 import { rateLimited } from '../platform/rate-limit.js';
 import path from 'path';
 import { walkSourceDir, SourceFolderError } from '../exams/file-source.js';
+import {
+  DEFAULT_TEMPLATES,
+  TEMPLATE_PLACEHOLDERS,
+  getEmailTemplate,
+  setEmailTemplate,
+  resetEmailTemplate,
+  isEmailTemplateCustomised,
+  isEmailTemplateKind,
+  type EmailTemplateKind,
+} from '../exams/email-templates.js';
 
 import fs from 'fs';
 
@@ -382,6 +392,50 @@ export function settingsRoutes(): Router {
       }
     },
   );
+
+  // ── GET /api/settings/exams/email-templates — the two patient-email templates ──
+  // Returns the current wording (operator's override or the built-in
+  // default), plus the defaults and placeholder hints the editor renders.
+  router.get('/exams/email-templates', (_req: Request, res: Response): void => {
+    const kinds: EmailTemplateKind[] = ['reminder', 'followup'];
+    res.json({
+      templates: Object.fromEntries(
+        kinds.map((kind) => [
+          kind,
+          { ...getEmailTemplate(kind), customised: isEmailTemplateCustomised(kind) },
+        ]),
+      ),
+      defaults: DEFAULT_TEMPLATES,
+      placeholders: TEMPLATE_PLACEHOLDERS,
+    });
+  });
+
+  // ── POST /api/settings/exams/email-templates — save or reset one template ──
+  router.post('/exams/email-templates', (req: Request, res: Response): void => {
+    const { kind, subject, body, reset } = req.body ?? {};
+    if (!isEmailTemplateKind(kind)) {
+      res.status(400).json({ error: 'Unknown template — expected "reminder" or "followup".' });
+      return;
+    }
+
+    if (reset === true) {
+      resetEmailTemplate(kind);
+      res.json({ success: true, template: getEmailTemplate(kind), customised: false });
+      return;
+    }
+
+    if (typeof subject !== 'string' || !subject.trim()) {
+      res.status(400).json({ error: 'The email needs a subject line.' });
+      return;
+    }
+    if (typeof body !== 'string' || !body.trim()) {
+      res.status(400).json({ error: 'The email needs a message body.' });
+      return;
+    }
+
+    setEmailTemplate(kind, { subject, body });
+    res.json({ success: true, template: getEmailTemplate(kind), customised: true });
+  });
 
   // ── GET /api/settings/ohip — configuration state, never the secrets ──
   router.get('/ohip', (_req: Request, res: Response): void => {

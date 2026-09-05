@@ -64,6 +64,8 @@ export type OAuthProvider = 'wave' | 'microsoft';
 
 // ── Rows ──
 
+export type FollowupMode = 'off' | 'remind' | 'followup';
+
 export interface PatientRow {
   id: string;
   full_name: string;
@@ -79,6 +81,14 @@ export interface PatientRow {
   updated_at: string;
   /** Soft-delete tombstone (migration 005) — reads filter this out. */
   deleted_at: string | null;
+  /** Recall preference (migration 009). off | remind | followup. */
+  followup_mode: FollowupMode;
+  /** Operator's explicit follow-up date ('YYYY-MM-DD'); wins over the computed one. */
+  followup_date_override: string | null;
+  /** When "Done" was tapped — suppresses the due entry until a newer last exam. */
+  followup_dismissed_at: string | null;
+  /** When a recall email last went out — display only. */
+  followup_last_emailed_at: string | null;
 }
 
 export interface AppointmentRow {

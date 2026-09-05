@@ -146,6 +146,44 @@ describe('patient records', () => {
     expect(rows[0].patient_id).toBeNull();
   });
 
+  describe('recall fields', () => {
+    it('defaults followup_mode to remind and exposes the recall fields on the DTO', () => {
+      const p = patients.createPatient({ full_name: 'Ada' });
+      const dto = patients.toPatientDto(patients.getPatient(p.id)!);
+
+      expect(dto.followup_mode).toBe('remind');
+      expect(dto.followup_date_override).toBeNull();
+      expect(dto.followup_dismissed_at).toBeNull();
+    });
+
+    it('updates the recall mode and override date', () => {
+      const p = patients.createPatient({ full_name: 'Ada' });
+
+      patients.updatePatient(p.id, { followup_mode: 'followup', followup_date_override: '2027-01-15' });
+
+      const after = patients.getPatient(p.id)!;
+      expect(after.followup_mode).toBe('followup');
+      expect(after.followup_date_override).toBe('2027-01-15');
+    });
+
+    it('ignores an unrecognised followup_mode rather than storing it', () => {
+      const p = patients.createPatient({ full_name: 'Ada' });
+
+      patients.updatePatient(p.id, { followup_mode: 'whenever' as never });
+
+      expect(patients.getPatient(p.id)!.followup_mode).toBe('remind');
+    });
+
+    it('reopens a dismissed follow-up when the override date is changed', () => {
+      const p = patients.createPatient({ full_name: 'Ada' });
+      patients.setFollowupState(p.id, { followup_dismissed_at: '2026-01-01T00:00:00.000Z' });
+
+      patients.updatePatient(p.id, { followup_date_override: '2027-06-01' });
+
+      expect(patients.getPatient(p.id)!.followup_dismissed_at).toBeNull();
+    });
+  });
+
   describe('matching an incoming request to an existing record', () => {
     it('matches on email, case-insensitively', () => {
       const p = patients.createPatient({ full_name: 'Ada Lovelace', email: 'ada@example.com' });

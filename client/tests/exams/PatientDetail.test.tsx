@@ -4,7 +4,13 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { PatientDetail } from '../../src/exams/PatientDetail';
 import { ToastProvider } from '../../src/shared/Toast';
-import { makePatient, makeAppointment, makeEligibility, makeEligibilityOutcome } from '../helpers/fixtures';
+import {
+  makePatient,
+  makeFollowup,
+  makeAppointment,
+  makeEligibility,
+  makeEligibilityOutcome,
+} from '../helpers/fixtures';
 
 vi.mock('../../src/shared/api');
 import * as api from '../../src/shared/api';
@@ -15,6 +21,7 @@ beforeEach(() => {
     ...makePatient(),
     appointments: [makeAppointment()],
     eligibility_history: [makeEligibility()],
+    followup: makeFollowup({ last_appointment_at: '2024-08-01T14:00:00.000Z' }),
   });
   api.updatePatient.mockResolvedValue(makePatient());
 });
@@ -93,6 +100,7 @@ describe('PatientDetail', () => {
       ...makePatient({ has_health_card: false, health_card_masked: null }),
       appointments: [],
       eligibility_history: [],
+      followup: makeFollowup(),
     });
     renderDetail();
     await screen.findByRole('heading', { name: 'Ada Lovelace' });
@@ -118,5 +126,73 @@ describe('PatientDetail', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /Check OHIP now/i }));
     expect(await screen.findByText(/Check failed: service unavailable/i)).toBeInTheDocument();
+  });
+
+  describe('recall', () => {
+    it('summarises the last and follow-up appointment', async () => {
+      api.getPatient.mockResolvedValue({
+        ...makePatient(),
+        appointments: [makeAppointment()],
+        eligibility_history: [],
+        followup: makeFollowup({
+          last_appointment_at: '2024-08-01T14:00:00.000Z',
+          followup_date: '2026-08-01',
+          followup_source: 'computed',
+        }),
+      });
+      renderDetail();
+      await screen.findByRole('heading', { name: 'Ada Lovelace' });
+
+      expect(screen.getByText(/Last appointment: .*2024/)).toBeInTheDocument();
+      expect(screen.getByText(/Follow-up: .*2026.*estimated/)).toBeInTheDocument();
+    });
+
+    it('persists the recall mode', async () => {
+      renderDetail();
+      await screen.findByRole('heading', { name: 'Ada Lovelace' });
+
+      await userEvent.selectOptions(
+        screen.getByLabelText('Recall'),
+        'Follow up — remind me and offer a recall email',
+      );
+      await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+      await waitFor(() => expect(api.updatePatient).toHaveBeenCalled());
+      const [, payload] = api.updatePatient.mock.calls[0];
+      expect(payload.followup_mode).toBe('followup');
+    });
+
+    it('drafts and sends a recall email when a follow-up is due', async () => {
+      api.getPatient.mockResolvedValue({
+        ...makePatient(),
+        appointments: [],
+        eligibility_history: [],
+        followup: makeFollowup({
+          last_appointment_at: '2024-08-01T14:00:00.000Z',
+          followup_date: '2026-08-01',
+          followup_source: 'computed',
+          due: true,
+        }),
+      });
+      api.getFollowupDraft.mockResolvedValue({
+        to: 'ada@example.com',
+        subject: 'Time for your next eye exam',
+        body: 'Hello Ada,',
+      });
+      api.sendFollowupEmail.mockResolvedValue({ followup: makeFollowup() });
+      renderDetail({ ohipEnabled: false });
+      await screen.findByRole('heading', { name: 'Ada Lovelace' });
+
+      await userEvent.click(screen.getByRole('button', { name: 'Draft follow-up email' }));
+      expect(await screen.findByDisplayValue('Time for your next eye exam')).toBeInTheDocument();
+
+      await userEvent.click(screen.getByRole('button', { name: /Send from Outlook/ }));
+      await waitFor(() =>
+        expect(api.sendFollowupEmail).toHaveBeenCalledWith('patient-1', {
+          subject: 'Time for your next eye exam',
+          body: 'Hello Ada,',
+        }),
+      );
+    });
   });
 });

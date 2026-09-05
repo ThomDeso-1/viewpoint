@@ -27,7 +27,15 @@ export function makeReceipt(overrides: Partial<ReceiptRow> = {}): ReceiptRow {
 
 // ── Exams fixtures ──
 
-import type { ExamRequest, Patient, Appointment, EligibilityCheck, EligibilityOutcome } from '../../src/shared/api';
+import type {
+  ExamRequest,
+  Patient,
+  PatientFollowup,
+  FollowupDue,
+  Appointment,
+  EligibilityCheck,
+  EligibilityOutcome,
+} from '../../src/shared/api';
 
 export function makePatient(overrides: Partial<Patient> = {}): Patient {
   return {
@@ -43,6 +51,43 @@ export function makePatient(overrides: Partial<Patient> = {}): Patient {
     notes: null,
     created_at: '2026-08-01T00:00:00.000Z',
     updated_at: '2026-08-01T00:00:00.000Z',
+    followup_mode: 'remind',
+    followup_date_override: null,
+    followup_dismissed_at: null,
+    followup_last_emailed_at: null,
+    ...overrides,
+  };
+}
+
+export function makeFollowup(overrides: Partial<PatientFollowup> = {}): PatientFollowup {
+  return {
+    last_appointment_at: null,
+    current_appointment_at: null,
+    followup_date: null,
+    followup_source: null,
+    due: false,
+    last_emailed_at: null,
+    ...overrides,
+  };
+}
+
+/** A patient row as `getPatients` returns it — the DTO plus its recall view. */
+export function makePatientRow(
+  patient: Partial<Patient> = {},
+  followup: Partial<PatientFollowup> = {},
+): Patient & { followup: PatientFollowup } {
+  return { ...makePatient(patient), followup: makeFollowup(followup) };
+}
+
+export function makeFollowupDue(overrides: Partial<FollowupDue> = {}): FollowupDue {
+  return {
+    patient_id: 'patient-1',
+    full_name: 'Ada Lovelace',
+    email: 'ada@example.com',
+    mode: 'followup',
+    last_appointment_at: '2024-08-01T14:00:00.000Z',
+    followup_date: '2026-08-01',
+    followup_last_emailed_at: null,
     ...overrides,
   };
 }

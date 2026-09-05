@@ -269,6 +269,8 @@ export function saveWaveAccounts(data: {
 
 // ── Exams: patients, schedule, exam requests ──
 
+export type FollowupMode = 'off' | 'remind' | 'followup';
+
 export interface Patient {
   id: string;
   full_name: string;
@@ -283,6 +285,34 @@ export interface Patient {
   notes: string | null;
   created_at: string;
   updated_at: string;
+  /** Recall preference. off = never surface; remind = show when due; followup = show + offer a recall email. */
+  followup_mode: FollowupMode;
+  /** Operator's explicit follow-up date ('YYYY-MM-DD'); overrides the computed one. */
+  followup_date_override: string | null;
+  followup_dismissed_at: string | null;
+  followup_last_emailed_at: string | null;
+}
+
+/** Derived recall view for one patient (see server/exams/followups.ts). */
+export interface PatientFollowup {
+  last_appointment_at: string | null;
+  /** Next booked appointment, not yet had — shown as "Current appointment". */
+  current_appointment_at: string | null;
+  /** 'YYYY-MM-DD', or null when there's no history and no override. */
+  followup_date: string | null;
+  followup_source: 'booked' | 'override' | 'computed' | null;
+  due: boolean;
+  last_emailed_at: string | null;
+}
+
+export interface FollowupDue {
+  patient_id: string;
+  full_name: string;
+  email: string | null;
+  mode: FollowupMode;
+  last_appointment_at: string | null;
+  followup_date: string;
+  followup_last_emailed_at: string | null;
 }
 
 export interface EligibilityCheck {
@@ -468,13 +498,19 @@ export function retryExamRequest(id: string): Promise<{ success: boolean }> {
   return request(`/exams/exam-requests/${id}/retry`, { method: 'POST' });
 }
 
-export function getPatients(): Promise<Patient[]> {
+export function getPatients(): Promise<(Patient & { followup: PatientFollowup })[]> {
   return request('/exams/patients');
 }
 
 export function getPatient(
   id: string,
-): Promise<Patient & { appointments: Appointment[]; eligibility_history: EligibilityCheck[] }> {
+): Promise<
+  Patient & {
+    appointments: Appointment[];
+    eligibility_history: EligibilityCheck[];
+    followup: PatientFollowup | null;
+  }
+> {
   return request(`/exams/patients/${id}`);
 }
 
@@ -482,6 +518,37 @@ export function updatePatient(id: string, fields: Partial<Patient> & { health_ca
   return request<Patient>(`/exams/patients/${id}`, {
     method: 'PUT',
     body: JSON.stringify(fields),
+  });
+}
+
+// ── Patient recall / follow-ups ──
+
+export function getFollowupsDue(): Promise<{ due: FollowupDue[] }> {
+  return request('/exams/followups');
+}
+
+export function getFollowupDraft(id: string): Promise<{ to: string; subject: string; body: string }> {
+  return request(`/exams/patients/${id}/followup/draft`);
+}
+
+export function sendFollowupEmail(
+  id: string,
+  body: { subject: string; body: string },
+): Promise<{ followup: PatientFollowup }> {
+  return request(`/exams/patients/${id}/followup/email`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export function dismissFollowup(id: string): Promise<{ followup: PatientFollowup }> {
+  return request(`/exams/patients/${id}/followup/dismiss`, { method: 'POST' });
+}
+
+export function snoozeFollowup(id: string, months = 1): Promise<{ followup: PatientFollowup }> {
+  return request(`/exams/patients/${id}/followup/snooze`, {
+    method: 'POST',
+    body: JSON.stringify({ months }),
   });
 }
 
@@ -675,6 +742,49 @@ export interface WaveInvoiceTargets {
 
 export function getWaveInvoiceTargets(): Promise<WaveInvoiceTargets> {
   return request('/settings/wave/income-accounts');
+}
+
+// ── Patient email templates ──
+
+export type EmailTemplateKind = 'reminder' | 'followup';
+
+export interface EmailTemplate {
+  subject: string;
+  body: string;
+}
+
+export interface TemplatePlaceholder {
+  token: string;
+  description: string;
+}
+
+export interface EmailTemplatesResponse {
+  templates: Record<EmailTemplateKind, EmailTemplate & { customised: boolean }>;
+  defaults: Record<EmailTemplateKind, EmailTemplate>;
+  placeholders: Record<EmailTemplateKind, TemplatePlaceholder[]>;
+}
+
+export function getEmailTemplates(): Promise<EmailTemplatesResponse> {
+  return request('/settings/exams/email-templates');
+}
+
+export function saveEmailTemplate(
+  kind: EmailTemplateKind,
+  template: EmailTemplate,
+): Promise<{ success: boolean; template: EmailTemplate; customised: boolean }> {
+  return request('/settings/exams/email-templates', {
+    method: 'POST',
+    body: JSON.stringify({ kind, ...template }),
+  });
+}
+
+export function resetEmailTemplate(
+  kind: EmailTemplateKind,
+): Promise<{ success: boolean; template: EmailTemplate; customised: boolean }> {
+  return request('/settings/exams/email-templates', {
+    method: 'POST',
+    body: JSON.stringify({ kind, reset: true }),
+  });
 }
 
 // ── OHIP configuration ──

@@ -47,6 +47,55 @@ export function listForPatient(patientId: string): AppointmentRow[] {
     .all(patientId) as AppointmentRow[];
 }
 
+/** The most recent non-cancelled appointment that has already started. */
+export function lastAppointmentFor(patientId: string, boundaryIso: string): AppointmentRow | undefined {
+  return getDb()
+    .prepare(
+      `SELECT * FROM appointments
+       WHERE patient_id = ? AND status != 'cancelled' AND starts_at < ?
+       ORDER BY starts_at DESC LIMIT 1`,
+    )
+    .get(patientId, boundaryIso) as AppointmentRow | undefined;
+}
+
+/** The next non-cancelled appointment — booked, not yet had. */
+export function currentAppointmentFor(patientId: string, boundaryIso: string): AppointmentRow | undefined {
+  return getDb()
+    .prepare(
+      `SELECT * FROM appointments
+       WHERE patient_id = ? AND status != 'cancelled' AND starts_at >= ?
+       ORDER BY starts_at ASC LIMIT 1`,
+    )
+    .get(patientId, boundaryIso) as AppointmentRow | undefined;
+}
+
+/**
+ * The last / current appointment for every patient at once — one grouped
+ * query each, rather than a per-row lookup when the directory lists
+ * hundreds of patients.
+ */
+export function lastAppointmentByPatient(boundaryIso: string): Map<string, string> {
+  const rows = getDb()
+    .prepare(
+      `SELECT patient_id, MAX(starts_at) AS starts_at FROM appointments
+       WHERE patient_id IS NOT NULL AND status != 'cancelled' AND starts_at < ?
+       GROUP BY patient_id`,
+    )
+    .all(boundaryIso) as { patient_id: string; starts_at: string }[];
+  return new Map(rows.map((r) => [r.patient_id, r.starts_at]));
+}
+
+export function currentAppointmentByPatient(boundaryIso: string): Map<string, string> {
+  const rows = getDb()
+    .prepare(
+      `SELECT patient_id, MIN(starts_at) AS starts_at FROM appointments
+       WHERE patient_id IS NOT NULL AND status != 'cancelled' AND starts_at >= ?
+       GROUP BY patient_id`,
+    )
+    .all(boundaryIso) as { patient_id: string; starts_at: string }[];
+  return new Map(rows.map((r) => [r.patient_id, r.starts_at]));
+}
+
 export interface AppointmentInput {
   patientId?: string | null;
   msEventId?: string | null;
