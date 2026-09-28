@@ -31,7 +31,18 @@ const TINY_PNG = Buffer.from(
 );
 
 async function main(): Promise<void> {
-  const dataDir = process.env.DATA_DIR || './demo-data';
+  // Without both of these the seed would write demo patients, a "demo"
+  // password and fake credentials into the REAL database and .env. The npm
+  // scripts always set them; running this file by hand must not fall back.
+  if (!process.env.DATA_DIR || !process.env.ENV_FILE || process.env.DEMO_MODE !== '1') {
+    console.error('Refusing to seed: run this via `npm run demo:seed` (needs DEMO_MODE=1, DATA_DIR and ENV_FILE).');
+    process.exit(1);
+  }
+  const dataDir = process.env.DATA_DIR;
+  if (path.resolve(dataDir) === path.resolve('data')) {
+    console.error(`Refusing to seed ${path.resolve(dataDir)} — that is the real data folder.`);
+    process.exit(1);
+  }
   fs.mkdirSync(dataDir, { recursive: true });
 
   getDb(); // applies migrations

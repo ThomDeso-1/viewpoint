@@ -4,6 +4,8 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['tests/**/*.test.ts'],
+    // Never let a test fall through to the real data/ folder.
+    setupFiles: ['tests/helpers/isolate-data-dir.ts'],
     // Raised again as the suite grew (15s → 30s → 60s): every
     // authenticated test file pays scrypt (~57ms per login, deliberately
     // slow) on top of migrations and temp-directory setup, and the whole

@@ -2,19 +2,24 @@ import Database from 'better-sqlite3';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { resolveDataDir } from './paths.js';
+import { hasUserTables, snapshotDatabase } from './backup.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 let db: Database.Database;
+let dbInfo: { path: string; createdNow: boolean } | null = null;
 
 export function getDb(): Database.Database {
   if (db) return db;
 
-  const dataDir = process.env.DATA_DIR || './data';
+  const dataDir = resolveDataDir();
   fs.mkdirSync(dataDir, { recursive: true });
 
   const dbPath = path.join(dataDir, 'receipts.db');
+  const createdNow = !fs.existsSync(dbPath);
   db = new Database(dbPath);
+  dbInfo = { path: dbPath, createdNow };
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
 
@@ -41,6 +46,18 @@ export function closeDb(): void {
     // Already closed, or the file is gone — nothing useful to do.
   }
   db = undefined as unknown as Database.Database;
+  dbInfo = null;
+}
+
+/**
+ * Where the open database lives, and whether this process created it.
+ * `index.ts` prints a loud warning for a new file: on an install that has
+ * been in use, a fresh database means the server was pointed at the wrong
+ * DATA_DIR — the real one is still sitting wherever it was.
+ */
+export function databaseInfo(): { path: string; createdNow: boolean } {
+  getDb();
+  return dbInfo!;
 }
 
 // ── Migrations ──
@@ -81,12 +98,25 @@ function runMigrations(conn: Database.Database): void {
      ON CONFLICT(key) DO UPDATE SET value = ?`,
   );
 
-  for (const file of files) {
+  const pending = files.filter((file) => {
     const version = parseInt(file.slice(0, 3), 10);
     if (Number.isNaN(version)) {
       throw new Error(`Migration filename must start with a 3-digit number: ${file}`);
     }
-    if (version <= currentVersion) continue;
+    return version > currentVersion;
+  });
+
+  // Snapshot an existing database before any migration touches it, so a
+  // migration that turns out to be destructive (a table rebuild like 005,
+  // a mistaken DELETE) can be undone. A brand-new database has nothing to
+  // lose and is skipped. If the snapshot itself fails, the throw stops the
+  // boot before anything is migrated.
+  if (pending.length > 0 && hasUserTables(conn)) {
+    snapshotDatabase(conn, `pre-migration-${pending[0].slice(0, 3)}`);
+  }
+
+  for (const file of pending) {
+    const version = parseInt(file.slice(0, 3), 10);
 
     const sql = fs.readFileSync(path.join(dir, file), 'utf-8');
 

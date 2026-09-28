@@ -33,6 +33,23 @@ env_unset() {
   chmod 600 "$ENV_FILE"
 }
 
+# Print the value of an uncommented `KEY=` line in .env (quotes stripped),
+# or nothing.
+env_get() {
+  local key="$1"
+  [ -f "$ENV_FILE" ] || return 0
+  grep -E "^${key}=" "$ENV_FILE" | tail -1 | cut -d= -f2- | sed -e 's/^"//' -e 's/"$//' || true
+}
+
+# Absolute path for a DATA_DIR / BACKUP_DIR value — relative ones resolve
+# against the app folder, the same rule as server/db/paths.ts.
+resolve_app_path() {
+  case "$1" in
+    /*) printf '%s\n' "${1%/}" ;;
+    *)  local rel="${1#./}"; printf '%s\n' "$APP_DIR/${rel%/}" ;;
+  esac
+}
+
 # Restart the background server so it re-reads .env.
 restart_server() {
   local uid

@@ -7,6 +7,7 @@ import cookieParser from 'cookie-parser';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { getDb } from './db/db.js';
+import { resolveDataDir } from './db/paths.js';
 import { StorageService } from './receipts/storage.js';
 import { authMiddleware, requireAuth } from './platform/auth.js';
 import { apiNotFound, errorHandler } from './platform/http.js';
@@ -25,7 +26,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
  * Used by both the production entrypoint (index.ts) and tests.
  */
 export function createApp(): Express {
-  const DATA_DIR = process.env.DATA_DIR || './data';
+  const DATA_DIR = resolveDataDir();
 
   getDb(); // ensure schema is applied
   const storage = new StorageService(DATA_DIR);

@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { getConfig, setConfig } from '../db/db.js';
+import { resolveDataDir } from '../db/paths.js';
 import { validateApiKey } from '../integrations/claude.js';
 import { updateEnvConfig } from '../platform/env-config.js';
 import {
@@ -43,7 +44,7 @@ function folderExists(dir: string): boolean {
  * filesystem access on the host. Private key is written 0600.
  */
 function writeOhipPem(name: 'private-key' | 'certificate' | 'ca-cert', contents: string): string {
-  const dir = path.resolve(process.env.DATA_DIR || './data', 'ohip');
+  const dir = path.join(resolveDataDir(), 'ohip');
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   const file = path.join(dir, `${name}.pem`);
   fs.writeFileSync(file, contents.trim() + '\n', { mode: 0o600 });

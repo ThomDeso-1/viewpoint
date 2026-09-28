@@ -44,7 +44,14 @@ export function updateEnvConfig(values: Record<string, string>): void {
   }
 
   fs.mkdirSync(path.dirname(target), { recursive: true });
-  fs.writeFileSync(target, updatedLines.join('\n') + '\n', { mode: 0o600 });
+  // Write-then-rename: .env holds DATA_ENCRYPTION_KEY, and writing it in
+  // place truncates the file first — a crash or full disk at that moment
+  // would lose the key and, with it, every encrypted value in the
+  // database. rename() within one directory is atomic, so the file is
+  // always either the old contents or the new.
+  const tmp = `${target}.tmp-${process.pid}`;
+  fs.writeFileSync(tmp, updatedLines.join('\n') + '\n', { mode: 0o600 });
+  fs.renameSync(tmp, target);
 
   for (const [key, value] of Object.entries(values)) {
     process.env[key] = value;

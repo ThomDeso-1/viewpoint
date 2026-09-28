@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { updateEnvConfig } from './env-config.js';
+import { getConfig, getDb, setConfig } from '../db/db.js';
 
 /**
  * Symmetric encryption for data at rest.
@@ -24,16 +25,53 @@ const VERSION = 'v1'; // lets the format change later without ambiguity
 let cachedKey: Buffer | null = null;
 
 /**
+ * app_config key holding an HMAC of the encryption key — enough to tell
+ * "same key" from "different key", useless for recovering the key itself.
+ */
+const FINGERPRINT_CONFIG_KEY = 'encryption_key_fingerprint';
+
+function fingerprint(key: Buffer): string {
+  return crypto.createHmac('sha256', key).update('viewpoint:key-check:v1').digest('hex');
+}
+
+/**
+ * True if any `*_enc` column in the database holds a value. Catches
+ * installs that encrypted data before fingerprints were recorded.
+ */
+function databaseHasEncryptedData(): boolean {
+  const db = getDb();
+  const tables = db
+    .prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'`)
+    .all() as { name: string }[];
+  for (const { name } of tables) {
+    const cols = db.prepare(`PRAGMA table_info("${name}")`).all() as { name: string }[];
+    for (const col of cols.filter((c) => c.name.endsWith('_enc'))) {
+      if (db.prepare(`SELECT 1 FROM "${name}" WHERE "${col.name}" IS NOT NULL LIMIT 1`).get()) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+/**
  * Returns the install's encryption key, generating and persisting one the
  * first time it's needed.
  *
  * Regenerating this key makes every existing encrypted value permanently
  * unreadable, so it is only ever created when absent — never rotated
- * implicitly.
+ * implicitly. And "absent" is checked against the database, not just
+ * `.env`: if `.env` was lost, restored from an old copy, or the server was
+ * started with a different one, the database's stored fingerprint (or its
+ * encrypted data) says a key already exists. Minting a fresh key then
+ * would effectively wipe every health card number, token and extraction —
+ * and new rows written under it would leave the database split across two
+ * keys — so this throws instead, and the fix is to restore `.env`.
  */
 export function getEncryptionKey(): Buffer {
   if (cachedKey) return cachedKey;
 
+  const stored = getConfig(FINGERPRINT_CONFIG_KEY);
   const existing = process.env[KEY_ENV_VAR];
   if (existing) {
     const key = Buffer.from(existing, 'base64');
@@ -44,8 +82,25 @@ export function getEncryptionKey(): Buffer {
           `a different key cannot decrypt existing data.`,
       );
     }
+    const fp = fingerprint(key);
+    if (stored && stored !== fp) {
+      throw new Error(
+        `${KEY_ENV_VAR} in .env is not the key this database was encrypted with. ` +
+          `Restore the original .env (or the original DATA_ENCRYPTION_KEY line) — ` +
+          `nothing has been changed, and the existing data is intact.`,
+      );
+    }
+    if (!stored) setConfig(FINGERPRINT_CONFIG_KEY, fp);
     cachedKey = key;
     return key;
+  }
+
+  if (stored || databaseHasEncryptedData()) {
+    throw new Error(
+      `${KEY_ENV_VAR} is missing from .env, but this database already holds data encrypted ` +
+        `with it. Refusing to generate a new key, which would make that data unreadable. ` +
+        `Restore .env from a backup (it must contain the original ${KEY_ENV_VAR}) and restart.`,
+    );
   }
 
   const generated = crypto.randomBytes(KEY_BYTES);
@@ -53,8 +108,19 @@ export function getEncryptionKey(): Buffer {
   // Writes .env and sets process.env in one step, so the rest of this boot
   // uses the same key that later boots will read back.
   updateEnvConfig({ [KEY_ENV_VAR]: encoded });
+  setConfig(FINGERPRINT_CONFIG_KEY, fingerprint(generated));
   cachedKey = generated;
   return generated;
+}
+
+/**
+ * Boot-time check (`server/index.ts`): loads the key now so a missing or
+ * mismatched one stops the server with a clear message at startup, rather
+ * than on the first patient read — and records the fingerprint for an
+ * install that predates it.
+ */
+export function verifyEncryptionKey(): void {
+  getEncryptionKey();
 }
 
 /** Encrypts a string to `v1:<iv>:<tag>:<ciphertext>`, all base64. */

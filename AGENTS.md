@@ -122,6 +122,17 @@ iPhone / browser  ──HTTPS──▶  Express (server/)  ──▶  SQLite (da
   (`verifyAuditChain()`). Never `DELETE`/`UPDATE` an `audit_log` row.
   Deleting a **patient** is a soft delete (`patients.deleted_at`); every
   read in `patients.ts` filters it out.
+- **Database safety** (nothing may clear the DB by accident):
+  a relative `DATA_DIR` resolves against the app folder, not cwd
+  (`server/db/paths.ts`), and a freshly created DB is announced loudly
+  at boot. `server/db/backup.ts` snapshots (`VACUUM INTO`) before any
+  migration touches an existing DB and daily into `DATA_DIR/backups/`
+  (30 dailies kept); `update.sh` snapshots before it rsyncs and aborts if
+  it can't. `crypto.ts` stores a key fingerprint and **refuses to boot**
+  rather than mint a new `DATA_ENCRYPTION_KEY` over existing encrypted
+  data; `.env` writes are write-then-rename. Migrations after 010 that
+  `DELETE`/`DROP` need a `-- destructive-ok: <reason>` comment
+  (`tests/platform/db-safety.test.ts`).
 - **Migrations:** numbered `server/db/migrations/NNN-*.sql`, each in a
   transaction, version tracked in `app_config.schema_version`. The runner
   is in `server/db/db.ts`.

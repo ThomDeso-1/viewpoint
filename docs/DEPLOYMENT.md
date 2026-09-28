@@ -117,6 +117,16 @@ receipt photo uploads can be several MB each and multer's default limit is
 
 ## Backups
 
+**Automatic (built in):** the server snapshots the database to
+`data/backups/` once a day (keeping 30) and before any schema migration;
+`update.command` takes one more before every update and won't proceed
+without it. Filenames say which: `receipts-daily-…`, `receipts-pre-migration-NNN-…`,
+`receipts-pre-update-…`. To restore one: stop the app, copy it over
+`data/receipts.db`, delete `receipts.db-wal` / `receipts.db-shm` next to
+it, start the app. These live on the same disk as the database and don't
+include photos or `.env`, so they cover mistakes, not a dead Mac — keep an
+off-machine copy as below, and keep `DATA_ENCRYPTION_KEY` safe separately.
+
 Two things need backing up: `data/receipts.db` (the SQLite database) and
 `data/Receipts/` (the actual photos). Losing either one is bad — the DB
 without the photos is useless, and the photos without the DB lose all

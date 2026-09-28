@@ -12,9 +12,13 @@ import { StorageService } from './receipts/storage.js';
 import { startPolling as startExamsPolling } from './exams/queue.js';
 import { warnIfDemoMode } from './platform/endpoints.js';
 import { assertSafeForPhi } from './platform/phi-guard.js';
+import { databaseInfo, getDb } from './db/db.js';
+import { resolveBackupDir, resolveDataDir } from './db/paths.js';
+import { startBackupSchedule } from './db/backup.js';
+import { verifyEncryptionKey } from './platform/crypto.js';
 
 const PORT = parseInt(process.env.PORT || '3000', 10);
-const DATA_DIR = process.env.DATA_DIR || './data';
+const DATA_DIR = resolveDataDir();
 
 const app = createApp();
 
@@ -22,10 +26,25 @@ const app = createApp();
 // after createApp() so the schema exists to count patients against.
 assertSafeForPhi();
 
+// Refuses to boot if DATA_ENCRYPTION_KEY is missing or isn't the key this
+// database was encrypted with, rather than minting a new one and leaving
+// every encrypted value unreadable (see crypto.ts).
+verifyEncryptionKey();
+
 app.listen(PORT, '0.0.0.0', () => {
   warnIfDemoMode();
   console.log(`Viewpoint server running on http://0.0.0.0:${PORT}`);
   console.log(`  Data directory: ${path.resolve(DATA_DIR)}`);
+  if (databaseInfo().createdNow) {
+    console.warn(
+      `  ⚠ Created a NEW, empty database at ${databaseInfo().path}.\n` +
+        `    If this install already had data, the server is pointed at the wrong DATA_DIR —\n` +
+        `    your existing database has not been touched; fix DATA_DIR in .env and restart.`,
+    );
+  }
+
+  startBackupSchedule(getDb());
+  console.log(`  Daily database snapshots → ${resolveBackupDir()}`);
 
   // Both pollers are started here rather than inside createApp() so that
   // tests, which build the app directly, never spawn background timers.

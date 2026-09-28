@@ -61,6 +61,8 @@ viewpoint-receipts/
 │   ├── app.ts                      createApp(): middleware, route mounts, static SPA
 │   ├── db/
 │   │   ├── db.ts                   connection, migration runner, ReceiptRow, config helpers
+│   │   ├── paths.ts                DATA_DIR / BACKUP_DIR resolution (against the app folder)
+│   │   ├── backup.ts               VACUUM INTO snapshots: pre-migration + daily schedule
 │   │   └── migrations/             001-initial · 002-security · 003-exams
 │   │                               004-invoice-line-items · 005-retention
 │   ├── platform/                   things every feature uses
