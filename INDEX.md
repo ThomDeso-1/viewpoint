@@ -65,6 +65,7 @@ viewpoint-receipts/
 │   │   ├── backup.ts               VACUUM INTO snapshots: pre-migration + daily schedule
 │   │   └── migrations/             001-initial · 002-security · 003-exams
 │   │                               004-invoice-line-items · 005-retention
+│   │                               … 010-receipt-tracking · 011-clients (client_type, address, dup flag)
 │   ├── platform/                   things every feature uses
 │   │   ├── auth.ts                 scrypt, login throttle, authMiddleware, requireAuth
 │   │   ├── sessions.ts             random tokens, SHA-256 storage, cookie options
@@ -85,7 +86,8 @@ viewpoint-receipts/
 │   │   └── extract-queue.ts        background poller → Claude reads new receipts, re-files by date/vendor
 │   ├── exams/
 │   │   ├── types.ts                all exam-workflow row types + status unions + extraction shape
-│   │   ├── patients.ts             ⚠ ONLY doorway to health card numbers (readHealthCard)
+│   │   ├── patients.ts             ⚠ ONLY doorway to health card numbers (readHealthCard); "Clients" in the UI
+│   │   ├── wave-import.ts          one-time Wave customer import: verify → preview → apply
 │   │   ├── appointments.ts         mirrored from Google Calendar
 │   │   ├── exam-requests.ts        one row per patient found in a scanned file; encrypted extraction
 │   │   ├── file-source.ts          walks EXAM_REQUEST_SOURCE_DIR; reads docx/xlsx/csv/pdf/txt/eml
@@ -116,7 +118,7 @@ viewpoint-receipts/
 │       ├── auth/     Login  Setup  Onboarding
 │       ├── receipts/ ReceiptList  ReceiptReview  BatchReview  Settings
 │       │             CaptureButton  ReceiptRow  ReceiptReviewForm  UploadStatusBar
-│       └── exams/ Inbox  Schedule  Patients  PatientDetail  AuditLog
+│       └── exams/ Inbox  Schedule  Patients (= Clients)  PatientDetail  WaveImport  AuditLog
 │                     GoogleSettings  ExamSettings  OhipSettings  InvoiceEditor  AppointmentForm
 │
 ├── tests/                          server suite (vitest + supertest) — mirrors server/
@@ -144,6 +146,7 @@ viewpoint-receipts/
 | **Audit trail** | `server/platform/audit.ts` (`audit()`, `verifyAuditChain()`), `server/routes/exams.ts` (`GET /audit`, `/audit/verify`), `client/src/exams/AuditLog.tsx` |
 | **The receipts pipeline** | `server/routes/receipts.ts`, `server/receipts/{storage,extract-queue}.ts`, `server/integrations/claude.ts`, `client/src/receipts/*` (no Wave — local tracking only since migration 010) |
 | **The exam-request pipeline** | `server/exams/queue.ts` (orchestrator) + `exam-requests.ts`, `patients.ts`, `appointments.ts`, `eligibility.ts`, `reminders.ts`; `server/routes/exams.ts`; `client/src/exams/{Inbox,Schedule,Patients,PatientDetail}.tsx` |
+| **Clients / Wave customer import** | `server/exams/{patients,wave-import}.ts`, `server/integrations/wave/customers.ts` (`fetchCustomerPage` / `listAllCustomers`), `server/routes/exams.ts` (`/wave-import/*`), `client/src/exams/{Patients,PatientDetail,WaveImport}.tsx`, migration 011 |
 | **Claude prompts / models** | `server/integrations/claude.ts` |
 | **Wave (exam invoices)** | `server/integrations/wave/` (`index.ts` barrel over `transport` / `reference` / `customers` / `invoices`; `auth.ts` for token ↔ OAuth), `server/routes/wave-oauth.ts` |
 | **Patient files folder scan** | `server/exams/{file-source,xlsx,processed-files,queue}.ts`, `server/platform/paths.ts`, `EXAM_REQUEST_SOURCE_DIR`; Settings → Exam Requests |

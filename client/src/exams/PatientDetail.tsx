@@ -9,6 +9,7 @@ import {
   type EligibilityCheck,
   type PatientFollowup,
   type FollowupMode,
+  type ClientType,
 } from '../shared/api';
 import { useToast } from '../shared/Toast';
 import { FollowupEmailComposer } from './FollowupEmailComposer';
@@ -17,12 +18,15 @@ import { PageHeader } from '../ui/PageHeader';
 import { Button } from '../ui/Button';
 import { Pill } from '../ui/Pill';
 import { SkeletonRows } from '../ui/Skeleton';
+import { Notice } from '../ui/Notice';
+import { CLIENT_TYPE_LABEL } from './WaveImport';
 import { formatDateTime } from '../shared/format';
 
 type PatientDetailData = Patient & {
   appointments: Appointment[];
   eligibility_history: EligibilityCheck[];
   followup: PatientFollowup | null;
+  possible_duplicate: { id: string; full_name: string } | null;
 };
 
 /** "12 Mar 2026", or null for a missing date. */
@@ -41,8 +45,8 @@ const FOLLOWUP_SOURCE_LABEL: Record<NonNullable<PatientFollowup['followup_source
 };
 
 /**
- * One patient's record: contact details, recall, appointment history, and
- * the full eligibility trail.
+ * One client's record: type, contact details, recall, appointment
+ * history, and the full eligibility trail.
  *
  * The health card number is only ever shown masked — the server does not
  * return it — so the field here writes a new number rather than editing
@@ -61,8 +65,10 @@ export function PatientDetail({ ohipEnabled = false }: { ohipEnabled?: boolean }
   const [newHealthCard, setNewHealthCard] = useState('');
   const [form, setForm] = useState({
     full_name: '',
+    client_type: 'patient' as ClientType,
     email: '',
     phone: '',
+    address: '',
     health_card_version: '',
     followup_mode: 'remind' as FollowupMode,
     followup_date_override: '',
@@ -75,8 +81,10 @@ export function PatientDetail({ ohipEnabled = false }: { ohipEnabled?: boolean }
       setPatient(data);
       setForm({
         full_name: data.full_name,
+        client_type: data.client_type,
         email: data.email ?? '',
         phone: data.phone ?? '',
+        address: data.address ?? '',
         health_card_version: data.health_card_version ?? '',
         followup_mode: data.followup_mode,
         followup_date_override: data.followup_date_override ?? '',
@@ -99,8 +107,10 @@ export function PatientDetail({ ohipEnabled = false }: { ohipEnabled?: boolean }
     try {
       await updatePatient(id, {
         full_name: form.full_name,
+        client_type: form.client_type,
         email: form.email || null,
         phone: form.phone || null,
+        address: form.address || null,
         health_card_version: form.health_card_version || null,
         followup_mode: form.followup_mode,
         followup_date_override: form.followup_date_override || null,
@@ -115,6 +125,17 @@ export function PatientDetail({ ohipEnabled = false }: { ohipEnabled?: boolean }
       showToast((err as Error).message, 'error');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const clearDuplicate = async () => {
+    if (!id) return;
+    try {
+      await updatePatient(id, { possible_duplicate_of: null });
+      showToast('Marked as not a duplicate.', 'success');
+      await load();
+    } catch (err) {
+      showToast((err as Error).message, 'error');
     }
   };
 
@@ -143,7 +164,7 @@ export function PatientDetail({ ohipEnabled = false }: { ohipEnabled?: boolean }
   if (loading || !patient) {
     return (
       <Screen width="read" className="vp-patient-detail">
-        <PageHeader title="Patient" back />
+        <PageHeader title="Client" back />
         <SkeletonRows rows={5} />
       </Screen>
     );
@@ -174,6 +195,29 @@ export function PatientDetail({ ohipEnabled = false }: { ohipEnabled?: boolean }
         {f?.due ? <Pill tone="attention"> follow-up due</Pill> : null}
       </p>
 
+      {patient.possible_duplicate && (
+        <Notice tone="warning" className="vp-mb-2">
+          <p>
+            This may be the same person as{' '}
+            <a
+              href={`/patients/${patient.possible_duplicate.id}`}
+              onClick={(e) => {
+                e.preventDefault();
+                navigate(`/patients/${patient.possible_duplicate!.id}`);
+              }}
+            >
+              {patient.possible_duplicate.full_name}
+            </a>{' '}
+            — imported from Wave with the same name but a different email.
+          </p>
+          <div className="vp-form-actions">
+            <Button size="sm" variant="secondary" onClick={clearDuplicate}>
+              Not a duplicate
+            </Button>
+          </div>
+        </Notice>
+      )}
+
       <section className="card">
         <h2>Details</h2>
 
@@ -183,6 +227,20 @@ export function PatientDetail({ ohipEnabled = false }: { ohipEnabled?: boolean }
             value={form.full_name}
             onChange={(e) => setForm({ ...form, full_name: e.target.value })}
           />
+        </label>
+
+        <label>
+          Type
+          <select
+            value={form.client_type}
+            onChange={(e) => setForm({ ...form, client_type: e.target.value as ClientType })}
+          >
+            {(Object.keys(CLIENT_TYPE_LABEL) as ClientType[]).map((t) => (
+              <option key={t} value={t}>
+                {CLIENT_TYPE_LABEL[t]}
+              </option>
+            ))}
+          </select>
         </label>
 
         <label>
@@ -197,6 +255,11 @@ export function PatientDetail({ ohipEnabled = false }: { ohipEnabled?: boolean }
         <label>
           Phone
           <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+        </label>
+
+        <label>
+          Address
+          <input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
         </label>
 
         <label>

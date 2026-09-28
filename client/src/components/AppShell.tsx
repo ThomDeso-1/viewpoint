@@ -8,7 +8,7 @@ const NAV: { to: string; label: string; icon: IconName; end?: boolean }[] = [
   { to: '/', label: 'Receipts', icon: 'receipt', end: true },
   { to: '/inbox', label: 'Exam requests', icon: 'inbox' },
   { to: '/schedule', label: 'Schedule', icon: 'calendar' },
-  { to: '/patients', label: 'Patients', icon: 'users' },
+  { to: '/patients', label: 'Clients', icon: 'users' },
 ];
 
 /**

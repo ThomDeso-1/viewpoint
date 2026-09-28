@@ -203,10 +203,16 @@ async function draftOne(row: ExamRequestRow): Promise<void> {
 
   // Fill in details a returning patient's record was missing, without
   // overwriting anything already on file.
-  const gaps: Record<string, string | null> = {};
+  // A client imported from Wave arrives with contact details only; this
+  // is where their date of birth and health card get filled in.
+  const gaps: patients.PatientUpdate = {};
   if (!patient.email && extraction.email) gaps.email = extraction.email;
   if (!patient.phone && extraction.phone) gaps.phone = extraction.phone;
+  if (!patient.date_of_birth && extraction.date_of_birth) gaps.date_of_birth = extraction.date_of_birth;
   if (!patient.notes && extraction.notes) gaps.notes = extraction.notes;
+  // An exam file naming an eyewear customer makes them a patient. A
+  // business is left alone — that match would be a coincidence of names.
+  if (patient.client_type === 'customer') gaps.client_type = 'patient';
   if (!patient.health_card_enc && extraction.health_card_number) {
     gaps.health_card_number = extraction.health_card_number;
     gaps.health_card_version = extraction.health_card_version;

@@ -178,3 +178,63 @@ export const WAVE_PRODUCTS = [
 ];
 
 export const WAVE_SALES_TAXES = [{ id: 'tax-hst', name: 'HST (13%)', rate: 0.13 }];
+
+/**
+ * Wave's customer list, for the Clients → "Import from Wave" demo. Chosen
+ * to exercise every branch against the two seeded patients: an email link
+ * (Katherine), a name-only match (Mae, different email), plain new
+ * customers, a company, and an archived record that is skipped.
+ */
+export interface DemoWaveCustomer {
+  id: string;
+  name: string;
+  firstName: string | null;
+  lastName: string | null;
+  email: string | null;
+  phone: string | null;
+  mobile: string | null;
+  internalNotes: string | null;
+  isArchived: boolean;
+  address: {
+    addressLine1: string | null;
+    addressLine2: string | null;
+    city: string | null;
+    postalCode: string | null;
+    province: { name: string } | null;
+    country: { name: string } | null;
+  } | null;
+}
+
+const ON = { province: { name: 'Ontario' }, country: { name: 'Canada' } };
+
+export const WAVE_CUSTOMERS: DemoWaveCustomer[] = [
+  {
+    id: 'wave-cust-katherine', name: 'Katherine Johnson', firstName: 'Katherine', lastName: 'Johnson',
+    email: 'katherine.johnson@example.com', phone: null, mobile: null, internalNotes: null, isArchived: false,
+    address: { addressLine1: '12 Orbit Lane', addressLine2: null, city: 'Toronto', postalCode: 'M4C 1A1', ...ON },
+  },
+  {
+    id: 'wave-cust-mae', name: 'Mae Jemison', firstName: 'Mae', lastName: 'Jemison',
+    email: 'mae@jemison.example', phone: '(647) 555-0131', mobile: null, internalNotes: null, isArchived: false,
+    address: null,
+  },
+  {
+    id: 'wave-cust-dorothy', name: 'Dorothy Vaughan', firstName: 'Dorothy', lastName: 'Vaughan',
+    email: 'dorothy.vaughan@example.com', phone: null, mobile: '(416) 555-0144',
+    internalNotes: 'Progressive lenses, titanium frame.', isArchived: false,
+    address: { addressLine1: '88 Langley Ave', addressLine2: 'Unit 3', city: 'Toronto', postalCode: 'M4K 1B5', ...ON },
+  },
+  {
+    id: 'wave-cust-mary', name: 'Mary Jackson', firstName: 'Mary', lastName: 'Jackson',
+    email: null, phone: '(905) 555-0102', mobile: null, internalNotes: null, isArchived: false, address: null,
+  },
+  {
+    id: 'wave-cust-lab', name: 'Northern Lens Laboratories Inc.', firstName: null, lastName: null,
+    email: 'orders@northernlens.example', phone: '(800) 555-0199', mobile: null, internalNotes: null,
+    isArchived: false, address: null,
+  },
+  {
+    id: 'wave-cust-old', name: 'Old Walk-in Account', firstName: null, lastName: null,
+    email: null, phone: null, mobile: null, internalNotes: null, isArchived: true, address: null,
+  },
+];

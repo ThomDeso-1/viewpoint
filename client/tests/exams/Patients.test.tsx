@@ -77,7 +77,7 @@ describe('Patients', () => {
     renderPatients();
     await screen.findByText('Ada Lovelace');
 
-    await userEvent.type(screen.getByLabelText('Search patients'), 'bob');
+    await userEvent.type(screen.getByLabelText('Search clients'), 'bob');
 
     expect(screen.queryByText('Ada Lovelace')).not.toBeInTheDocument();
     expect(screen.getByText('Bob Jones')).toBeInTheDocument();
@@ -92,7 +92,7 @@ describe('Patients', () => {
     renderPatients();
     await screen.findByText('Ada Lovelace');
 
-    await userEvent.type(screen.getByLabelText('Search patients'), 'bob@');
+    await userEvent.type(screen.getByLabelText('Search clients'), 'bob@');
     expect(screen.getByText('Bob Jones')).toBeInTheDocument();
   });
 
@@ -101,8 +101,63 @@ describe('Patients', () => {
     renderPatients();
     await screen.findByText('Ada Lovelace');
 
-    await userEvent.type(screen.getByLabelText('Search patients'), 'zzz');
-    expect(screen.getByText(/No patients match/i)).toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText('Search clients'), 'zzz');
+    expect(screen.getByText(/No clients match/i)).toBeInTheDocument();
+  });
+
+  // Spec (migration 011): "Clients" — patients, customers and businesses
+  // in one directory, filterable by type.
+  it('filters clients by type', async () => {
+    api.getPatients.mockResolvedValue([
+      makePatientRow(),
+      makePatientRow({ id: 'c1', full_name: 'Carl Customer', client_type: 'customer' }),
+      makePatientRow({ id: 'b1', full_name: 'Lens Lab Inc.', client_type: 'business' }),
+    ]);
+    renderPatients();
+    await screen.findByText('Ada Lovelace');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Businesses' }));
+
+    expect(screen.getByText('Lens Lab Inc.')).toBeInTheDocument();
+    expect(screen.queryByText('Ada Lovelace')).not.toBeInTheDocument();
+    expect(screen.queryByText('Carl Customer')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Patients' }));
+    expect(screen.getByText('Ada Lovelace')).toBeInTheDocument();
+    expect(screen.queryByText('Lens Lab Inc.')).not.toBeInTheDocument();
+  });
+
+  it('flags possible duplicates and filters to them', async () => {
+    api.getPatients.mockResolvedValue([
+      makePatientRow(),
+      makePatientRow({ id: 'd1', full_name: 'Ada Lovelace', client_type: 'customer', possible_duplicate_of: 'patient-1' }),
+      makePatientRow({ id: 'x', full_name: 'Bob Jones' }),
+    ]);
+    renderPatients();
+    await screen.findByText('Bob Jones');
+
+    expect(screen.getByText('Possible duplicate')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Possible duplicates (1)' }));
+
+    expect(screen.getByText('1 of 3')).toBeInTheDocument();
+    expect(screen.queryByText('Bob Jones')).not.toBeInTheDocument();
+  });
+
+  it('only shows the duplicates filter when there are some', async () => {
+    api.getPatients.mockResolvedValue([makePatientRow()]);
+    renderPatients();
+    await screen.findByText('Ada Lovelace');
+    expect(screen.queryByRole('button', { name: /Possible duplicates/ })).not.toBeInTheDocument();
+  });
+
+  it('does not nag about a health card for a customer', async () => {
+    api.getPatients.mockResolvedValue([
+      makePatientRow({ client_type: 'customer', has_health_card: false, health_card_masked: null }),
+    ]);
+    renderPatients();
+    await screen.findByText('Ada Lovelace');
+    expect(screen.queryByText('No health card')).not.toBeInTheDocument();
+    expect(screen.getByText('Customer')).toBeInTheDocument();
   });
 
   it('shows the last and follow-up appointment on the row', async () => {

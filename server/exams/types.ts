@@ -66,6 +66,9 @@ export type OAuthProvider = 'wave' | 'microsoft';
 
 export type FollowupMode = 'off' | 'remind' | 'followup';
 
+/** What kind of client a `patients` row is (migration 011). */
+export type ClientType = 'patient' | 'customer' | 'business';
+
 export interface PatientRow {
   id: string;
   full_name: string;
@@ -89,6 +92,12 @@ export interface PatientRow {
   followup_dismissed_at: string | null;
   /** When a recall email last went out — display only. */
   followup_last_emailed_at: string | null;
+  /** patient | customer | business (migration 011). */
+  client_type: ClientType;
+  /** One formatted postal address, e.g. from Wave. */
+  address: string | null;
+  /** Another row with the same name, flagged by an import for the operator to confirm. */
+  possible_duplicate_of: string | null;
 }
 
 export interface AppointmentRow {

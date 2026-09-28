@@ -10,6 +10,7 @@ import * as calendar from '../integrations/microsoft/calendar.js';
 import { sendMail } from '../integrations/microsoft/graph.js';
 import { isMicrosoftConnected, MicrosoftAuthError } from '../integrations/microsoft/auth.js';
 import * as processedFiles from '../exams/processed-files.js';
+import * as waveImport from '../exams/wave-import.js';
 import { sourceDir } from '../exams/file-source.js';
 import {
   checkPatientEligibility,
@@ -310,6 +311,71 @@ export function examsRoutes(): Router {
     );
   });
 
+  // ── Wave customer import (one-time; reads Wave, writes only locally) ──
+
+  const importError = (res: Response, err: unknown): void => {
+    if (err instanceof waveImport.WaveImportError) {
+      res.status(err.code === 'preview_expired' ? 409 : 400).json({ error: err.message, code: err.code });
+      return;
+    }
+    if (err instanceof Error && err.name === 'WaveAPIError') {
+      res.status(502).json({ error: err.message });
+      return;
+    }
+    throw err;
+  };
+
+  router.get('/wave-import/status', (_req: Request, res: Response): void => {
+    res.json(waveImport.importStatus());
+  });
+
+  router.post(
+    '/wave-import/verify',
+    rateLimited('wave-import-verify', 10, 60_000),
+    async (_req: Request, res: Response): Promise<void> => {
+      try {
+        res.json(await waveImport.verifyWaveImport());
+      } catch (err) {
+        importError(res, err);
+      }
+    },
+  );
+
+  router.post(
+    '/wave-import/preview',
+    rateLimited('wave-import-preview', 5, 5 * 60_000),
+    async (_req: Request, res: Response): Promise<void> => {
+      try {
+        res.json(await waveImport.previewWaveImport());
+      } catch (err) {
+        importError(res, err);
+      }
+    },
+  );
+
+  router.post(
+    '/wave-import/apply',
+    rateLimited('wave-import-apply', 5, 5 * 60_000),
+    (req: Request, res: Response): void => {
+      const { previewId, decisions } = req.body ?? {};
+      if (typeof previewId !== 'string' || !previewId) {
+        res.status(400).json({ error: 'A previewId is required.' });
+        return;
+      }
+      const clean: Record<string, waveImport.NameMatchDecision> = {};
+      if (decisions && typeof decisions === 'object') {
+        for (const [waveId, d] of Object.entries(decisions)) {
+          if (d === 'separate' || d === 'link' || d === 'skip') clean[waveId] = d;
+        }
+      }
+      try {
+        res.json(waveImport.applyWaveImport(previewId, clean));
+      } catch (err) {
+        importError(res, err);
+      }
+    },
+  );
+
   // ── Follow-ups due — the recall worklist ──
   router.get('/followups', (_req: Request, res: Response): void => {
     res.json({ due: followups.listDueFollowups() });
@@ -318,7 +384,7 @@ export function examsRoutes(): Router {
   router.post('/patients', (req: Request, res: Response): void => {
     const { full_name } = req.body;
     if (!full_name || typeof full_name !== 'string') {
-      res.status(400).json({ error: 'A patient name is required.' });
+      res.status(400).json({ error: 'A client name is required.' });
       return;
     }
 
@@ -335,8 +401,14 @@ export function examsRoutes(): Router {
 
     auditRequest(req, { action: 'patient.read', entityType: 'patient', entityId: patient.id });
 
+    const duplicate = patient.possible_duplicate_of
+      ? patientsService.getPatient(patient.possible_duplicate_of)
+      : undefined;
+
     res.json({
       ...patientsService.toPatientDto(patient),
+      // Just enough to recognise and open the other record.
+      possible_duplicate: duplicate ? { id: duplicate.id, full_name: duplicate.full_name } : null,
       appointments: appointmentsService.listForPatient(patient.id),
       eligibility_history: checksForPatient(patient.id).map(toEligibilityDto),
       followup: followups.followupForPatient(patient.id),
@@ -344,6 +416,11 @@ export function examsRoutes(): Router {
   });
 
   router.put('/patients/:id', (req: Request, res: Response): void => {
+    const { client_type } = req.body ?? {};
+    if (client_type !== undefined && !patientsService.CLIENT_TYPES.includes(client_type)) {
+      res.status(400).json({ error: 'Client type must be patient, customer or business.' });
+      return;
+    }
     const updated = patientsService.updatePatient(req.params.id, req.body);
     if (!updated) {
       res.status(404).json({ error: 'Patient not found.' });

@@ -6,6 +6,7 @@ import {
   WAVE_BUSINESS,
   WAVE_PRODUCTS,
   WAVE_SALES_TAXES,
+  WAVE_CUSTOMERS,
   appointmentFor,
   extractionFor,
   type DemoPerson,
@@ -184,11 +185,26 @@ app.post('/wave/graphql', (req: Request, res: Response) => {
   }
 
   if (has('customers(')) {
-    log('wave', 'list customers');
+    // The pre-existing Wave list plus anything an invoice created, in the
+    // full shape the client import asks for, paged like Wave.
+    const all = [
+      ...WAVE_CUSTOMERS,
+      ...[...customers.values()].map((c) => ({
+        ...c, firstName: null, lastName: null, phone: null, mobile: null,
+        internalNotes: null, isArchived: false, address: null,
+      })),
+    ];
+    const pageSize = Math.max(1, variables.pageSize ?? 50);
+    const page = Math.max(1, variables.page ?? 1);
+    const totalPages = Math.max(1, Math.ceil(all.length / pageSize));
+    log('wave', `list customers (page ${page}/${totalPages})`);
     return res.json({
       data: {
         business: {
-          customers: { pageInfo: onePage, edges: [...customers.values()].map((node) => ({ node })) },
+          customers: {
+            pageInfo: { currentPage: page, totalPages, totalCount: all.length },
+            edges: all.slice((page - 1) * pageSize, page * pageSize).map((node) => ({ node })),
+          },
         },
       },
     });

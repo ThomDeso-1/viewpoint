@@ -82,11 +82,11 @@ describe('AuditLog', () => {
       entry({ id: 1, action: 'reminder.send' }),
     ]);
     renderLog();
-    await screen.findByText('Viewed patient');
+    await screen.findByText('Viewed client');
 
     await userEvent.click(screen.getByRole('button', { name: 'Patient data' }));
 
-    expect(screen.getByText('Viewed patient')).toBeInTheDocument();
+    expect(screen.getByText('Viewed client')).toBeInTheDocument();
     expect(screen.queryByText('Signed in')).not.toBeInTheDocument();
     expect(screen.queryByText('Sent reminder')).not.toBeInTheDocument();
   });
@@ -104,7 +104,7 @@ describe('AuditLog', () => {
 
     expect(screen.getByText('Sent reminder')).toBeInTheDocument();
     expect(screen.getByText('Sent invoice')).toBeInTheDocument();
-    expect(screen.queryByText('Viewed patient')).not.toBeInTheDocument();
+    expect(screen.queryByText('Viewed client')).not.toBeInTheDocument();
   });
 
   it('returns to everything when All is chosen again', async () => {
@@ -113,7 +113,7 @@ describe('AuditLog', () => {
       entry({ id: 1, action: 'login.success' }),
     ]);
     renderLog();
-    await screen.findByText('Viewed patient');
+    await screen.findByText('Viewed client');
 
     await userEvent.click(screen.getByRole('button', { name: 'Patient data' }));
     expect(screen.queryByText('Signed in')).not.toBeInTheDocument();
@@ -126,7 +126,7 @@ describe('AuditLog', () => {
     api.getAuditLog.mockResolvedValue([entry({ entity_id: 'abcdef1234567890' })]);
     renderLog();
 
-    await screen.findByText('Viewed patient');
+    await screen.findByText('Viewed client');
     expect(screen.getByText(/patient abcdef12/)).toBeInTheDocument();
     expect(screen.queryByText(/abcdef1234567890/)).not.toBeInTheDocument();
   });

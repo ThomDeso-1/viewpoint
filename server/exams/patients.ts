@@ -1,13 +1,23 @@
 import { v4 as uuid } from 'uuid';
 import { getDb } from '../db/db.js';
-import type { PatientRow, FollowupMode } from './types.js';
+import type { PatientRow, FollowupMode, ClientType } from './types.js';
 import { encryptOptional, decryptOptional } from '../platform/crypto.js';
 import { audit } from '../platform/audit.js';
 
 const FOLLOWUP_MODES: readonly FollowupMode[] = ['off', 'remind', 'followup'];
+export const CLIENT_TYPES: readonly ClientType[] = ['patient', 'customer', 'business'];
+
+function isClientType(value: unknown): value is ClientType {
+  return CLIENT_TYPES.includes(value as ClientType);
+}
 
 /**
- * Patient records — the app's only store of personal health information.
+ * Client records — the app's only store of personal health information.
+ *
+ * Shown as "Clients" since migration 011: one directory for patients,
+ * eyewear customers and businesses, told apart by `client_type`. The
+ * table, this module and the API paths keep the `patient` name — see the
+ * migration for why.
  *
  * Two rules this module exists to enforce, so no caller has to remember
  * them:
@@ -27,7 +37,13 @@ export interface PatientInput {
   notes?: string | null;
   followup_mode?: FollowupMode;
   followup_date_override?: string | null;
+  client_type?: ClientType;
+  address?: string | null;
+  /** Only `null` is accepted — "Not a duplicate". Imports set it directly. */
+  possible_duplicate_of?: null;
 }
+
+export type PatientUpdate = Partial<PatientInput>;
 
 /** What the API returns: never the card number, only whether one is on file. */
 export interface PatientDto {
@@ -48,6 +64,9 @@ export interface PatientDto {
   followup_date_override: string | null;
   followup_dismissed_at: string | null;
   followup_last_emailed_at: string | null;
+  client_type: ClientType;
+  address: string | null;
+  possible_duplicate_of: string | null;
 }
 
 // ── Reads ──
@@ -97,24 +116,39 @@ export function findMatchingPatient(email?: string | null, fullName?: string | n
   return undefined;
 }
 
+export function findPatientByWaveCustomerId(waveCustomerId: string): PatientRow | undefined {
+  return getDb()
+    .prepare(`SELECT * FROM patients WHERE wave_customer_id = ? AND deleted_at IS NULL`)
+    .get(waveCustomerId) as PatientRow | undefined;
+}
+
+/** Every live client with this exact name (case-insensitive) — for duplicate flagging. */
+export function findPatientsByName(fullName: string): PatientRow[] {
+  return getDb()
+    .prepare(`SELECT * FROM patients WHERE full_name = ? COLLATE NOCASE AND deleted_at IS NULL`)
+    .all(fullName.trim()) as PatientRow[];
+}
+
 // ── Writes ──
+
+const INSERT_PATIENT_SQL = `INSERT INTO patients (
+     id, full_name, email, phone, date_of_birth,
+     health_card_enc, health_card_version, wave_customer_id, notes,
+     client_type, address, possible_duplicate_of,
+     created_at, updated_at
+   ) VALUES (
+     @id, @full_name, @email, @phone, @date_of_birth,
+     @health_card_enc, @health_card_version, @wave_customer_id, @notes,
+     @client_type, @address, @possible_duplicate_of,
+     @created_at, @updated_at
+   )`;
 
 export function createPatient(input: PatientInput): PatientRow {
   const now = new Date().toISOString();
   const id = uuid();
 
   getDb()
-    .prepare(
-      `INSERT INTO patients (
-         id, full_name, email, phone, date_of_birth,
-         health_card_enc, health_card_version, wave_customer_id, notes,
-         created_at, updated_at
-       ) VALUES (
-         @id, @full_name, @email, @phone, @date_of_birth,
-         @health_card_enc, @health_card_version, NULL, @notes,
-         @created_at, @updated_at
-       )`,
-    )
+    .prepare(INSERT_PATIENT_SQL)
     .run({
       id,
       full_name: input.full_name,
@@ -123,7 +157,11 @@ export function createPatient(input: PatientInput): PatientRow {
       date_of_birth: input.date_of_birth ?? null,
       health_card_enc: encryptOptional(input.health_card_number),
       health_card_version: input.health_card_version ?? null,
+      wave_customer_id: null,
       notes: input.notes ?? null,
+      client_type: isClientType(input.client_type) ? input.client_type : 'patient',
+      address: input.address ?? null,
+      possible_duplicate_of: null,
       created_at: now,
       updated_at: now,
     });
@@ -169,6 +207,9 @@ export function updatePatient(id: string, input: Partial<PatientInput>): Patient
          followup_mode = @followup_mode,
          followup_date_override = @followup_date_override,
          followup_dismissed_at = @followup_dismissed_at,
+         client_type = @client_type,
+         address = @address,
+         possible_duplicate_of = @possible_duplicate_of,
          updated_at = @updated_at
        WHERE id = @id`,
     )
@@ -192,6 +233,11 @@ export function updatePatient(id: string, input: Partial<PatientInput>): Patient
             : existing.followup_mode,
       followup_date_override: followupOverride,
       followup_dismissed_at: followupDismissedAt,
+      client_type: isClientType(input.client_type) ? input.client_type : existing.client_type,
+      address: input.address === undefined ? existing.address : input.address || null,
+      // Can only be cleared here ("Not a duplicate"); imports set it.
+      possible_duplicate_of:
+        input.possible_duplicate_of === null ? null : existing.possible_duplicate_of,
       updated_at: new Date().toISOString(),
     });
 
@@ -204,6 +250,125 @@ export function setWaveCustomerId(patientId: string, waveCustomerId: string): vo
   getDb()
     .prepare(`UPDATE patients SET wave_customer_id = ?, updated_at = ? WHERE id = ?`)
     .run(waveCustomerId, new Date().toISOString(), patientId);
+}
+
+// ── Wave customer import ──
+
+/** Contact details an import may fill in — only where the record has none. */
+export interface ImportedContact {
+  email: string | null;
+  phone: string | null;
+  address: string | null;
+  notes: string | null;
+}
+
+/** One write the Wave import will make, as decided at preview time. */
+export type ClientImportOp =
+  | {
+      kind: 'create';
+      waveCustomerId: string;
+      full_name: string;
+      client_type: ClientType;
+      contact: ImportedContact;
+      /** Name-only match the operator chose to keep separate. */
+      possible_duplicate_of: string | null;
+    }
+  | { kind: 'link'; patientId: string; waveCustomerId: string; contact: ImportedContact }
+  | { kind: 'fill'; patientId: string; contact: ImportedContact };
+
+export interface ClientImportResult {
+  created: number;
+  linked: number;
+  updated: number;
+  flagged: number;
+  skipped: number;
+}
+
+/**
+ * Applies a reviewed Wave import in one transaction — all of it or none.
+ *
+ * Never overwrites: a link or fill only writes a field the record has
+ * empty, and never touches name, date of birth or health card. Each op
+ * re-checks the state it was planned against (the preview may be minutes
+ * old), and one that no longer applies is counted as skipped rather than
+ * forced. One summary audit row, not one per client — a first import can
+ * be hundreds of rows.
+ */
+export function applyClientImport(ops: ClientImportOp[]): ClientImportResult {
+  const db = getDb();
+  const result: ClientImportResult = { created: 0, linked: 0, updated: 0, flagged: 0, skipped: 0 };
+  const now = new Date().toISOString();
+
+  const insert = db.prepare(INSERT_PATIENT_SQL);
+  const fillGaps = db.prepare(
+    `UPDATE patients SET
+       email   = COALESCE(NULLIF(email, ''),   @email),
+       phone   = COALESCE(NULLIF(phone, ''),   @phone),
+       address = COALESCE(NULLIF(address, ''), @address),
+       notes   = COALESCE(NULLIF(notes, ''),   @notes),
+       updated_at = @now
+     WHERE id = @id AND deleted_at IS NULL`,
+  );
+  const link = db.prepare(
+    `UPDATE patients SET wave_customer_id = @wave_customer_id, updated_at = @now
+     WHERE id = @id AND deleted_at IS NULL AND wave_customer_id IS NULL`,
+  );
+
+  db.transaction(() => {
+    for (const op of ops) {
+      if (op.kind === 'create') {
+        // Already imported (a second apply, or linked since the preview).
+        if (findPatientByWaveCustomerId(op.waveCustomerId)) {
+          result.skipped++;
+          continue;
+        }
+        insert.run({
+          id: uuid(),
+          full_name: op.full_name,
+          email: op.contact.email,
+          phone: op.contact.phone,
+          date_of_birth: null,
+          health_card_enc: null,
+          health_card_version: null,
+          wave_customer_id: op.waveCustomerId,
+          notes: op.contact.notes,
+          client_type: op.client_type,
+          address: op.contact.address,
+          possible_duplicate_of: op.possible_duplicate_of,
+          created_at: now,
+          updated_at: now,
+        });
+        result.created++;
+        if (op.possible_duplicate_of) result.flagged++;
+      } else if (op.kind === 'link') {
+        if (findPatientByWaveCustomerId(op.waveCustomerId)) {
+          result.skipped++;
+          continue;
+        }
+        if (link.run({ id: op.patientId, wave_customer_id: op.waveCustomerId, now }).changes === 0) {
+          result.skipped++;
+          continue;
+        }
+        fillGaps.run({ id: op.patientId, now, ...op.contact });
+        result.linked++;
+      } else {
+        const changes = fillGaps.run({ id: op.patientId, now, ...op.contact }).changes;
+        if (changes > 0) result.updated++;
+        else result.skipped++;
+      }
+    }
+
+    // Counts only — no names or contact details in the audit trail.
+    audit({
+      action: 'client.import',
+      entityType: 'patient',
+      detail:
+        `wave: ${result.created} created (${result.flagged} flagged), ` +
+        `${result.linked} linked, ${result.updated} updated, ${result.skipped} skipped`,
+    });
+  })();
+
+  return result;
 }
 
 /**
@@ -311,5 +476,8 @@ export function toPatientDto(row: PatientRow): PatientDto {
     followup_date_override: row.followup_date_override,
     followup_dismissed_at: row.followup_dismissed_at,
     followup_last_emailed_at: row.followup_last_emailed_at,
+    client_type: row.client_type,
+    address: row.address,
+    possible_duplicate_of: row.possible_duplicate_of,
   };
 }

@@ -312,6 +312,38 @@ describe('exams queue', () => {
       expect(patients.readHealthCard(existing.id, 'test')).toBe('1111111111');
     });
 
+    // Spec (migration 011): a client imported from Wave has contact details
+    // only — the first exam file naming them fills in the rest.
+    it('fills a Wave-imported customer\'s date of birth and promotes them to patient', async () => {
+      const existing = patients.createPatient({
+        full_name: 'Ada Lovelace',
+        email: 'ada@example.com',
+        client_type: 'customer',
+      });
+
+      const mock = await seedExtracted();
+      mock.mockResolvedValueOnce(graphCalendar([]));
+      await queue.draftPending();
+
+      const after = patients.getPatient(existing.id)!;
+      expect(after.client_type).toBe('patient');
+      expect(after.date_of_birth).toBe('1990-01-01');
+    });
+
+    it('does not reclassify a business that an exam file happens to name', async () => {
+      const existing = patients.createPatient({
+        full_name: 'Ada Lovelace',
+        email: 'ada@example.com',
+        client_type: 'business',
+      });
+
+      const mock = await seedExtracted();
+      mock.mockResolvedValueOnce(graphCalendar([]));
+      await queue.draftPending();
+
+      expect(patients.getPatient(existing.id)!.client_type).toBe('business');
+    });
+
     it('records the appointment from the file when no calendar event matches', async () => {
       const mock = await seedExtracted();
       mock.mockResolvedValueOnce(graphCalendar([]));

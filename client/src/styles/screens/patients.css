@@ -17,7 +17,11 @@
 }
 .vp-patient-row:hover { border-color: var(--hairline-2); background: var(--surface-2); }
 .vp-patient-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.vp-patient-name { font-weight: var(--weight-semibold); font-size: var(--text-sm); }
+.vp-patient-name { font-weight: var(--weight-semibold); font-size: var(--text-sm); display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+
+/* type filter — scrolls sideways on a phone rather than wrapping */
+.vp-client-filter { display: flex; max-width: 100%; overflow-x: auto; margin-bottom: var(--space-3); }
+.vp-client-filter button { white-space: nowrap; }
 .vp-patient-row .vp-muted { font-size: var(--text-xs); }
 .vp-patient-row > span:last-child { flex-shrink: 0; font-size: var(--text-xs); white-space: nowrap; }
 
@@ -111,3 +115,30 @@
   border-radius: var(--radius-sm);
 }
 .followup-composer textarea { resize: vertical; line-height: var(--leading-body); font-family: var(--font-mono); font-size: var(--text-sm); }
+
+/* ── Wave import dialog ── */
+.vp-wave-import-summary { list-style: none; display: flex; flex-direction: column; gap: var(--space-1); font-size: var(--text-sm); }
+.vp-wave-import-h { font-size: var(--text-sm); font-weight: var(--weight-semibold); margin-bottom: var(--space-1); }
+.vp-wave-import details summary { cursor: pointer; font-size: var(--text-sm); color: var(--brand); }
+.vp-wave-import-list { list-style: none; margin-top: var(--space-2); display: flex; flex-direction: column; gap: var(--space-1); font-size: var(--text-sm); }
+.vp-wave-match {
+  padding: var(--space-3);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.vp-wave-match-sides { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); font-size: var(--text-sm); }
+.vp-wave-match-sides > span { display: flex; flex-direction: column; min-width: 0; overflow-wrap: anywhere; }
+.vp-wave-match-sides .vp-muted { font-size: var(--text-xs); }
+.vp-wave-match select {
+  width: 100%;
+  padding: 0.45rem 0.6rem;
+  font-size: 16px;
+  font-family: inherit;
+  color: var(--ink-1);
+  background: var(--surface);
+  border: 1px solid var(--hairline-2);
+  border-radius: var(--radius-sm);
+}

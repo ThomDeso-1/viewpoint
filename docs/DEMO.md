@@ -93,7 +93,13 @@ upcoming and always a reminder due.
    window).
 8. **Tap "Schedule"** in the top-right nav. Try **Add** for a walk-in, and
    **Link a patient** on anything unmatched.
-9. **Settings** (gear, top-left) **→ App & privacy → View access log** →
+9. **Tap "Clients" → Import from Wave** → **Verify import**, then
+   **Import from Wave**. The preview reads the fake Wave list: Katherine
+   links by email, Mae shares a name but not an email (pick what to do),
+   three are new (one a business), one archived record is skipped. Nothing
+   is saved until **Confirm import**. Run it again: everything is
+   "already linked".
+10. **Settings** (gear, top-left) **→ App & privacy → View access log** →
    every health card read and everything sent, recorded.
 
 ---

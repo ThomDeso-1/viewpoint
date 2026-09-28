@@ -267,6 +267,9 @@ export function saveWaveSalesTax(salesTaxId: string): Promise<{ success: boolean
 
 export type FollowupMode = 'off' | 'remind' | 'followup';
 
+/** What kind of client a record is — shown as "Clients" in the app (migration 011). */
+export type ClientType = 'patient' | 'customer' | 'business';
+
 export interface Patient {
   id: string;
   full_name: string;
@@ -287,6 +290,10 @@ export interface Patient {
   followup_date_override: string | null;
   followup_dismissed_at: string | null;
   followup_last_emailed_at: string | null;
+  client_type: ClientType;
+  address: string | null;
+  /** Set by an import when another client has the same name; cleared by "Not a duplicate". */
+  possible_duplicate_of: string | null;
 }
 
 /** Derived recall view for one patient (see server/exams/followups.ts). */
@@ -505,6 +512,7 @@ export function getPatient(
     appointments: Appointment[];
     eligibility_history: EligibilityCheck[];
     followup: PatientFollowup | null;
+    possible_duplicate: { id: string; full_name: string } | null;
   }
 > {
   return request(`/exams/patients/${id}`);
@@ -514,6 +522,74 @@ export function updatePatient(id: string, fields: Partial<Patient> & { health_ca
   return request<Patient>(`/exams/patients/${id}`, {
     method: 'PUT',
     body: JSON.stringify(fields),
+  });
+}
+
+// ── Wave customer import (server/exams/wave-import.ts) ──
+
+export interface WaveImportStatus {
+  waveConfigured: boolean;
+  /** When "Verify import" last passed; null until it has. */
+  verifiedAt: string | null;
+  lastImportAt: string | null;
+}
+
+export interface WaveImportClientRef {
+  id: string;
+  full_name: string;
+  email: string | null;
+  phone: string | null;
+  client_type: ClientType;
+}
+
+export interface WaveImportPreview {
+  previewId: string;
+  fetched: number;
+  archived: number;
+  counts: { new: number; link: number; update: number; unchanged: number; nameMatch: number };
+  newByType: Record<ClientType, number>;
+  newClients: { waveId: string; name: string; email: string | null; client_type: ClientType }[];
+  links: { waveId: string; waveName: string; email: string | null; client: WaveImportClientRef }[];
+  nameMatches: {
+    waveId: string;
+    waveName: string;
+    email: string | null;
+    phone: string | null;
+    client: WaveImportClientRef;
+  }[];
+}
+
+export type NameMatchDecision = 'separate' | 'link' | 'skip';
+
+export interface WaveImportResult {
+  created: number;
+  linked: number;
+  updated: number;
+  flagged: number;
+  skipped: number;
+}
+
+export function getWaveImportStatus(): Promise<WaveImportStatus> {
+  return request('/exams/wave-import/status');
+}
+
+/** Reads one customer from Wave to prove the query's field names. Writes nothing. */
+export function verifyWaveImport(): Promise<{ ok: boolean; error?: string; totalCount?: number | null }> {
+  return request('/exams/wave-import/verify', { method: 'POST' });
+}
+
+/** Reads every Wave customer and says what an import would do. Writes nothing. */
+export function previewWaveImport(): Promise<WaveImportPreview> {
+  return request('/exams/wave-import/preview', { method: 'POST' });
+}
+
+export function applyWaveImport(
+  previewId: string,
+  decisions: Record<string, NameMatchDecision>,
+): Promise<WaveImportResult> {
+  return request('/exams/wave-import/apply', {
+    method: 'POST',
+    body: JSON.stringify({ previewId, decisions }),
   });
 }
 

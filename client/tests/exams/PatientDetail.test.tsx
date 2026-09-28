@@ -22,6 +22,7 @@ beforeEach(() => {
     appointments: [makeAppointment()],
     eligibility_history: [makeEligibility()],
     followup: makeFollowup({ last_appointment_at: '2024-08-01T14:00:00.000Z' }),
+    possible_duplicate: null,
   });
   api.updatePatient.mockResolvedValue(makePatient());
 });
@@ -194,5 +195,41 @@ describe('PatientDetail', () => {
         }),
       );
     });
+  });
+
+  // Spec (migration 011): a client's type is editable, and an import's
+  // "possible duplicate" flag can be cleared.
+  it('saves a changed client type and address', async () => {
+    renderDetail();
+    await screen.findByRole('heading', { name: 'Ada Lovelace' });
+
+    await userEvent.selectOptions(screen.getByLabelText('Type'), 'customer');
+    await userEvent.type(screen.getByLabelText('Address'), '1 Engine St');
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(api.updatePatient).toHaveBeenCalledWith(
+        'patient-1',
+        expect.objectContaining({ client_type: 'customer', address: '1 Engine St' }),
+      ),
+    );
+  });
+
+  it('flags a possible duplicate and clears it on "Not a duplicate"', async () => {
+    api.getPatient.mockResolvedValue({
+      ...makePatient({ possible_duplicate_of: 'p-other' }),
+      appointments: [],
+      eligibility_history: [],
+      followup: null,
+      possible_duplicate: { id: 'p-other', full_name: 'Ada King' },
+    });
+    renderDetail();
+
+    expect(await screen.findByText('Ada King')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Not a duplicate' }));
+
+    await waitFor(() =>
+      expect(api.updatePatient).toHaveBeenCalledWith('patient-1', { possible_duplicate_of: null }),
+    );
   });
 });

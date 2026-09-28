@@ -387,6 +387,22 @@ This is the one integration with real-world gates. Once re-enabled, in order:
 Wave's docs, not verified in their Playground. Check them before the
 first real invoice (`docs/history/upgrade-plan.md` "What's left" #2).
 
+The customer-import query (`CUSTOMER_PAGE_QUERY` in `customers.ts`) is
+the same story, but checks itself: Clients → Import from Wave →
+**Verify import** runs it for one customer, and the import stays locked
+until that passes. A wrong field name comes back as Wave's GraphQL error
+naming the field.
+
+### Clients (was "Patients")
+
+The directory is labelled **Clients** in the UI and holds patients,
+eyewear customers and businesses (`client_type`, migration 011). The
+table, `patients.ts`, the row/DTO types and the `/api/exams/patients`
+paths keep the `patient` name — renaming the table would mean a rebuild
+under five foreign keys (see migration 009's note). An exam file that
+names a `customer` promotes them to `patient` and fills their empty
+fields (`draftOne` in `queue.ts`); nothing overwrites a value on file.
+
 ### Turning on HTTPS (required before real patient data)
 
 `docs/DEPLOYMENT.md` + `deploy/Caddyfile`, or — for the single-Mac setup —

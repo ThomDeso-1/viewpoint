@@ -56,6 +56,9 @@ export function makePatient(overrides: Partial<Patient> = {}): Patient {
     followup_date_override: null,
     followup_dismissed_at: null,
     followup_last_emailed_at: null,
+    client_type: 'patient',
+    address: null,
+    possible_duplicate_of: null,
     ...overrides,
   };
 }
