@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { uploadImages } from '../shared/api';
+import { compressImage } from './compress-image';
 import { useToast } from '../shared/Toast';
 import { Button } from '../ui/Button';
 import { Icon } from '../ui/Icon';
@@ -24,7 +25,8 @@ export function CaptureButton({ onCapture, mode = 'fab' }: Props) {
     setMenuOpen(false);
 
     try {
-      await uploadImages(Array.from(files));
+      const small = await Promise.all(Array.from(files).map(compressImage));
+      await uploadImages(small);
       onCapture();
     } catch (err: any) {
       showToast(err.message || 'Upload failed. Please try again.');

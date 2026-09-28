@@ -21,6 +21,17 @@ function extensionForMimeType(mimetype: string): string {
   }
 }
 
+/** "Staples Business Depot #123" → "staples-business-depot-123", capped. */
+function vendorSlug(vendor: string | null): string {
+  return (vendor ?? '')
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40)
+    .replace(/-+$/, '');
+}
+
 /**
  * Manages receipt image files on disk — saving into monthly folders,
  * loading, deleting, and computing hashes.
@@ -122,18 +133,38 @@ export class StorageService {
     }
   }
 
-  /** Move an image to a different month folder. Returns new relative path. */
-  moveReceiptImage(oldPath: string, newDate: Date): string {
+  /**
+   * Re-file an image (and its sidecar) under the receipt's own date and
+   * vendor, e.g. `2026-08/2026-08-14_staples_1a2b3c4d.jpg`, so the
+   * Receipts folder on disk reads like the in-app list — browsable in
+   * Finder without the app. Returns the new relative path.
+   *
+   * Takes the `YYYY-MM-DD` string rather than a Date: the stored
+   * receipt_date is UTC midnight, and turning that into a local Date put
+   * the 1st of the month into the previous month's folder in Toronto.
+   *
+   * The random batch id (and `_pN` page suffix) from the original name is
+   * kept, so two receipts from the same vendor on the same day can't
+   * collide. Same target → no-op.
+   */
+  refileReceipt(oldPath: string, ymd: string, vendor: string | null): string {
+    const month = ymd.slice(0, 7);
+    const parsed = path.parse(oldPath);
+    const token = parsed.name.match(/[0-9a-f]{8}(?:_p\d+)?$/)?.[0] ?? parsed.name;
+    const slug = vendorSlug(vendor);
+    const fileName = `${ymd}${slug ? `_${slug}` : ''}_${token}${parsed.ext}`;
+    const newRelative = `${month}/${fileName}`;
+    if (newRelative === oldPath) return oldPath;
+
     const oldAbs = this.absolutePath(oldPath);
-    const newMonth = this.monthFolder(newDate);
-    this.ensureMonthFolder(newDate);
-    const fileName = path.basename(oldPath);
-    const newRelative = `${newMonth}/${fileName}`;
     const newAbs = this.absolutePath(newRelative);
+    if (fs.existsSync(newAbs)) return oldPath; // never overwrite another receipt
 
-    if (oldPath === newRelative) return oldPath;
-
+    fs.mkdirSync(path.dirname(newAbs), { recursive: true });
+    const oldSidecar = this.sidecarPath(oldPath);
+    const hasSidecar = fs.existsSync(oldSidecar);
     fs.renameSync(oldAbs, newAbs);
+    if (hasSidecar) fs.renameSync(oldSidecar, this.sidecarPath(newRelative));
 
     // Clean up now-empty old month folder
     const oldFolder = path.dirname(oldAbs);
@@ -145,20 +176,6 @@ export class StorageService {
     }
 
     return newRelative;
-  }
-
-  /** Move an image and its sidecar JSON together to a different month folder. */
-  moveReceiptFileSet(oldPath: string, newDate: Date): string {
-    const oldSidecar = this.sidecarPath(oldPath);
-    const hasSidecar = fs.existsSync(oldSidecar);
-    const newPath = this.moveReceiptImage(oldPath, newDate);
-
-    if (hasSidecar) {
-      const newSidecar = this.sidecarPath(newPath);
-      if (oldSidecar !== newSidecar) fs.renameSync(oldSidecar, newSidecar);
-    }
-
-    return newPath;
   }
 
   // ── Sidecar files ──

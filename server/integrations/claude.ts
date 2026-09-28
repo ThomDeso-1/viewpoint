@@ -183,6 +183,11 @@ function validateExtractionResult(value: unknown): asserts value is ExtractionRe
   if (!Array.isArray(v.taxes) || v.taxes.some((t) => typeof (t as any)?.amount !== 'number')) {
     throw new Error('"taxes" must be an array of entries with a numeric "amount"');
   }
+  // Normalize rather than reject: the fields are usable either way, and
+  // the list badges/filters on exactly these three values. Anything
+  // unexpected is treated as "low" so the receipt gets a second look.
+  const c = typeof v.confidence === 'string' ? v.confidence.trim().toLowerCase() : '';
+  v.confidence = c === 'high' || c === 'medium' || c === 'low' ? c : 'low';
 }
 
 // ── Network ──

@@ -80,7 +80,7 @@ viewpoint-receipts/
 │   │   └── phi-guard.ts            refuses to boot over plain HTTP once PHI is in play
 │   ├── receipts/
 │   │   ├── storage.ts              monthly folders, image hash, sidecars, re-filing
-│   │   └── upload-queue.ts         background poller → Wave expenses
+│   │   └── extract-queue.ts        background poller → Claude reads new receipts, re-files by date/vendor
 │   ├── exams/
 │   │   ├── types.ts                all exam-workflow row types + status unions + extraction shape
 │   │   ├── patients.ts             ⚠ ONLY doorway to health card numbers (readHealthCard)
@@ -96,7 +96,7 @@ viewpoint-receipts/
 │   ├── integrations/               one folder per external service, bare fetch
 │   │   ├── claude.ts               receipt + patient-batch extraction; prompts; model IDs
 │   │   ├── oauth/   state-store.ts (pending `state` map)  callback.ts (shared result page + router factory)
-│   │   ├── wave/    index.ts (barrel)  transport.ts  reference.ts  expenses.ts
+│   │   ├── wave/    index.ts (barrel)  transport.ts  reference.ts
 │   │   │            customers.ts  invoices.ts  auth.ts (token ↔ OAuth)
 │   │   ├── google/  auth.ts  gmail.ts (send only)  calendar.ts
 │   │   └── ohip/    index.ts (factory)  hcv-client.ts (interface + response codes)
@@ -120,7 +120,7 @@ viewpoint-receipts/
 ├── tests/                          server suite (vitest + supertest) — mirrors server/
 │   ├── helpers/  testApp.ts (isolated temp DB + cwd per file)  fetchMock.ts
 │   ├── platform/  auth  security  phi-guard  rate-limit  audit-chain
-│   ├── receipts/  receipts  receipts-extract  storage  upload-queue
+│   ├── receipts/  receipts  receipts-extract  storage  extract-queue
 │   ├── exams/  patients  queue  routes
 │   ├── integrations/  claude  wave  wave-oauth  google  ohip  demo-mode
 │   └── http/  settings  error-handling
@@ -140,17 +140,17 @@ viewpoint-receipts/
 | **Auth / login / sessions** | `server/platform/auth.ts`, `server/platform/sessions.ts`, `server/routes/auth.ts`, `client/src/auth/{Login,Setup}.tsx` |
 | **Encryption at rest** | `server/platform/crypto.ts` (+ every `*_enc` column in `db/migrations/003-exams.sql`) |
 | **Audit trail** | `server/platform/audit.ts` (`audit()`, `verifyAuditChain()`), `server/routes/exams.ts` (`GET /audit`, `/audit/verify`), `client/src/exams/AuditLog.tsx` |
-| **The receipts pipeline** | `server/routes/receipts.ts`, `server/receipts/{storage,upload-queue}.ts`, `server/integrations/claude.ts`, `server/integrations/wave/{transport,expenses}.ts`, `client/src/receipts/*` |
+| **The receipts pipeline** | `server/routes/receipts.ts`, `server/receipts/{storage,extract-queue}.ts`, `server/integrations/claude.ts`, `client/src/receipts/*` (no Wave — local tracking only since migration 010) |
 | **The exam-request pipeline** | `server/exams/queue.ts` (orchestrator) + `exam-requests.ts`, `patients.ts`, `appointments.ts`, `eligibility.ts`, `reminders.ts`; `server/routes/exams.ts`; `client/src/exams/{Inbox,Schedule,Patients,PatientDetail}.tsx` |
 | **Claude prompts / models** | `server/integrations/claude.ts` |
-| **Wave (expenses + invoices)** | `server/integrations/wave/` (`index.ts` barrel over `transport` / `reference` / `expenses` / `customers` / `invoices`; `auth.ts` for token ↔ OAuth), `server/routes/wave-oauth.ts` |
+| **Wave (exam invoices)** | `server/integrations/wave/` (`index.ts` barrel over `transport` / `reference` / `customers` / `invoices`; `auth.ts` for token ↔ OAuth), `server/routes/wave-oauth.ts` |
 | **Patient files folder scan** | `server/exams/{file-source,xlsx,processed-files,queue}.ts`, `server/platform/paths.ts`, `EXAM_REQUEST_SOURCE_DIR`; Settings → Exam Requests |
 | **Google (Calendar + reminder send)** | `server/integrations/google/{auth,gmail,calendar}.ts`, `server/platform/oauth-store.ts`, `server/routes/google.ts`, `client/src/exams/GoogleSettings.tsx` |
 | **OAuth flow plumbing (both providers)** | `server/integrations/oauth/{state-store,callback}.ts` — `state` map + the callback router factory / result page |
 | **OHIP eligibility** *(disabled by default — `OHIP_ENABLED`)* | `server/integrations/ohip/*` (incl. `ohipEnabled()`), `server/exams/eligibility.ts`, `client/src/exams/OhipSettings.tsx` |
 | **Schedule "Status" column** *(the OHIP stand-in while disabled)* | `server/exams/coverage-status.ts` (`classifyCoverageStatus`), `coverage_status` in the extraction, `coverage_class` on the exam-request DTO |
 | **Reminders (+ future SMS)** | `server/exams/reminders.ts` (`ReminderChannel` interface) |
-| **Background queues / retry** | `server/receipts/upload-queue.ts`, `server/exams/queue.ts`, `server/platform/{backoff,poller}.ts` |
+| **Background queues / retry** | `server/receipts/extract-queue.ts`, `server/exams/queue.ts`, `server/platform/{backoff,poller}.ts` |
 | **Settings screens** | `server/routes/settings.ts`, `client/src/receipts/Settings.tsx`, `client/src/auth/Onboarding.tsx`, `client/src/exams/*Settings.tsx` |
 | **DB schema** | `server/db/migrations/` (new file only) + `server/db/db.ts` / `server/exams/types.ts` |
 | **Demo mode** | `server/platform/endpoints.ts`, `demo/*` |
@@ -173,7 +173,7 @@ deliberately left out and should each be their own small commit — see
   factory); each route file keeps only its `buildAuthorizeUrl` /
   `exchange` wiring.
 - ~~**P2-26**~~ — ✅ done. `server/integrations/wave/wave.ts` (691 lines)
-  → `transport` / `reference` / `expenses` / `customers` / `invoices`
+  → `transport` / `reference` / `customers` / `invoices`
   + an `index.ts` barrel.
 - ~~**P2-27**~~ — ✅ done. `server/platform/poller.ts` (`makePoller`);
   both queues keep only their `processQueue` pass + a one-line

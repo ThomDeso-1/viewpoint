@@ -4,13 +4,15 @@ import request from 'supertest';
 import { setupTestApp, fakeImageBytes, type TestContext } from '../helpers/testApp.js';
 
 /**
- * Spec (CONVERSION-PLAN.md "Receipt Pipeline" + GETTING-STARTED.md):
- *  captured → extracted → reviewed → uploaded
- * A receipt is created by uploading photo(s); it lives in a monthly
- * `Receipts/YYYY-MM/` folder; the list groups receipts by month and
- * supports search/status filtering; approving (PUT status=reviewed)
- * moves its files if the receipt date's month changed; deleting a
- * receipt removes its files.
+ * Spec (CONVERSION-PLAN.md "Receipt Pipeline", as revised by migration 010):
+ *  captured → extracted → reviewed        (↘ needsAttention if unreadable)
+ * A receipt is created by uploading photo(s) and read automatically
+ * (extract-queue.test.ts); there is no Wave upload and no approval gate —
+ * `reviewed` just means the operator checked it. It lives in a monthly
+ * `Receipts/YYYY-MM/` folder named for the receipt's own date; the list
+ * groups by the receipt's date month, newest first, and supports
+ * search/status filtering; editing the date or vendor re-files its image;
+ * the photo is retrievable by id; deleting a receipt removes its files.
  */
 describe('receipts', () => {
   let ctx: TestContext;
@@ -187,10 +189,15 @@ describe('receipts', () => {
       expect(after.body.month_folder).toBe(before.body.month_folder);
     });
 
-    it('approving (status=reviewed) is reflected on the receipt', async () => {
+    it('marking it checked (status=reviewed) is reflected on the receipt', async () => {
       const res = await request(ctx.app).put(`/api/receipts/${receiptId}`).send({ status: 'reviewed' });
       expect(res.status).toBe(200);
       expect(res.body.status).toBe('reviewed');
+    });
+
+    it('rejects an unknown status', async () => {
+      const res = await request(ctx.app).put(`/api/receipts/${receiptId}`).send({ status: 'uploaded' });
+      expect(res.status).toBe(400);
     });
 
     it('moving the receipt date into a different month re-files its image', async () => {
@@ -210,6 +217,17 @@ describe('receipts', () => {
       expect(fs.existsSync(oldImagePath)).toBe(false);
       const newImagePath = `${ctx.dataDir}/Receipts/${res.body.primary_image}`;
       expect(fs.existsSync(newImagePath)).toBe(true);
+    });
+
+    it('names the file on disk by receipt date and vendor, so the folder is browsable', async () => {
+      const res = await request(ctx.app)
+        .put(`/api/receipts/${receiptId}`)
+        .send({ vendor: 'Grand & Toy', receipt_date: '2019-03-01T00:00:00.000Z' });
+
+      // The 1st stays in its own month — the stored UTC midnight used to
+      // land in the previous month's folder west of Greenwich.
+      expect(res.body.primary_image).toMatch(/^2019-03\/2019-03-01_grand-toy_[0-9a-f]{8}\.jpg$/);
+      expect(fs.existsSync(`${ctx.dataDir}/Receipts/${res.body.primary_image}`)).toBe(true);
     });
   });
 
@@ -329,27 +347,91 @@ describe('receipts', () => {
     });
   });
 
-  describe('queue status counts', () => {
-    it('tallies receipts by pipeline stage', async () => {
-      // Baseline snapshot, then create one receipt of a known status and
-      // confirm the "captured" bucket increments by exactly one — this
-      // avoids depending on exact totals left over from earlier tests.
-      const before = await request(ctx.app).get('/api/receipts/queue/status');
+  describe('summary counts', () => {
+    it('counts receipts being read, to check, and unreadable', async () => {
+      const before = await request(ctx.app).get('/api/receipts/summary');
+      expect(before.status).toBe(200);
       await request(ctx.app)
         .post('/api/receipts')
-        .attach('images', fakeImageBytes('queue-count'), { filename: 'a.jpg', contentType: 'image/jpeg' });
-      const after = await request(ctx.app).get('/api/receipts/queue/status');
+        .attach('images', fakeImageBytes('summary-count'), { filename: 'a.jpg', contentType: 'image/jpeg' });
+      const after = await request(ctx.app).get('/api/receipts/summary');
 
-      expect(after.body.captured).toBe(before.body.captured + 1);
-      expect(Object.keys(after.body).sort()).toEqual(['captured', 'failed', 'pending', 'uploaded'].sort());
+      expect(after.body.processing).toBe(before.body.processing + 1);
+      expect(Object.keys(after.body).sort()).toEqual(['processing', 'toCheck', 'unreadable']);
+    });
+
+    it('the old Wave queue endpoints are gone', async () => {
+      expect((await request(ctx.app).get('/api/receipts/queue/status')).status).toBe(404);
+      expect((await request(ctx.app).post('/api/receipts/retry-all')).status).toBe(404);
+    });
+  });
+
+  describe('retrieving the photo', () => {
+    let receipt: any;
+
+    beforeAll(async () => {
+      const res = await request(ctx.app)
+        .post('/api/receipts')
+        .attach('images', fakeImageBytes('photo-link'), { filename: 'a.jpg', contentType: 'image/jpeg' })
+        .attach('images', fakeImageBytes('photo-link-back'), { filename: 'b.jpg', contentType: 'image/jpeg' });
+      receipt = res.body[0];
+    });
+
+    it('serves the image by receipt id', async () => {
+      const res = await request(ctx.app).get(`/api/receipts/${receipt.id}/image`).buffer(true);
+      expect(res.status).toBe(200);
+      expect(res.headers['content-type']).toMatch(/image\/jpeg/);
+      expect(Buffer.from(res.body).includes('photo-link')).toBe(true);
+    });
+
+    it('offers it as a download named like the file on disk', async () => {
+      const res = await request(ctx.app).get(`/api/receipts/${receipt.id}/image`).query({ download: 1 });
+      expect(res.status).toBe(200);
+      expect(res.headers['content-disposition']).toContain('attachment');
+      expect(res.headers['content-disposition']).toContain(receipt.primary_image.split('/')[1]);
+    });
+
+    it('keeps working after the file is re-filed', async () => {
+      await request(ctx.app).put(`/api/receipts/${receipt.id}`).send({ vendor: 'Moved Vendor', receipt_date: '2018-02-02' });
+      const res = await request(ctx.app).get(`/api/receipts/${receipt.id}/image`);
+      expect(res.status).toBe(200);
+    });
+
+    it('404s for an unknown receipt or a page that does not exist', async () => {
+      expect((await request(ctx.app).get('/api/receipts/nope/image')).status).toBe(404);
+      expect((await request(ctx.app).get(`/api/receipts/${receipt.id}/image`).query({ page: 9 })).status).toBe(404);
+    });
+  });
+
+  describe('ordering', () => {
+    it('lists newest receipt date first within a month, regardless of upload order', async () => {
+      const ids: string[] = [];
+      for (const [seed, date] of [['ord-a', '2016-04-03'], ['ord-b', '2016-04-20'], ['ord-c', '2016-04-11']]) {
+        const r = await request(ctx.app)
+          .post('/api/receipts')
+          .attach('images', fakeImageBytes(seed), { filename: 'a.jpg', contentType: 'image/jpeg' });
+        await request(ctx.app).put(`/api/receipts/${r.body[0].id}`).send({ receipt_date: date });
+        ids.push(r.body[0].id);
+      }
+
+      const list = (await request(ctx.app).get('/api/receipts')).body;
+      const april = list.find((g: any) => g.month === '2016-04');
+      expect(april.receipts.map((r: any) => r.receipt_date.slice(0, 10))).toEqual([
+        '2016-04-20',
+        '2016-04-11',
+        '2016-04-03',
+      ]);
+      // And months are newest first overall.
+      const months = list.map((g: any) => g.month);
+      expect(months).toEqual([...months].sort().reverse());
     });
   });
 });
 
 /**
  * Regression: a partial update used to null out the extracted fields.
- * Approving a receipt with just {status:'reviewed'} wiped its vendor and
- * total, and the upload queue then rejected it for having no amount.
+ * Marking a receipt with just {status:'reviewed'} wiped its vendor and
+ * total.
  */
 describe('partial updates', () => {
   let ctx: TestContext;

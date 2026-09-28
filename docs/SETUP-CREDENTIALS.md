@@ -68,10 +68,11 @@ Wave → Settings → API Access → Create a token.
 Chosen from dropdowns immediately after the token — the app fetches them
 from your Wave account. You'll pick:
 
-- **Business** — which Wave business to post to
-- **Expense account** — where receipt expenses are recorded
-- **Paid-from account** — the bank or credit card they came out of
-- **Sales tax** *(optional)*
+- **Business** — which Wave business exam invoices come from
+- **Sales tax** *(optional)* — applied to exam invoice line items
+
+(Receipts are no longer posted to Wave, so there are no expense /
+paid-from accounts to choose.)
 
 ---
 

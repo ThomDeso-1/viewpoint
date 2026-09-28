@@ -5,10 +5,9 @@ import { StatusBadge } from '../../src/shared/StatusBadge';
 /** Spec (db/schema.sql ReceiptStatus): every pipeline status must have a readable label. */
 describe('StatusBadge', () => {
   it.each([
-    ['captured', 'Captured'],
+    ['captured', 'Reading…'],
     ['extracted', 'Extracted'],
-    ['reviewed', 'Reviewed'],
-    ['uploaded', 'Uploaded'],
+    ['reviewed', 'Checked'],
     ['needsAttention', 'Needs Attention'],
     ['failed', 'Failed'],
   ])('labels status "%s" as "%s"', (status, label) => {

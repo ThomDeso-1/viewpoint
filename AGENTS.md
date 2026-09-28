@@ -14,9 +14,12 @@ exams with partner optometrists (the optometry side is a partnership, not
 the core business). Two workflows share one Express server, one SQLite
 database, and one React PWA:
 
-1. **Receipts** (original) — photograph an expense receipt → Claude vision
-   extracts vendor/date/total → operator reviews → a background queue
-   posts it to **Wave** as an expense.
+1. **Receipts** (original) — photograph an expense receipt → a background
+   queue has Claude vision read vendor/date/total straight away, with a
+   confidence rating → the image is filed on disk under the receipt's own
+   date and vendor → the operator checks the uncertain ones. A local
+   tracking system: receipts are **not** sent to Wave (the expense upload
+   was removed in migration 010).
 2. **Exam bookings** (added later) — a patient/appointment file (Word,
    Excel, CSV, PDF, …) lands in the scanned folder → Claude extracts one
    or more patients, merging each one's schedule row with any notes that
@@ -33,14 +36,16 @@ database, and one React PWA:
 Both pipelines use the **same status-machine shape** on purpose:
 
 ```
-receipts:  captured → extracted → reviewed  → uploaded
+receipts:  captured → extracted → reviewed          (reviewed = "checked", not a gate)
 exams:     received  → extracted → drafted  → approved → completed
-                              ↘ needsAttention      ↘ failed
+                   ↘ needsAttention                 ↘ failed
 ```
 
-Everything up to `reviewed` / `drafted` happens unattended on a 60-second
-poll. **Nothing is sent to a patient, the ministry, or the books without
-an explicit operator action.**
+Receipts have no approval gate because they commit nothing: the only
+thing that leaves the machine is the photo going to Claude. Exams do
+everything up to `drafted` unattended on a 60-second poll. **Nothing is
+sent to a patient, the ministry, or the books without an explicit
+operator action.**
 
 ### The golden rules of this app
 
@@ -72,7 +77,7 @@ an explicit operator action.**
 iPhone / browser  ──HTTPS──▶  Express (server/)  ──▶  SQLite (data/receipts.db)
    React PWA (client/)                │                 receipt images (data/Receipts/)
                                       ├─▶ Claude API      (receipt + patient-file extraction)
-                                      ├─▶ Wave GraphQL     (expenses + invoices)
+                                      ├─▶ Wave GraphQL     (exam invoices)
                                       ├─▶ scanned folder   (patient/appointment files — EXAM_REQUEST_SOURCE_DIR)
                                       ├─▶ Gmail API        (send reminders)
                                       ├─▶ Google Calendar  (mirror the schedule)
@@ -93,7 +98,7 @@ iPhone / browser  ──HTTPS──▶  Express (server/)  ──▶  SQLite (da
   routes `async` handler rejections there instead of hanging the socket.
 - **Two background pollers**, started only in `server/index.ts` (never in
   `createApp()`, so tests don't spawn timers):
-  `server/receipts/upload-queue.ts` (Wave expenses) and
+  `server/receipts/extract-queue.ts` (reads new receipts with Claude) and
   `server/exams/queue.ts` (the whole exam-request pipeline). Both wrap
   their `processQueue` pass in `makePoller` (`server/platform/poller.ts`)
   — the re-entry guard / interval / trigger are shared.
@@ -101,8 +106,7 @@ iPhone / browser  ──HTTPS──▶  Express (server/)  ──▶  SQLite (da
   failed row records `retry_count` + `updated_at`; each pass skips rows
   that aren't due. One flaky item never blocks the batch; a restart
   resumes the schedule.
-- **Idempotency keys:** `receipts` → Wave `externalId:
-  viewpoint-<id>`; `appointments.google_event_id` UNIQUE;
+- **Idempotency keys:** `appointments.google_event_id` UNIQUE;
   `exam_requests.source_ref` UNIQUE (`<file-content-hash>#<patient-index>`;
   `processed_source_files` also skips a file whose hash is unchanged).
   Re-scanning can only ever update, never duplicate.
@@ -136,8 +140,8 @@ npm install && (cd client && npm install)   # first time
 npm run dev                # server :3000, client (Vite) :5173 with API proxy
 npm run demo               # whole app against local fakes, no credentials — see docs/DEMO.md
 
-npm test                   # SERVER tests only (vitest + supertest) — 363 at last audit
-npm run test:client        # CLIENT tests (vitest + testing-library) — 191 at last audit
+npm test                   # SERVER tests only (vitest + supertest) — 534 at last audit
+npm run test:client        # CLIENT tests (vitest + testing-library) — 248 at last audit
 npm run test:all           # both suites
 npm run typecheck:all      # both projects (tsc --noEmit)
 
@@ -395,7 +399,7 @@ in `docs/AUDIT.md` §3 so the decision stays visible.
 
 | Symptom | Start at |
 |---|---|
-| A receipt won't upload | `server/receipts/upload-queue.ts`, the receipt's `last_error` / `status` / `retry_count` |
+| A receipt stays "Reading…" / shows "Couldn't read" | `server/receipts/extract-queue.ts`; `CLAUDE_API_KEY` set?; the receipt's `last_error` / `status` / `retry_count` |
 | An exam request is stuck | `server/exams/queue.ts` + `exam-requests.ts`; check `status`, `last_error`, `retry_count`; `isReadyForRetry` gating |
 | Eligibility always says "mock" | `OHIP_HCV_MODE` unset/`mock`; `server/integrations/ohip/index.ts` |
 | Gmail/Calendar calls 401 | token refresh in `server/integrations/google/auth.ts` → `oauth-store.ts`; reconnect in Settings |

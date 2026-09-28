@@ -55,7 +55,7 @@ interface CreatedInvoice {
 const sentEmails: SentEmail[] = [];
 const invoices: CreatedInvoice[] = [];
 const customers = new Map<string, { id: string; name: string; email: string | null }>();
-const expenses: { at: string; description: string; amount: number }[] = [];
+const receiptsRead: { at: string; vendor: string; total: number; confidence: string }[] = [];
 let requestCount = 0;
 
 function log(service: string, detail: string): void {
@@ -86,15 +86,21 @@ app.post('/anthropic/v1/messages', (req: Request, res: Response) => {
 
   if (hasImage) {
     // Cycled so a batch of receipts doesn't come back identical.
-    const receipt = RECEIPTS[expenses.length % RECEIPTS.length];
-    log('claude', `receipt extraction → ${receipt.vendor} $${receipt.total}`);
+    const receipt = RECEIPTS[receiptsRead.length % RECEIPTS.length];
+    receiptsRead.push({
+      at: new Date().toISOString(),
+      vendor: receipt.vendor,
+      total: receipt.total,
+      confidence: receipt.confidence,
+    });
+    log('claude', `receipt extraction → ${receipt.vendor} $${receipt.total} (${receipt.confidence})`);
 
     return res.json({
       content: [
         {
           type: 'text',
           text: JSON.stringify({
-            receipt_date: new Date().toISOString().slice(0, 10),
+            receipt_date: new Date(Date.now() - receipt.daysAgo * 86_400_000).toISOString().slice(0, 10),
             vendor: receipt.vendor,
             items: [{ description: receipt.summary, amount: receipt.subtotal }],
             summary_description: receipt.summary,
@@ -102,7 +108,7 @@ app.post('/anthropic/v1/messages', (req: Request, res: Response) => {
             taxes: [{ type: 'HST', rate: 0.13, amount: receipt.tax }],
             total: receipt.total,
             currency: 'CAD',
-            confidence: 'high',
+            confidence: receipt.confidence,
           }),
         },
       ],
@@ -273,25 +279,6 @@ app.post('/wave/graphql', (req: Request, res: Response) => {
     }
     log('wave', `send invoice → ${variables.input?.to}`);
     return res.json({ data: { invoiceSend: { didSucceed: true, inputErrors: null } } });
-  }
-
-  if (has('moneyTransactionCreate')) {
-    const input = variables.input ?? {};
-    expenses.push({
-      at: new Date().toISOString(),
-      description: input.description,
-      amount: input.anchor?.amount ?? 0,
-    });
-    log('wave', `create expense → ${input.description} $${input.anchor?.amount}`);
-    return res.json({
-      data: {
-        moneyTransactionCreate: {
-          didSucceed: true,
-          inputErrors: null,
-          transaction: { id: `txn-${expenses.length}` },
-        },
-      },
-    });
   }
 
   log('wave', `unhandled query: ${query.slice(0, 60).replace(/\s+/g, ' ')}`);
@@ -476,13 +463,13 @@ app.delete('/graph/v1.0/me/events/:id', (req: Request, res: Response) => {
 // ── Dashboard ──
 
 app.get('/_demo/state', (_req: Request, res: Response) => {
-  res.json({ sentEmails, invoices, expenses, customers: [...customers.values()], msEvents });
+  res.json({ sentEmails, invoices, receiptsRead, customers: [...customers.values()], msEvents });
 });
 
 app.post('/_demo/reset', (_req: Request, res: Response) => {
   sentEmails.length = 0;
   invoices.length = 0;
-  expenses.length = 0;
+  receiptsRead.length = 0;
   customers.clear();
   msEvents = seedMsEvents();
   msEventSeq = msEvents.length;
@@ -526,12 +513,12 @@ app.get('/', (_req: Request, res: Response) => {
         .join('')
     : '<p class="empty">No invoices raised yet.</p>';
 
-  const expenseRows = expenses.length
-    ? `<ul>${expenses
-        .map((e) => `<li>${escape(e.description)} — $${e.amount.toFixed(2)}</li>`)
+  const receiptRows = receiptsRead.length
+    ? `<ul>${receiptsRead
+        .map((r) => `<li>${escape(r.vendor)} — $${r.total.toFixed(2)} (${r.confidence} confidence)</li>`)
         .reverse()
         .join('')}</ul>`
-    : '<p class="empty">No receipts uploaded yet.</p>';
+    : '<p class="empty">No receipts read yet.</p>';
 
   res.type('html').send(`<!doctype html>
 <html><head><meta charset="utf-8"><title>Demo services</title>
@@ -571,8 +558,8 @@ app.get('/', (_req: Request, res: Response) => {
   <h2>Invoices "raised" (${invoices.length})</h2>
   ${invoiceRows}
 
-  <h2>Receipt expenses "posted" (${expenses.length})</h2>
-  ${expenseRows}
+  <h2>Receipts read (${receiptsRead.length})</h2>
+  ${receiptRows}
 
   <form method="post" action="/_demo/reset"><button type="submit">Clear captured activity</button></form>
 </body></html>`);

@@ -5,11 +5,10 @@ interface Props {
 }
 
 const LABELS: Record<string, string> = {
-  // Receipts
-  captured: 'Captured',
+  // Receipts (the list itself badges by confidence — receipts/receipt-status.ts)
+  captured: 'Reading…',
   extracted: 'Extracted',
-  reviewed: 'Reviewed',
-  uploaded: 'Uploaded',
+  reviewed: 'Checked',
   // Exam requests. `extracted` and `failed` are shared with receipts
   // above and mean the same thing in both pipelines.
   received: 'New',
@@ -23,10 +22,9 @@ const LABELS: Record<string, string> = {
 };
 
 const TONES: Record<string, Tone> = {
-  captured: 'neutral',
+  captured: 'progress',
   extracted: 'progress',
-  reviewed: 'attention',
-  uploaded: 'done',
+  reviewed: 'done',
   received: 'neutral',
   drafted: 'progress',
   approved: 'done',

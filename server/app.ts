@@ -21,7 +21,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /**
  * Builds the Express app (routes, middleware, static serving) without
- * starting the HTTP listener or the background upload-queue poller.
+ * starting the HTTP listener or the background pollers.
  * Used by both the production entrypoint (index.ts) and tests.
  */
 export function createApp(): Express {

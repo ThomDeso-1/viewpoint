@@ -29,8 +29,6 @@ const baseSettings = {
   waveTokenPreview: null,
   waveBusinessId: '',
   waveBusinessName: '',
-  waveExpenseAccountId: '',
-  waveAnchorAccountId: '',
   waveSalesTaxId: '',
   isOnboarded: true,
   microsoftConnected: false,
@@ -38,13 +36,13 @@ const baseSettings = {
 
 /**
  * Spec (CONVERSION-PLAN.md "Settings Page"): masked key previews, Wave
- * connection health, upload queue counts, "Retry All Failed" only when
- * there are failures, Sign Out.
+ * connection health, where receipt photos are kept, Sign Out. (The upload
+ * queue counts and "Retry All Failed" went with the Wave upload queue —
+ * migration 010.)
  */
 describe('Settings', () => {
   it('shows "Not configured" for keys that are not set', async () => {
     api.getSettings.mockResolvedValue(baseSettings);
-    api.getQueueStatus.mockResolvedValue({ uploaded: 0, pending: 0, failed: 0, captured: 0 });
     api.getWaveHealth.mockResolvedValue({ healthy: false });
     renderSettings();
 
@@ -53,7 +51,6 @@ describe('Settings', () => {
 
   it('shows the masked key preview once a Claude key is configured', async () => {
     api.getSettings.mockResolvedValue({ ...baseSettings, hasClaudeKey: true, claudeKeyPreview: 'sk-ant-ab…wxyz' });
-    api.getQueueStatus.mockResolvedValue({ uploaded: 0, pending: 0, failed: 0, captured: 0 });
     api.getWaveHealth.mockResolvedValue({ healthy: false });
     renderSettings();
 
@@ -62,7 +59,6 @@ describe('Settings', () => {
 
   it('shows Connected/Disconnected based on Wave health', async () => {
     api.getSettings.mockResolvedValue({ ...baseSettings, hasWaveToken: true, waveTokenPreview: 'wv…abcd', waveBusinessName: 'Acme Co' });
-    api.getQueueStatus.mockResolvedValue({ uploaded: 0, pending: 0, failed: 0, captured: 0 });
     api.getWaveHealth.mockResolvedValue({ healthy: true });
     renderSettings();
 
@@ -70,57 +66,19 @@ describe('Settings', () => {
     expect(screen.getByText('Acme Co')).toBeInTheDocument();
   });
 
-  it('shows queue counts', async () => {
+  it('says where receipt photos are kept, and has no upload-queue controls', async () => {
     api.getSettings.mockResolvedValue(baseSettings);
-    api.getQueueStatus.mockResolvedValue({ uploaded: 5, pending: 2, failed: 1, captured: 3 });
     api.getWaveHealth.mockResolvedValue({ healthy: false });
     renderSettings();
 
-    await waitFor(() => expect(screen.getByText('5')).toBeInTheDocument());
-    expect(screen.getByText('3')).toBeInTheDocument();
-    expect(screen.getByText('2')).toBeInTheDocument();
-  });
-
-  it('hides "Retry All Failed" when there are no failures', async () => {
-    api.getSettings.mockResolvedValue(baseSettings);
-    api.getQueueStatus.mockResolvedValue({ uploaded: 0, pending: 0, failed: 0, captured: 0 });
-    api.getWaveHealth.mockResolvedValue({ healthy: false });
-    renderSettings();
-
-    await waitFor(() => expect(screen.getByText('Viewpoint v1.0.0')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Receipt photos')).toBeInTheDocument());
+    expect(screen.getByText('data/Receipts')).toBeInTheDocument();
+    expect(screen.queryByText(/upload queue/i)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /retry all failed/i })).not.toBeInTheDocument();
-  });
-
-  it('shows and uses "Retry All Failed" when there are failures', async () => {
-    api.getSettings.mockResolvedValue(baseSettings);
-    api.getQueueStatus
-      .mockResolvedValueOnce({ uploaded: 0, pending: 0, failed: 2, captured: 0 })
-      .mockResolvedValueOnce({ uploaded: 0, pending: 2, failed: 0, captured: 0 });
-    api.getWaveHealth.mockResolvedValue({ healthy: false });
-    api.retryAllFailed.mockResolvedValue({ success: true });
-    renderSettings();
-
-    const retryBtn = await screen.findByRole('button', { name: /retry all failed/i });
-    await userEvent.click(retryBtn);
-
-    expect(api.retryAllFailed).toHaveBeenCalled();
-    await waitFor(() => expect(screen.queryByRole('button', { name: /retry all failed/i })).not.toBeInTheDocument());
-  });
-
-  it('shows a toast if retrying fails', async () => {
-    api.getSettings.mockResolvedValue(baseSettings);
-    api.getQueueStatus.mockResolvedValue({ uploaded: 0, pending: 0, failed: 1, captured: 0 });
-    api.getWaveHealth.mockResolvedValue({ healthy: false });
-    api.retryAllFailed.mockRejectedValue(new Error('Could not retry failed uploads.'));
-    renderSettings();
-
-    await userEvent.click(await screen.findByRole('button', { name: /retry all failed/i }));
-    expect(await screen.findByText('Could not retry failed uploads.')).toBeInTheDocument();
   });
 
   it('signs out and navigates to /login', async () => {
     api.getSettings.mockResolvedValue(baseSettings);
-    api.getQueueStatus.mockResolvedValue({ uploaded: 0, pending: 0, failed: 0, captured: 0 });
     api.getWaveHealth.mockResolvedValue({ healthy: false });
     api.logout.mockResolvedValue({ success: true });
     renderSettings();

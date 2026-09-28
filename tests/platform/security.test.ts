@@ -78,6 +78,47 @@ describe('schema migrations', () => {
 
     fs.rmSync(legacyDir, { recursive: true, force: true });
   });
+
+  // Migration 010: the Wave upload queue was removed. Receipts that had
+  // been approved into it are "checked"; old Wave errors are cleared; the
+  // confidence is lifted out of the extraction blob.
+  it('010 folds old Wave-queue statuses into reviewed and backfills confidence', async () => {
+    const legacyDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vr-legacy-010-'));
+    const legacyDb = new Database(path.join(legacyDir, 'receipts.db'));
+    legacyDb.exec(fs.readFileSync('server/db/migrations/001-initial.sql', 'utf-8'));
+    const insert = legacyDb.prepare(
+      `INSERT INTO receipts (id, primary_image, receipt_date, capture_date, month_folder,
+                             status, extracted_json, wave_txn_id, last_error, retry_count,
+                             created_at, updated_at)
+       VALUES (?, 'x.jpg', '2026-01-05', '2026-01-05', '2026-01', ?, ?, ?, ?, ?, '2026-01-05', '2026-01-05')`,
+    );
+    insert.run('up', 'uploaded', '{"confidence":"high"}', 'txn-1', null, 0);
+    insert.run('fail', 'failed', '{"confidence":"low"}', null, 'Wave 500', 5);
+    insert.run('attn', 'needsAttention', null, null, 'Total amount is zero or missing.', 0);
+    insert.run('ext', 'extracted', '{"confidence":"medium"}', null, null, 0);
+    insert.run('cap', 'captured', null, null, null, 0);
+    insert.run('junk', 'extracted', 'not json', null, null, 0);
+    legacyDb.close();
+
+    ctx = await setupTestApp({ DATA_DIR: legacyDir });
+
+    const db = new Database(path.join(legacyDir, 'receipts.db'), { readonly: true });
+    const rows = Object.fromEntries(
+      (db.prepare(`SELECT id, status, confidence, last_error, retry_count, wave_txn_id FROM receipts`).all() as any[]).map(
+        (r) => [r.id, r],
+      ),
+    );
+    db.close();
+
+    expect(rows.up).toMatchObject({ status: 'reviewed', confidence: 'high', wave_txn_id: 'txn-1' });
+    expect(rows.fail).toMatchObject({ status: 'reviewed', confidence: 'low', last_error: null, retry_count: 0 });
+    expect(rows.attn).toMatchObject({ status: 'reviewed', last_error: null });
+    expect(rows.ext).toMatchObject({ status: 'extracted', confidence: 'medium' });
+    expect(rows.cap).toMatchObject({ status: 'captured', confidence: null });
+    expect(rows.junk).toMatchObject({ status: 'extracted', confidence: null });
+
+    fs.rmSync(legacyDir, { recursive: true, force: true });
+  });
 });
 
 describe('encryption at rest', () => {

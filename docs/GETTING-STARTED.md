@@ -1,8 +1,9 @@
 # Getting Started with Viewpoint Receipts
 
 This app photographs your business receipts, reads the vendor/date/total
-off them automatically, and (once you approve each one) uploads them to
-Wave as expenses. It runs on a computer you keep on and connected to
+off them automatically (with a confidence rating, so you know which ones
+to double-check), and keeps the photos on this computer, filed by receipt
+date and vendor. It runs on a computer you keep on and connected to
 Wi-Fi, and you use it from your iPhone's browser like an app.
 
 Setup takes about 15 minutes, once.
@@ -69,9 +70,8 @@ remember.
 Right after setting your password, the app will ask for:
 
 1. **Your Claude API key** — paste it in, it validates automatically.
-2. **Your Wave access token** — paste it in, pick which Wave business,
-   which account to record expenses against, and which bank/credit card
-   the expenses are "paid from."
+2. **Your Wave access token** — paste it in and pick which Wave business.
+   Wave is only used for exam invoices; receipts stay in the app.
 
 You can hit **"Skip for now"** on either step and add it later from the
 Settings page in the app.
@@ -185,4 +185,5 @@ Everything below lives in `/Applications/ViewpointApp` — double-click:
 
 Your receipts and data live entirely on this Mac, in
 `/Applications/ViewpointApp/data` — nothing is sent anywhere except to
-Claude (to read the receipt) and Wave (to record the expense).
+Claude (to read the receipt). Receipt photos are in
+`data/Receipts/<year-month>/`, named like `2026-08-14_staples_1a2b3c4d.jpg`.

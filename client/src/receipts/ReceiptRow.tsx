@@ -1,7 +1,8 @@
 import type { ReceiptRow as Receipt } from '../shared/api';
-import { StatusBadge } from '../shared/StatusBadge';
 import { formatMoney } from '../shared/format';
+import { Pill } from '../ui/Pill';
 import { Icon } from '../ui/Icon';
+import { receiptBadge, receiptLocalDate } from './receipt-status';
 
 interface Props {
   receipt: Receipt;
@@ -10,11 +11,13 @@ interface Props {
 }
 
 export function ReceiptRow({ receipt, onTap, onDelete }: Props) {
-  const date = new Date(receipt.receipt_date).toLocaleDateString('en-CA', {
+  const reading = receipt.status === 'captured';
+  const date = receiptLocalDate(receipt.receipt_date).toLocaleDateString('en-CA', {
     month: 'short',
     day: 'numeric',
   });
   const amount = receipt.total_amount != null ? formatMoney(receipt.total_amount, receipt.currency) : null;
+  const badge = receiptBadge(receipt);
 
   return (
     <div className="vp-receipt-row">
@@ -24,15 +27,20 @@ export function ReceiptRow({ receipt, onTap, onDelete }: Props) {
         </span>
         <span className="vp-receipt-info">
           <span className="vp-receipt-top">
-            <span className="vp-receipt-vendor">{receipt.vendor || 'Unprocessed'}</span>
-            <StatusBadge status={receipt.status} />
+            <span className="vp-receipt-vendor">
+              {receipt.vendor || (reading ? 'Reading receipt…' : 'Unknown vendor')}
+            </span>
+            <Pill tone={badge.tone}>{badge.label}</Pill>
           </span>
           <span className="vp-receipt-meta">
-            <span>{date}</span>
+            {/* Until it's read, the only date there is is the upload time. */}
+            <span>{reading ? `Uploaded ${date}` : date}</span>
             {amount && <span className="vp-receipt-amount">{amount}</span>}
           </span>
           {receipt.summary && <span className="vp-receipt-summary">{receipt.summary}</span>}
-          {receipt.last_error && <span className="vp-receipt-err">{receipt.last_error}</span>}
+          {receipt.status === 'needsAttention' && receipt.last_error && (
+            <span className="vp-receipt-err">{receipt.last_error}</span>
+          )}
         </span>
       </button>
       <button

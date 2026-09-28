@@ -7,7 +7,8 @@ import path from 'path';
 // on the same file.
 dotenv.config({ path: process.env.ENV_FILE || undefined });
 import { createApp } from './app.js';
-import { startPolling } from './receipts/upload-queue.js';
+import { startPolling } from './receipts/extract-queue.js';
+import { StorageService } from './receipts/storage.js';
 import { startPolling as startExamsPolling } from './exams/queue.js';
 import { warnIfDemoMode } from './platform/endpoints.js';
 import { assertSafeForPhi } from './platform/phi-guard.js';
@@ -28,8 +29,10 @@ app.listen(PORT, '0.0.0.0', () => {
 
   // Both pollers are started here rather than inside createApp() so that
   // tests, which build the app directly, never spawn background timers.
-  startPolling();
-  console.log('  Upload queue polling started');
+  // Same DATA_DIR as createApp()'s instance — StorageService is only a
+  // root path, so two of them over one folder agree.
+  startPolling(new StorageService(DATA_DIR));
+  console.log('  Receipt extract queue polling started');
 
   startExamsPolling();
   console.log('  Exam queue polling started');

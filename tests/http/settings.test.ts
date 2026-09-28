@@ -95,24 +95,27 @@ describe('settings', () => {
     });
   });
 
-  describe('saving Wave accounts', () => {
-    it('requires both expense and anchor account ids', async () => {
-      const res = await request(ctx.app).post('/api/settings/wave-accounts').send({ expenseAccountId: 'e1' });
+  describe('saving the Wave sales tax (exam invoices)', () => {
+    it('rejects a non-string salesTaxId', async () => {
+      const res = await request(ctx.app).post('/api/settings/wave-sales-tax').send({ salesTaxId: 42 });
       expect(res.status).toBe(400);
     });
 
-    it('persists expense/anchor/sales-tax selections', async () => {
-      const res = await request(ctx.app).post('/api/settings/wave-accounts').send({
-        expenseAccountId: 'expense-1',
-        anchorAccountId: 'anchor-1',
-        salesTaxId: 'tax-1',
-      });
+    it('persists the selection, and an empty value clears it', async () => {
+      const res = await request(ctx.app).post('/api/settings/wave-sales-tax').send({ salesTaxId: 'tax-1' });
       expect(res.status).toBe(200);
+      expect((await request(ctx.app).get('/api/settings')).body.waveSalesTaxId).toBe('tax-1');
 
+      await request(ctx.app).post('/api/settings/wave-sales-tax').send({ salesTaxId: '' });
+      expect((await request(ctx.app).get('/api/settings')).body.waveSalesTaxId).toBe('');
+    });
+
+    it('no longer exposes the expense / anchor account settings (receipt upload queue removed)', async () => {
       const settings = await request(ctx.app).get('/api/settings');
-      expect(settings.body.waveExpenseAccountId).toBe('expense-1');
-      expect(settings.body.waveAnchorAccountId).toBe('anchor-1');
-      expect(settings.body.waveSalesTaxId).toBe('tax-1');
+      expect(settings.body).not.toHaveProperty('waveExpenseAccountId');
+      expect(settings.body).not.toHaveProperty('waveAnchorAccountId');
+      expect((await request(ctx.app).post('/api/settings/wave-accounts').send({})).status).toBe(404);
+      expect((await request(ctx.app).get('/api/settings/wave/accounts')).status).toBe(404);
     });
   });
 
@@ -190,7 +193,7 @@ describe('settings', () => {
   });
 });
 
-describe('settings: Wave accounts/taxes require a configured connection', () => {
+describe('settings: Wave taxes require a configured connection', () => {
   let ctx: TestContext;
 
   beforeAll(async () => {
@@ -198,11 +201,6 @@ describe('settings: Wave accounts/taxes require a configured connection', () => 
   });
 
   afterAll(() => ctx.teardown());
-
-  it('refuses to fetch accounts without a configured token+business', async () => {
-    const res = await request(ctx.app).get('/api/settings/wave/accounts');
-    expect(res.status).toBe(400);
-  });
 
   it('refuses to fetch taxes without a configured token+business', async () => {
     const res = await request(ctx.app).get('/api/settings/wave/taxes');

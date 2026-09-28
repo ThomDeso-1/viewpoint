@@ -149,11 +149,16 @@ export function extractionFor(person: DemoPerson) {
 }
 
 /** Receipts the fake Claude returns, cycled through in order. */
+/**
+ * What the fake Claude "reads" off an uploaded receipt, cycled per image.
+ * Dates and confidence vary so the list shows ordering by receipt date
+ * and every confidence badge.
+ */
 export const RECEIPTS = [
-  { vendor: 'Staples', summary: 'Office supplies', subtotal: 42.47, tax: 5.52, total: 47.99 },
-  { vendor: 'Petro-Canada', summary: 'Fuel', subtotal: 68.14, tax: 8.86, total: 77.0 },
-  { vendor: 'Grand & Toy', summary: 'Printer paper and toner', subtotal: 112.39, tax: 14.61, total: 127.0 },
-  { vendor: 'Bell Canada', summary: 'Business internet — monthly', subtotal: 89.0, tax: 11.57, total: 100.57 },
+  { vendor: 'Staples', summary: 'Office supplies', subtotal: 42.47, tax: 5.52, total: 47.99, daysAgo: 2, confidence: 'high' },
+  { vendor: 'Petro-Canada', summary: 'Fuel', subtotal: 68.14, tax: 8.86, total: 77.0, daysAgo: 12, confidence: 'medium' },
+  { vendor: 'Grand & Toy', summary: 'Printer paper and toner', subtotal: 112.39, tax: 14.61, total: 127.0, daysAgo: 38, confidence: 'low' },
+  { vendor: 'Bell Canada', summary: 'Business internet — monthly', subtotal: 89.0, tax: 11.57, total: 100.57, daysAgo: 20, confidence: 'high' },
 ];
 
 export const WAVE_BUSINESS = { id: 'demo-business-1', name: 'Viewpoint Vision Care (Demo)', isPersonal: false };

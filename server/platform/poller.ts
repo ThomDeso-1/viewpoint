@@ -1,5 +1,5 @@
 /**
- * Background-poller scaffolding, shared by the receipt upload queue and
+ * Background-poller scaffolding, shared by the receipt extract queue and
  * the exams queue (audit P2-27).
  *
  * Both queues had their own copy of: a re-entry guard, a `setInterval`
@@ -16,7 +16,7 @@
  */
 
 export interface PollerOptions {
-  /** Log prefix, e.g. `upload-queue` / `exams-queue`. */
+  /** Log prefix, e.g. `extract-queue` / `exams-queue`. */
   name: string;
   intervalMs: number;
   /** One pass over the queue. Rejections are caught and logged. */

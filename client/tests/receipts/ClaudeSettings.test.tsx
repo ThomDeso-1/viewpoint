@@ -19,8 +19,6 @@ const baseSettings: SettingsData = {
   waveTokenPreview: null,
   waveBusinessId: '',
   waveBusinessName: '',
-  waveExpenseAccountId: '',
-  waveAnchorAccountId: '',
   waveSalesTaxId: '',
   isOnboarded: true,
   microsoftConnected: false,

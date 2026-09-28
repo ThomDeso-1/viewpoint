@@ -2,19 +2,19 @@
  * The "record a failed attempt" state transition, shared by the three
  * retry loops that each hand-rolled it (audit P3-28): exam-request
  * extraction / drafting (`exams/exam-requests.ts`), reminder dispatch
- * (`exams/reminders.ts`), and the receipt upload queue
- * (`receipts/upload-queue.ts`).
+ * (`exams/reminders.ts`), and receipt extraction
+ * (`receipts/extract-queue.ts`).
  *
  * The shape is always "retryable? bump the count; count hit the ceiling?
  * give up". The three differ only in policy:
  *   - `retrying` — the status a row keeps while it still has attempts left
- *     (`reviewed` / `pending` / or the exam request's current status)
+ *     (`captured` / `pending` / or the exam request's current status)
  *   - `terminal` — what a *non*-retryable error means: `failed`, or
  *     `needsAttention` to park it for the operator. Defaults to
  *     `exhausted`.
  *   - `countAlways` — whether a non-retryable attempt still counts against
- *     the budget. The receipt queue increments regardless; the exams
- *     loops only count retryable attempts.
+ *     the budget. No current caller sets it (the old receipt upload queue
+ *     did); every loop counts only retryable attempts.
  *
  * This computes the transition; the caller owns the UPDATE (and the
  * `last_error` / `updated_at` columns, which are uniform).

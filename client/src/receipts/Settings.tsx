@@ -2,14 +2,10 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   getSettings,
-  getQueueStatus,
-  retryAllFailed,
   getWaveHealth,
   logout,
   type Settings as SettingsData,
-  type QueueStatus,
 } from '../shared/api';
-import { useToast } from '../shared/Toast';
 import { ClaudeSettings } from './ClaudeSettings';
 import { WaveSettings } from './WaveSettings';
 import { MicrosoftSettings } from '../exams/MicrosoftSettings';
@@ -20,15 +16,11 @@ import { Screen } from '../ui/Screen';
 import { PageHeader } from '../ui/PageHeader';
 import { Section } from '../ui/Card';
 import { Button } from '../ui/Button';
-import { KeyValueList, KeyValue } from '../ui/KeyValue';
 
 export function Settings({ ohipEnabled = false }: { ohipEnabled?: boolean }) {
   const navigate = useNavigate();
   const [settings, setSettings] = useState<SettingsData | null>(null);
-  const [queue, setQueue] = useState<QueueStatus | null>(null);
   const [waveHealthy, setWaveHealthy] = useState<boolean | null>(null);
-  const [retrying, setRetrying] = useState(false);
-  const { showToast } = useToast();
 
   const loadConnections = () => {
     Promise.all([
@@ -39,20 +31,7 @@ export function Settings({ ohipEnabled = false }: { ohipEnabled?: boolean }) {
 
   useEffect(() => {
     loadConnections();
-    getQueueStatus().then(setQueue).catch(() => {});
   }, []);
-
-  const handleRetryAll = async () => {
-    setRetrying(true);
-    try {
-      await retryAllFailed();
-      setQueue(await getQueueStatus());
-    } catch (err) {
-      showToast((err as Error).message || 'Could not retry failed uploads.');
-    } finally {
-      setRetrying(false);
-    }
-  };
 
   const handleLogout = async () => {
     await logout();
@@ -85,7 +64,7 @@ export function Settings({ ohipEnabled = false }: { ohipEnabled?: boolean }) {
           <Section
             id="connections"
             title="Connections"
-            description="Claude reads your receipts; Wave records expenses and invoices; Outlook sends mail and syncs the calendar."
+            description="Claude reads your receipts; Wave sends exam invoices; Outlook sends mail and syncs the calendar."
           >
             <ClaudeSettings settings={settings} onSaved={loadConnections} />
             <WaveSettings settings={settings} waveHealthy={waveHealthy} onSaved={loadConnections} />
@@ -119,24 +98,13 @@ export function Settings({ ohipEnabled = false }: { ohipEnabled?: boolean }) {
               View access log
             </Button>
 
-            {queue && (
-              <>
-                <h3 className="vp-settings-subhead">Upload queue</h3>
-                <KeyValueList>
-                  <KeyValue label="Captured">{queue.captured}</KeyValue>
-                  <KeyValue label="Pending review">{queue.pending}</KeyValue>
-                  <KeyValue label="Failed">
-                    {queue.failed > 0 ? <span className="vp-error-text">{queue.failed}</span> : 0}
-                  </KeyValue>
-                  <KeyValue label="Uploaded">{queue.uploaded}</KeyValue>
-                </KeyValueList>
-                {queue.failed > 0 && (
-                  <Button variant="secondary" onClick={handleRetryAll} loading={retrying}>
-                    Retry All Failed
-                  </Button>
-                )}
-              </>
-            )}
+
+            <h3 className="vp-settings-subhead">Receipt photos</h3>
+            <p className="vp-settings-lede">
+              Kept on this computer only, in the app's <code>data/Receipts</code> folder — one folder
+              per month, each file named by receipt date and vendor. The photo is sent to Claude once
+              to be read; nothing else leaves the machine.
+            </p>
           </Section>
 
           <Section id="account" title="Account">

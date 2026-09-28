@@ -11,6 +11,7 @@ import * as api from '../../src/shared/api';
 beforeEach(() => {
   for (const fn of Object.values(api)) fn.mockReset();
   api.checkDuplicates.mockResolvedValue({ warnings: [] });
+  api.getSettings.mockResolvedValue({ hasClaudeKey: true } as any);
 });
 
 function renderBatch() {
@@ -22,10 +23,11 @@ function renderBatch() {
 }
 
 /**
- * Spec (CONVERSION-PLAN.md "Batch review queue"): swipe/step through only
- * the receipts that still need review (captured/extracted); "All caught
- * up" once the queue is exhausted; Previous is disabled on the first
- * item; approving one advances to the next.
+ * Spec (CONVERSION-PLAN.md "Batch review queue", revised by migration
+ * 010): swipe/step through only the receipts worth a human look —
+ * unreadable, or read at medium/low confidence and not yet checked;
+ * "All caught up" once the queue is exhausted; Previous is disabled on
+ * the first item; saving one advances to the next.
  */
 describe('BatchReview', () => {
   it('shows "All caught up" when there is nothing to review', async () => {
@@ -34,19 +36,21 @@ describe('BatchReview', () => {
     await waitFor(() => expect(screen.getByText(/all caught up/i)).toBeInTheDocument());
   });
 
-  it('only queues captured/extracted receipts, in list order', async () => {
+  it('only queues uncertain or unreadable receipts, in list order', async () => {
     api.listReceipts.mockResolvedValue([
       {
         month: '2026-01',
         receipts: [
-          makeReceipt({ id: 'r1', status: 'uploaded' }),
-          makeReceipt({ id: 'r2', status: 'captured', vendor: 'Costco' }),
-          makeReceipt({ id: 'r3', status: 'extracted', vendor: 'Staples' }),
+          makeReceipt({ id: 'r1', status: 'reviewed', vendor: 'Checked', confidence: 'low' }),
+          makeReceipt({ id: 'r2', status: 'extracted', vendor: 'Costco', confidence: 'low' }),
+          makeReceipt({ id: 'r3', status: 'extracted', vendor: 'Sure Thing', confidence: 'high' }),
+          makeReceipt({ id: 'r4', status: 'needsAttention' }),
+          makeReceipt({ id: 'r5', status: 'captured' }),
         ],
       },
     ]);
     api.getReceipt.mockImplementation(async (id: string) =>
-      id === 'r2' ? makeReceipt({ id: 'r2', status: 'captured', vendor: 'Costco' }) : makeReceipt({ id: 'r3', status: 'extracted', vendor: 'Staples' }),
+      id === 'r2' ? makeReceipt({ id: 'r2', status: 'extracted', vendor: 'Costco', confidence: 'low' }) : makeReceipt({ id: 'r4', status: 'needsAttention' }),
     );
     renderBatch();
 
@@ -64,12 +68,12 @@ describe('BatchReview', () => {
       {
         month: '2026-01',
         receipts: [
-          makeReceipt({ id: 'r1', status: 'captured' }),
-          makeReceipt({ id: 'r2', status: 'captured' }),
+          makeReceipt({ id: 'r1', status: 'needsAttention' }),
+          makeReceipt({ id: 'r2', status: 'needsAttention' }),
         ],
       },
     ]);
-    api.getReceipt.mockImplementation(async (id: string) => makeReceipt({ id, status: 'captured' }));
+    api.getReceipt.mockImplementation(async (id: string) => makeReceipt({ id, status: 'needsAttention' }));
     renderBatch();
 
     await waitFor(() => expect(screen.getByRole('button', { name: /previous/i })).toBeDisabled());
@@ -80,12 +84,12 @@ describe('BatchReview', () => {
       {
         month: '2026-01',
         receipts: [
-          makeReceipt({ id: 'r1', status: 'captured' }),
-          makeReceipt({ id: 'r2', status: 'captured' }),
+          makeReceipt({ id: 'r1', status: 'needsAttention' }),
+          makeReceipt({ id: 'r2', status: 'needsAttention' }),
         ],
       },
     ]);
-    api.getReceipt.mockImplementation(async (id: string) => makeReceipt({ id, status: 'captured' }));
+    api.getReceipt.mockImplementation(async (id: string) => makeReceipt({ id, status: 'needsAttention' }));
     renderBatch();
 
     await waitFor(() => expect(screen.getByText(/1 of 2/i)).toBeInTheDocument());
@@ -95,9 +99,9 @@ describe('BatchReview', () => {
 
   it('shows "All caught up" after skipping past the last item', async () => {
     api.listReceipts.mockResolvedValue([
-      { month: '2026-01', receipts: [makeReceipt({ id: 'r1', status: 'captured' })] },
+      { month: '2026-01', receipts: [makeReceipt({ id: 'r1', status: 'needsAttention' })] },
     ]);
-    api.getReceipt.mockResolvedValue(makeReceipt({ id: 'r1', status: 'captured' }));
+    api.getReceipt.mockResolvedValue(makeReceipt({ id: 'r1', status: 'needsAttention' }));
     renderBatch();
 
     await waitFor(() => expect(screen.getByText(/1 of 1/i)).toBeInTheDocument());
@@ -105,13 +109,13 @@ describe('BatchReview', () => {
     await waitFor(() => expect(screen.getByText(/all caught up/i)).toBeInTheDocument());
   });
 
-  it('approving the current receipt advances to the next one', async () => {
+  it('saving the current receipt advances to the next one', async () => {
     api.listReceipts.mockResolvedValue([
       {
         month: '2026-01',
         receipts: [
-          makeReceipt({ id: 'r1', status: 'extracted', vendor: 'Costco', total_amount: 10, receipt_date: '2026-06-01T00:00:00.000Z' }),
-          makeReceipt({ id: 'r2', status: 'extracted', vendor: 'Staples' }),
+          makeReceipt({ id: 'r1', status: 'extracted', confidence: 'low', vendor: 'Costco', total_amount: 10, receipt_date: '2026-06-01T00:00:00.000Z' }),
+          makeReceipt({ id: 'r2', status: 'extracted', confidence: 'medium', vendor: 'Staples' }),
         ],
       },
     ]);
@@ -122,7 +126,7 @@ describe('BatchReview', () => {
     renderBatch();
 
     await waitFor(() => expect(screen.getByText(/1 of 2/i)).toBeInTheDocument());
-    await userEvent.click(screen.getByRole('button', { name: /approve & upload/i }));
+    await userEvent.click(screen.getByRole('button', { name: /save as checked/i }));
 
     await waitFor(() => expect(screen.getByText(/2 of 2/i)).toBeInTheDocument());
   });

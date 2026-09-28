@@ -2,12 +2,12 @@ import { useEffect, useState, useCallback, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   listReceipts,
-  getQueueStatus,
+  getReceiptSummary,
   deleteReceipt,
   getHealthStatus,
   getSettings,
   type ReceiptGroup,
-  type QueueStatus,
+  type ReceiptSummary,
   type HealthStatus,
   type Settings,
 } from '../shared/api';
@@ -15,7 +15,8 @@ import { AddToHomeScreenTip } from '../shared/AddToHomeScreenTip';
 import { SetupChecklist } from '../receipts/SetupChecklist';
 import { CaptureButton } from '../receipts/CaptureButton';
 import { ReceiptRow } from '../receipts/ReceiptRow';
-import { UploadStatusBar } from '../receipts/UploadStatusBar';
+import { ReceiptSummaryBar } from '../receipts/ReceiptSummaryBar';
+import { needsCheck } from '../receipts/receipt-status';
 import { useToast } from '../shared/Toast';
 import { Screen } from '../ui/Screen';
 import { PageHeader } from '../ui/PageHeader';
@@ -27,9 +28,12 @@ import { ConfirmDialog } from '../ui/Dialog';
 import { Icon } from '../ui/Icon';
 import { formatMonthFolder } from '../shared/format';
 
+/** How often to refresh while a just-uploaded receipt is still being read. */
+export const READING_POLL_MS = 3000;
+
 export function ReceiptList() {
   const [groups, setGroups] = useState<ReceiptGroup[]>([]);
-  const [queue, setQueue] = useState<QueueStatus | null>(null);
+  const [summary, setSummary] = useState<ReceiptSummary | null>(null);
   const [health, setHealth] = useState<HealthStatus | null>(null);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [search, setSearch] = useState('');
@@ -41,12 +45,12 @@ export function ReceiptList() {
 
   const refresh = useCallback(async () => {
     try {
-      const [receipts, status] = await Promise.all([
+      const [receipts, counts] = await Promise.all([
         listReceipts(search ? { search } : undefined),
-        getQueueStatus(),
+        getReceiptSummary(),
       ]);
       setGroups(receipts);
-      setQueue(status);
+      setSummary(counts);
     } catch {
       // swallow — will show empty
     } finally {
@@ -57,6 +61,15 @@ export function ReceiptList() {
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  // Uploads are read in the background, so keep refreshing until the
+  // fields land. Not while there's no Claude key — they'd never finish.
+  const reading = (summary?.processing ?? 0) > 0 && settings?.hasClaudeKey !== false;
+  useEffect(() => {
+    if (!reading) return;
+    const t = setInterval(refresh, READING_POLL_MS);
+    return () => clearInterval(t);
+  }, [reading, refresh]);
 
   useEffect(() => {
     getHealthStatus().then(setHealth).catch(() => {});
@@ -78,10 +91,7 @@ export function ReceiptList() {
   };
 
   const totalReceipts = groups.reduce((n, g) => n + g.receipts.length, 0);
-  const reviewableCount = groups.reduce(
-    (n, g) => n + g.receipts.filter((r) => r.status === 'captured' || r.status === 'extracted').length,
-    0,
-  );
+  const toCheckCount = groups.reduce((n, g) => n + g.receipts.filter(needsCheck).length, 0);
 
   const alerts: ReactNode[] = [];
   if (settings?.demoMode) {
@@ -95,6 +105,14 @@ export function ReceiptList() {
       </Notice>,
     );
   }
+  if (settings && !settings.hasClaudeKey && (summary?.processing ?? 0) > 0) {
+    alerts.push(
+      <Notice key="no-claude" tone="warning">
+        Add your Claude API key in Settings and new receipts will be read automatically. Until then
+        you can fill them in by hand.
+      </Notice>,
+    );
+  }
   if (health?.claudeConfigured && health.claudeHealthy === false) {
     alerts.push(
       <Notice key="claude" tone="danger">
@@ -105,7 +123,7 @@ export function ReceiptList() {
   if (health?.waveConfigured && health.waveHealthy === false) {
     alerts.push(
       <Notice key="wave" tone="danger">
-        Wave connection has expired — uploads are paused. Reconnect in Settings.
+        Wave connection has expired — exam invoices can't be sent. Reconnect in Settings.
       </Notice>,
     );
   }
@@ -137,16 +155,16 @@ export function ReceiptList() {
 
       <SetupChecklist settings={settings} />
 
-      {queue && <UploadStatusBar queue={queue} />}
+      {summary && <ReceiptSummaryBar summary={summary} />}
 
-      {reviewableCount > 1 && (
+      {toCheckCount > 1 && (
         <Button
           variant="secondary"
           block
           className="vp-mb-4"
           onClick={() => navigate('/review-batch')}
         >
-          Review All ({reviewableCount})
+          Check uncertain receipts ({toCheckCount})
         </Button>
       )}
 

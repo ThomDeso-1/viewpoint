@@ -4,7 +4,6 @@
  *
  *   transport   GraphQL client + `WaveAPIError` taxonomy
  *   reference   businesses, accounts, sales taxes, products (read-only)
- *   expenses    createExpenseTransaction (receipt upload queue)
  *   customers   find / create (before an invoice)
  *   invoices    draft / approve / send (behind the approval gate)
  *
@@ -13,6 +12,5 @@
 
 export * from './transport.js';
 export * from './reference.js';
-export * from './expenses.js';
 export * from './customers.js';
 export * from './invoices.js';

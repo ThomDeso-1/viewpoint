@@ -177,14 +177,21 @@
 .vp-review-image {
   border-radius: var(--radius-md);
   overflow: hidden;
-  margin-bottom: var(--space-4);
+  margin-bottom: var(--space-2);
   background: var(--surface-2);
   border: 1px solid var(--hairline);
   max-height: 240px;
   display: flex;
   justify-content: center;
 }
+.vp-review-image a { display: flex; cursor: zoom-in; }
 .vp-review-image img { max-height: 240px; object-fit: contain; }
+.vp-review-image-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
 
 .vp-review-extracting {
   display: flex;

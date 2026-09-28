@@ -11,8 +11,6 @@ const CREDENTIAL_ENV_KEYS = [
   'WAVE_ACCESS_TOKEN',
   'WAVE_BUSINESS_ID',
   'WAVE_BUSINESS_NAME',
-  'WAVE_EXPENSE_ACCOUNT_ID',
-  'WAVE_ANCHOR_ACCOUNT_ID',
   'WAVE_SALES_TAX_ID',
   // Generated on first use rather than pasted in. Without clearing it,
   // the first test to trigger generation leaks its key into every later

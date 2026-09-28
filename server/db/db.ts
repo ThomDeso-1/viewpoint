@@ -116,21 +116,23 @@ export interface ReceiptRow {
   tax_amount: number | null;
   currency: string;
   extracted_json: string | null;
+  /** Historical only — set on receipts posted before the Wave queue was removed (migration 010). */
   wave_txn_id: string | null;
   last_error: string | null;
   retry_count: number;
   image_hash: string | null;
+  /** Claude's 'high' | 'medium' | 'low'; null until extracted. */
+  confidence: string | null;
   created_at: string;
   updated_at: string;
 }
 
-export type ReceiptStatus =
-  | 'captured'
-  | 'extracted'
-  | 'reviewed'
-  | 'uploaded'
-  | 'needsAttention'
-  | 'failed';
+/**
+ * captured → extracted → reviewed, or captured → needsAttention when the
+ * image can't be read. `reviewed` is "operator checked it", not a gate —
+ * nothing downstream waits on it (migration 010).
+ */
+export type ReceiptStatus = 'captured' | 'extracted' | 'reviewed' | 'needsAttention';
 
 // ── Config helpers ──
 

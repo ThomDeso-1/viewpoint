@@ -21,8 +21,6 @@ function settings(overrides: Partial<Settings> = {}): Settings {
     waveTokenPreview: null,
     waveBusinessId: '',
     waveBusinessName: '',
-    waveExpenseAccountId: '',
-    waveAnchorAccountId: '',
     waveSalesTaxId: '',
     isOnboarded: true,
     microsoftConnected: false,

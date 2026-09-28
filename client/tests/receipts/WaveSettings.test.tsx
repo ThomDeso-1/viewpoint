@@ -19,8 +19,6 @@ const baseSettings: SettingsData = {
   waveTokenPreview: null,
   waveBusinessId: '',
   waveBusinessName: '',
-  waveExpenseAccountId: '',
-  waveAnchorAccountId: '',
   waveSalesTaxId: '',
   isOnboarded: true,
   microsoftConnected: false,
@@ -37,22 +35,19 @@ function renderPanel(settings: SettingsData | null, onSaved = vi.fn()) {
 
 /**
  * Spec: a user who skipped onboarding must be able to connect Wave from
- * Settings — no hand-editing `.env`. Same token → business → accounts
- * flow the wizard runs.
+ * Settings — no hand-editing `.env`. Token → business → sales tax (for
+ * exam invoices; the expense/anchor account pickers went with the
+ * receipt upload queue).
  */
 describe('WaveSettings', () => {
-  it('runs token → business → accounts and saves without touching .env', async () => {
+  it('runs token → business → sales tax and saves without touching .env', async () => {
     api.validateWaveToken.mockResolvedValue({
       valid: true,
       businesses: [{ id: 'biz-1', name: 'Acme Co', isPersonal: false }],
     });
     api.saveWaveConnection.mockResolvedValue({ success: true });
-    api.getWaveAccounts.mockResolvedValue({
-      expense: [{ id: 'exp-1', name: 'Office Supplies' }],
-      anchor: [{ id: 'anc-1', name: 'Chequing' }],
-    });
-    api.getWaveTaxes.mockResolvedValue([]);
-    api.saveWaveAccounts.mockResolvedValue({ success: true });
+    api.getWaveTaxes.mockResolvedValue([{ id: 'tax-hst', name: 'HST', rate: 0.13 }]);
+    api.saveWaveSalesTax.mockResolvedValue({ success: true });
     const onSaved = renderPanel(baseSettings);
 
     await userEvent.click(screen.getByRole('button', { name: /connect wave/i }));
@@ -61,16 +56,11 @@ describe('WaveSettings', () => {
 
     await userEvent.click(await screen.findByRole('button', { name: /acme co/i }));
 
-    // Single-option account lists are pre-selected by the flow.
-    await userEvent.click(await screen.findByRole('button', { name: /^save$/i }));
+    expect(screen.queryByLabelText(/expense account/i)).not.toBeInTheDocument();
+    await userEvent.selectOptions(await screen.findByLabelText(/sales tax/i), 'tax-hst');
+    await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
 
-    await waitFor(() =>
-      expect(api.saveWaveAccounts).toHaveBeenCalledWith({
-        expenseAccountId: 'exp-1',
-        anchorAccountId: 'anc-1',
-        salesTaxId: '',
-      }),
-    );
+    await waitFor(() => expect(api.saveWaveSalesTax).toHaveBeenCalledWith('tax-hst'));
     expect(api.saveWaveConnection).toHaveBeenCalledWith({
       token: 'wave-tok',
       businessId: 'biz-1',

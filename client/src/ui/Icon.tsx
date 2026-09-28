@@ -25,6 +25,7 @@ export type IconName =
   | 'user'
   | 'users'
   | 'external'
+  | 'download'
   | 'copy'
   | 'alert'
   | 'info'
@@ -42,6 +43,7 @@ const PATHS: Record<IconName, string> = {
   close: 'M6 6l12 12M18 6L6 18',
   check: 'M4 12.5l5 5L20 6',
   circle: 'M12 21a9 9 0 100-18 9 9 0 000 18z',
+  download: 'M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3',
   trash: 'M3 6h18M8 6V4a1 1 0 011-1h6a1 1 0 011 1v2M6 6l1 14a2 2 0 002 2h6a2 2 0 002-2l1-14M10 11v6M14 11v6',
   camera:
     'M3 8a2 2 0 012-2h2.6l1.2-2h6.4L16.6 6H19a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V8zM12 17a4 4 0 100-8 4 4 0 000 8z',

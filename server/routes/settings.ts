@@ -4,7 +4,6 @@ import { validateApiKey } from '../integrations/claude.js';
 import { updateEnvConfig } from '../platform/env-config.js';
 import {
   validateToken,
-  fetchExpenseAndAnchorAccounts,
   fetchSalesTaxes,
   fetchIncomeAccounts,
   fetchProducts,
@@ -73,8 +72,6 @@ export function settingsRoutes(): Router {
       waveAuthMode: authMode(),
       waveBusinessId: process.env.WAVE_BUSINESS_ID || '',
       waveBusinessName: process.env.WAVE_BUSINESS_NAME || '',
-      waveExpenseAccountId: process.env.WAVE_EXPENSE_ACCOUNT_ID || '',
-      waveAnchorAccountId: process.env.WAVE_ANCHOR_ACCOUNT_ID || '',
       waveSalesTaxId: process.env.WAVE_SALES_TAX_ID || '',
       isOnboarded: getConfig('onboarded') === 'true',
       demoMode: isDemoMode(),
@@ -112,23 +109,6 @@ export function settingsRoutes(): Router {
       res.json({ valid: true, businesses });
     } catch (err: any) {
       res.json({ valid: false, error: err.message });
-    }
-  });
-
-  // ── GET /api/settings/wave/accounts — Fetch expense & anchor accounts ──
-  router.get('/wave/accounts', async (_req: Request, res: Response): Promise<void> => {
-    const businessId = process.env.WAVE_BUSINESS_ID;
-    if (!isWaveConfigured() || !businessId) {
-      res.status(400).json({ error: 'Wave is not configured.' });
-      return;
-    }
-
-    try {
-      const token = await getWaveToken();
-      const { expense, anchor } = await fetchExpenseAndAnchorAccounts(businessId, token);
-      res.json({ expense, anchor });
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
     }
   });
 
@@ -194,24 +174,17 @@ export function settingsRoutes(): Router {
     res.json({ success: true });
   });
 
-  // ── POST /api/settings/wave-accounts — Save expense/anchor accounts + sales tax ──
-  router.post('/wave-accounts', (req: Request, res: Response): void => {
-    const { expenseAccountId, anchorAccountId, salesTaxId } = req.body;
-    if (
-      !expenseAccountId ||
-      typeof expenseAccountId !== 'string' ||
-      !anchorAccountId ||
-      typeof anchorAccountId !== 'string'
-    ) {
-      res.status(400).json({ error: 'Expense and anchor accounts are required.' });
+  // ── POST /api/settings/wave-sales-tax — Default sales tax for exam invoices ──
+  // (Was /wave-accounts, which also took the expense + "paid from"
+  // accounts for the receipt upload queue — removed with that queue.)
+  router.post('/wave-sales-tax', (req: Request, res: Response): void => {
+    const { salesTaxId } = req.body;
+    if (salesTaxId != null && typeof salesTaxId !== 'string') {
+      res.status(400).json({ error: 'salesTaxId must be a string.' });
       return;
     }
 
-    updateEnvConfig({
-      WAVE_EXPENSE_ACCOUNT_ID: expenseAccountId,
-      WAVE_ANCHOR_ACCOUNT_ID: anchorAccountId,
-      WAVE_SALES_TAX_ID: salesTaxId || '',
-    });
+    updateEnvConfig({ WAVE_SALES_TAX_ID: salesTaxId || '' });
     res.json({ success: true });
   });
 

@@ -67,9 +67,11 @@ export interface ReceiptRow {
   id: string;
   primary_image: string;
   additional_images: string;
+  /** The date printed on the receipt once read; the upload time until then. */
   receipt_date: string;
   capture_date: string;
   month_folder: string;
+  /** captured (being read) → extracted → reviewed (checked); needsAttention = couldn't read. */
   status: string;
   vendor: string | null;
   summary: string | null;
@@ -81,6 +83,8 @@ export interface ReceiptRow {
   last_error: string | null;
   retry_count: number;
   image_hash: string | null;
+  /** Claude's 'high' | 'medium' | 'low'; null until read. */
+  confidence: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -90,11 +94,13 @@ export interface ReceiptGroup {
   receipts: ReceiptRow[];
 }
 
-export interface QueueStatus {
-  uploaded: number;
-  pending: number;
-  failed: number;
-  captured: number;
+export interface ReceiptSummary {
+  /** Uploaded, still being read by Claude. */
+  processing: number;
+  /** Read at medium/low confidence and not yet checked. */
+  toCheck: number;
+  /** Claude couldn't read them. */
+  unreadable: number;
 }
 
 export function listReceipts(params?: { search?: string; status?: string }): Promise<ReceiptGroup[]> {
@@ -119,8 +125,20 @@ export function uploadImages(files: File[]): Promise<ReceiptRow[]> {
   return request('/receipts', { method: 'POST', body: form });
 }
 
-export function getQueueStatus(): Promise<QueueStatus> {
-  return request('/receipts/queue/status');
+export function getReceiptSummary(): Promise<ReceiptSummary> {
+  return request('/receipts/summary');
+}
+
+/**
+ * Stable link to a receipt's photo, by id — survives the file being
+ * re-filed on disk. `download` saves it under its on-disk name.
+ */
+export function receiptImageUrl(id: string, opts: { download?: boolean; page?: number } = {}): string {
+  const qs = new URLSearchParams();
+  if (opts.page && opts.page > 1) qs.set('page', String(opts.page));
+  if (opts.download) qs.set('download', '1');
+  const q = qs.toString();
+  return `/api/receipts/${id}/image${q ? '?' + q : ''}`;
 }
 
 // ── Settings ──
@@ -134,8 +152,6 @@ export interface Settings {
   waveTokenPreview: string | null;
   waveBusinessId: string;
   waveBusinessName: string;
-  waveExpenseAccountId: string;
-  waveAnchorAccountId: string;
   waveSalesTaxId: string;
   isOnboarded: boolean;
   /** Whether the Outlook / Microsoft 365 connection (mail + calendar) is set up. */
@@ -178,16 +194,6 @@ export function checkDuplicates(id: string): Promise<{ warnings: string[] }> {
   return request(`/receipts/${id}/duplicates`);
 }
 
-// ── Retry ──
-
-export function retryReceipt(id: string): Promise<{ success: boolean }> {
-  return request(`/receipts/${id}/retry`, { method: 'POST' });
-}
-
-export function retryAllFailed(): Promise<{ success: boolean }> {
-  return request('/receipts/retry-all', { method: 'POST' });
-}
-
 // ── Settings validation ──
 
 export function validateClaudeKey(apiKey: string): Promise<{ valid: boolean; error?: string }> {
@@ -204,13 +210,6 @@ export function validateWaveToken(
     method: 'POST',
     body: JSON.stringify({ token }),
   });
-}
-
-export function getWaveAccounts(): Promise<{
-  expense: { id: string; name: string }[];
-  anchor: { id: string; name: string }[];
-}> {
-  return request('/settings/wave/accounts');
 }
 
 export function getWaveTaxes(): Promise<{ id: string; name: string; rate: number }[]> {
@@ -256,14 +255,11 @@ export function saveWaveConnection(data: {
   });
 }
 
-export function saveWaveAccounts(data: {
-  expenseAccountId: string;
-  anchorAccountId: string;
-  salesTaxId?: string;
-}): Promise<{ success: boolean }> {
-  return request('/settings/wave-accounts', {
+/** Default sales tax applied to exam invoice line items ('' = none). */
+export function saveWaveSalesTax(salesTaxId: string): Promise<{ success: boolean }> {
+  return request('/settings/wave-sales-tax', {
     method: 'POST',
-    body: JSON.stringify(data),
+    body: JSON.stringify({ salesTaxId }),
   });
 }
 

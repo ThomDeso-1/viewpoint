@@ -1,8 +1,10 @@
 # Viewpoint Receipts
 
-Photograph business receipts, extract vendor/date/total via Claude vision,
-review and correct the extraction, and upload the expense to Wave
-accounting. Self-hosted, single-user, installable as a PWA on iPhone.
+Photograph business receipts; Claude vision reads vendor/date/total
+straight away with a confidence rating, and the photo is kept on disk
+filed by receipt date and vendor. Also runs the exam-booking workflow
+(Wave invoices, Outlook reminders). Self-hosted, single-user, installable
+as a PWA on iPhone.
 
 - **Just want to run it?** → [`docs/GETTING-STARTED.md`](docs/GETTING-STARTED.md)
   (macOS `.pkg` installer + Tailscale, non-technical, ~15 minutes).
@@ -34,4 +36,4 @@ npm test                 # server tests (vitest + supertest)
 
 React + TypeScript (Vite, PWA) · Node.js + Express + TypeScript ·
 SQLite (`better-sqlite3`) · Claude API (extraction) · Wave GraphQL API
-(expense upload).
+(exam invoices).

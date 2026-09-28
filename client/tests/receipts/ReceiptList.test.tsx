@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
-import { ReceiptList } from '../../src/receipts/ReceiptList';
+import { ReceiptList, READING_POLL_MS } from '../../src/receipts/ReceiptList';
 import { ToastProvider } from '../../src/shared/Toast';
 import { makeReceipt } from '../helpers/fixtures';
 
@@ -12,7 +12,7 @@ import * as api from '../../src/shared/api';
 beforeEach(() => {
   for (const fn of Object.values(api)) fn.mockReset();
   api.listReceipts.mockResolvedValue([]);
-  api.getQueueStatus.mockResolvedValue({ uploaded: 0, pending: 0, failed: 0, captured: 0 });
+  api.getReceiptSummary.mockResolvedValue({ processing: 0, toCheck: 0, unreadable: 0 });
   api.getHealthStatus.mockResolvedValue({ claudeConfigured: false, claudeHealthy: null, waveConfigured: false, waveHealthy: null });
   // ReceiptList reads this for the demo-mode banner. Fully-connected so the
   // setup checklist stays hidden and doesn't clutter these assertions.
@@ -41,8 +41,11 @@ function renderList() {
  * "Health check banner", "Batch review queue"):
  *  - Empty state when there are no receipts.
  *  - Health banners for an invalid Claude key / expired Wave token.
- *  - "Review All (N)" only appears once there's more than one reviewable
- *    (captured/extracted) receipt.
+ *  - Receipts are read automatically on upload, so the list refreshes by
+ *    itself while any are still being read (not when there's no Claude
+ *    key — they'd never finish).
+ *  - "Check uncertain receipts (N)" only appears once more than one
+ *    receipt needs a look (unreadable, or read at medium/low confidence).
  *  - Deleting asks for confirmation first.
  */
 describe('ReceiptList', () => {
@@ -78,43 +81,64 @@ describe('ReceiptList', () => {
     await waitFor(() => expect(screen.getByText(/wave connection has expired/i)).toBeInTheDocument());
   });
 
-  it('hides "Review All" when there is only 1 reviewable receipt', async () => {
+  it('hides the batch check when only one receipt is uncertain', async () => {
     api.listReceipts.mockResolvedValue([
-      { month: '2026-01', receipts: [makeReceipt({ id: 'r1', status: 'captured' })] },
+      { month: '2026-01', receipts: [makeReceipt({ id: 'r1', status: 'extracted', vendor: 'A', confidence: 'low' })] },
     ]);
     renderList();
-    await waitFor(() => expect(screen.getByText('Unprocessed')).toBeInTheDocument());
-    expect(screen.queryByText(/review all/i)).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('A')).toBeInTheDocument());
+    expect(screen.queryByText(/check uncertain/i)).not.toBeInTheDocument();
   });
 
-  it('shows "Review All (N)" once more than one receipt needs review', async () => {
+  it('offers "Check uncertain receipts (N)" counting unreadable and medium/low confidence only', async () => {
     api.listReceipts.mockResolvedValue([
       {
         month: '2026-01',
         receipts: [
-          makeReceipt({ id: 'r1', status: 'captured' }),
-          makeReceipt({ id: 'r2', status: 'extracted' }),
+          makeReceipt({ id: 'r1', status: 'extracted', vendor: 'Low', confidence: 'low' }),
+          makeReceipt({ id: 'r2', status: 'extracted', vendor: 'Med', confidence: 'medium' }),
+          makeReceipt({ id: 'r3', status: 'needsAttention' }),
+          makeReceipt({ id: 'r4', status: 'extracted', vendor: 'High', confidence: 'high' }),
+          makeReceipt({ id: 'r5', status: 'reviewed', vendor: 'Checked', confidence: 'low' }),
+          makeReceipt({ id: 'r6', status: 'captured' }),
         ],
       },
     ]);
     renderList();
-    await waitFor(() => expect(screen.getByText(/review all \(2\)/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/check uncertain receipts \(3\)/i)).toBeInTheDocument());
   });
 
-  it('does not count uploaded/reviewed receipts toward the reviewable total', async () => {
-    api.listReceipts.mockResolvedValue([
-      {
-        month: '2026-01',
-        receipts: [
-          makeReceipt({ id: 'r1', status: 'captured' }),
-          makeReceipt({ id: 'r2', status: 'uploaded' }),
-          makeReceipt({ id: 'r3', status: 'reviewed' }),
-        ],
-      },
-    ]);
-    renderList();
-    await waitFor(() => expect(screen.getAllByText('Unprocessed')).toHaveLength(3));
-    expect(screen.queryByText(/review all/i)).not.toBeInTheDocument();
+  it('refreshes by itself while a receipt is still being read', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      api.getReceiptSummary.mockResolvedValue({ processing: 1, toCheck: 0, unreadable: 0 });
+      api.listReceipts.mockResolvedValue([{ month: '2026-01', receipts: [makeReceipt({ status: 'captured' })] }]);
+      renderList();
+      await waitFor(() => expect(screen.getByText('Reading receipt…')).toBeInTheDocument());
+      const before = api.listReceipts.mock.calls.length;
+
+      await vi.advanceTimersByTimeAsync(READING_POLL_MS + 50);
+      await waitFor(() => expect(api.listReceipts.mock.calls.length).toBeGreaterThan(before));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("doesn't poll, and says why, when there's no Claude key", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      api.getSettings.mockResolvedValue({ demoMode: false, hasClaudeKey: false, hasWaveToken: true, microsoftConnected: true } as any);
+      api.getReceiptSummary.mockResolvedValue({ processing: 1, toCheck: 0, unreadable: 0 });
+      api.listReceipts.mockResolvedValue([{ month: '2026-01', receipts: [makeReceipt({ status: 'captured' })] }]);
+      renderList();
+      await waitFor(() => expect(screen.getByText(/add your claude api key in settings and new receipts/i)).toBeInTheDocument());
+      const before = api.listReceipts.mock.calls.length;
+
+      await vi.advanceTimersByTimeAsync(READING_POLL_MS * 3);
+      expect(api.listReceipts.mock.calls.length).toBe(before);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('filters the list via the search box', async () => {

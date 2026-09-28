@@ -11,9 +11,9 @@ export function ReceiptReview() {
     <ReceiptReviewForm
       key={id}
       id={id}
-      headerTitle="Review Receipt"
+      headerTitle="Receipt"
       onBack={() => navigate(-1)}
-      onApproved={() => navigate('/', { replace: true })}
+      onSaved={() => navigate('/', { replace: true })}
     />
   );
 }

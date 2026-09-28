@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type TouchEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { listReceipts } from '../shared/api';
 import { ReceiptReviewForm } from '../receipts/ReceiptReviewForm';
+import { needsCheck } from '../receipts/receipt-status';
 import { Screen } from '../ui/Screen';
 import { Button } from '../ui/Button';
 import { EmptyState } from '../ui/EmptyState';
@@ -19,7 +20,7 @@ export function BatchReview() {
       .then((groups) => {
         const reviewable = groups
           .flatMap((g) => g.receipts)
-          .filter((r) => r.status === 'captured' || r.status === 'extracted')
+          .filter(needsCheck)
           .map((r) => r.id);
         setIds(reviewable);
       })
@@ -71,7 +72,7 @@ export function BatchReview() {
     return (
       <Screen width="read">
         <EmptyState icon="check" title="All caught up">
-          Every receipt has been reviewed.
+          Every uncertain receipt has been checked.
           <span className="vp-empty-action">
             <Button variant="primary" onClick={() => navigate('/', { replace: true })}>
               Back to Receipts
@@ -89,7 +90,7 @@ export function BatchReview() {
       <ReceiptReviewForm
         key={currentId}
         id={currentId}
-        headerTitle="Review Receipt"
+        headerTitle="Check Receipt"
         headerRight={
           <span className="vp-batch-progress">
             {index + 1} of {ids.length}
@@ -106,7 +107,7 @@ export function BatchReview() {
           </div>
         }
         onBack={() => navigate('/', { replace: true })}
-        onApproved={goNext}
+        onSaved={goNext}
       />
     </div>
   );

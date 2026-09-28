@@ -2,8 +2,7 @@ import { useState, type FormEvent } from 'react';
 import {
   validateWaveToken,
   saveWaveConnection,
-  saveWaveAccounts,
-  getWaveAccounts,
+  saveWaveSalesTax,
   getWaveTaxes,
   type Settings as SettingsData,
 } from '../shared/api';
@@ -25,18 +24,13 @@ interface WaveBusiness {
   isPersonal: boolean;
 }
 
-interface WaveAccount {
-  id: string;
-  name: string;
-}
-
 interface WaveTax {
   id: string;
   name: string;
   rate: number;
 }
 
-type Stage = 'idle' | 'token' | 'business' | 'accounts';
+type Stage = 'idle' | 'token' | 'business' | 'tax';
 
 /**
  * Wave Accounting panel for the Settings page.
@@ -51,11 +45,7 @@ export function WaveSettings({ settings, waveHealthy, onSaved }: Props) {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [businesses, setBusinesses] = useState<WaveBusiness[]>([]);
-  const [expenseAccounts, setExpenseAccounts] = useState<WaveAccount[]>([]);
-  const [anchorAccounts, setAnchorAccounts] = useState<WaveAccount[]>([]);
   const [taxes, setTaxes] = useState<WaveTax[]>([]);
-  const [expenseAccountId, setExpenseAccountId] = useState('');
-  const [anchorAccountId, setAnchorAccountId] = useState('');
   const [salesTaxId, setSalesTaxId] = useState('');
   const { showToast } = useToast();
 
@@ -64,11 +54,7 @@ export function WaveSettings({ settings, waveHealthy, onSaved }: Props) {
     setToken('');
     setError('');
     setBusinesses([]);
-    setExpenseAccounts([]);
-    setAnchorAccounts([]);
     setTaxes([]);
-    setExpenseAccountId('');
-    setAnchorAccountId('');
     setSalesTaxId('');
   };
 
@@ -102,31 +88,21 @@ export function WaveSettings({ settings, waveHealthy, onSaved }: Props) {
         businessId: business.id,
         businessName: business.name,
       });
-      const [accounts, taxList] = await Promise.all([getWaveAccounts(), getWaveTaxes()]);
-      setExpenseAccounts(accounts.expense);
-      setAnchorAccounts(accounts.anchor);
-      setTaxes(taxList);
-      if (accounts.expense.length === 1) setExpenseAccountId(accounts.expense[0].id);
-      if (accounts.anchor.length === 1) setAnchorAccountId(accounts.anchor[0].id);
-      setStage('accounts');
+      setTaxes(await getWaveTaxes());
+      setStage('tax');
     } catch (err) {
-      setError((err as Error).message || 'Could not load accounts for that business.');
+      setError((err as Error).message || 'Could not load sales taxes for that business.');
     } finally {
       setBusy(false);
     }
   };
 
-  const handleAccountsSubmit = async (e: FormEvent) => {
+  const handleTaxSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
-    if (!expenseAccountId || !anchorAccountId) {
-      setError('Choose an expense account and an anchor account.');
-      return;
-    }
-
     setBusy(true);
     try {
-      await saveWaveAccounts({ expenseAccountId, anchorAccountId, salesTaxId });
+      await saveWaveSalesTax(salesTaxId);
       showToast('Wave connected.', 'success');
       reset();
       onSaved();
@@ -183,7 +159,7 @@ export function WaveSettings({ settings, waveHealthy, onSaved }: Props) {
             help={
               <>
                 Create a full-access token at <code>developer.waveapps.com</code> under Manage
-                Applications. Used to upload approved receipts as expenses.
+                Applications. Used to send exam invoices.
               </>
             }
           />
@@ -200,7 +176,7 @@ export function WaveSettings({ settings, waveHealthy, onSaved }: Props) {
 
       {stage === 'business' && (
         <div className="vp-subpanel-form">
-          <p className="vp-subpanel-lede">Which Wave business should receipts upload to?</p>
+          <p className="vp-subpanel-lede">Which Wave business should invoices come from?</p>
           {error && <Notice tone="danger">{error}</Notice>}
           <div className="vp-choice-list">
             {businesses.map((b) => (
@@ -222,39 +198,9 @@ export function WaveSettings({ settings, waveHealthy, onSaved }: Props) {
         </div>
       )}
 
-      {stage === 'accounts' && (
-        <form onSubmit={handleAccountsSubmit} className="vp-subpanel-form">
-          <Field label="Expense account" htmlFor="wave-expense-account">
-            <Select
-              id="wave-expense-account"
-              value={expenseAccountId}
-              onChange={(e) => setExpenseAccountId(e.target.value)}
-            >
-              <option value="">Select…</option>
-              {expenseAccounts.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-            </Select>
-          </Field>
-
-          <Field label="Paid from" htmlFor="wave-anchor-account">
-            <Select
-              id="wave-anchor-account"
-              value={anchorAccountId}
-              onChange={(e) => setAnchorAccountId(e.target.value)}
-            >
-              <option value="">Select…</option>
-              {anchorAccounts.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-            </Select>
-          </Field>
-
-          <Field label="Sales tax (optional)" htmlFor="wave-sales-tax">
+      {stage === 'tax' && (
+        <form onSubmit={handleTaxSubmit} className="vp-subpanel-form">
+          <Field label="Sales tax on invoices (optional)" htmlFor="wave-sales-tax">
             <Select
               id="wave-sales-tax"
               value={salesTaxId}
@@ -271,12 +217,7 @@ export function WaveSettings({ settings, waveHealthy, onSaved }: Props) {
 
           {error && <Notice tone="danger">{error}</Notice>}
           <div className="vp-form-actions">
-            <Button
-              type="submit"
-              variant="primary"
-              loading={busy}
-              disabled={!expenseAccountId || !anchorAccountId}
-            >
+            <Button type="submit" variant="primary" loading={busy}>
               Save
             </Button>
             <Button type="button" variant="secondary" onClick={() => setStage('business')} disabled={busy}>

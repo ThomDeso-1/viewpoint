@@ -33,7 +33,7 @@ type WaveStage = 'token' | 'business';
  * mode.
  *
  * Deliberately short: it only captures what's needed to start working.
- * The finer Wave setup (expense/anchor accounts, sales tax), the full
+ * The finer Wave setup (invoice account, sales tax), the full
  * Microsoft app-registration form, and OHIP ministry credentials are done
  * later in Settings, which has the full forms — asking for them here was
  * the biggest drop-off point.
@@ -244,7 +244,7 @@ export function Onboarding({ onComplete, ohipEnabled = false }: Props) {
             <p className="wizard-steps">Step 3 of {totalSteps}</p>
             <h1>Connect Wave</h1>
             <p className="auth-subtitle">
-              Paste your Wave access token to upload approved receipts as expenses.
+              Paste your Wave access token to send exam invoices.
             </p>
 
             <form onSubmit={handleWaveTokenSubmit}>
@@ -276,7 +276,7 @@ export function Onboarding({ onComplete, ohipEnabled = false }: Props) {
           <>
             <p className="wizard-steps">Step 3 of {totalSteps}</p>
             <h1>Choose a Business</h1>
-            <p className="auth-subtitle">Which Wave business should receipts upload to?</p>
+            <p className="auth-subtitle">Which Wave business should invoices come from?</p>
 
             {waveError && <p className="auth-error">{waveError}</p>}
             <div className="wizard-list">
@@ -293,7 +293,7 @@ export function Onboarding({ onComplete, ohipEnabled = false }: Props) {
               ))}
             </div>
             <p className="settings-help">
-              You'll pick which accounts expenses post to in Settings, once you're in.
+              You'll pick the invoice account and sales tax in Settings, once you're in.
             </p>
             <button
               className="wizard-back"

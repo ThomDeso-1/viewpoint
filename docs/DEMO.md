@@ -32,7 +32,7 @@ you can watch the workflow move.
 | Real service | Replaced by |
 |---|---|
 | Anthropic (Claude) | Canned extractions — receipts and patient files |
-| Wave | In-memory customers, invoices and expenses |
+| Wave | In-memory customers and invoices |
 | Patient files folder | A seeded `patient-files/upcoming-exams.csv` with three patients and a note (the app also reads Word/PDF/etc.) |
 | Gmail | Send only — reminder mail is captured, not delivered |
 | Google Calendar | Three appointments matching those patients |
@@ -72,9 +72,10 @@ upcoming and always a reminder due.
 ## A five-minute tour
 
 1. **Open the app** → you land on Receipts. Three are waiting.
-2. **Tap one** → it "extracts" instantly. Fix anything, tap
-   **Approve & Upload**. Within a minute it shows as uploaded — and
-   appears under *Receipt expenses* on http://localhost:4000.
+2. **Watch them fill in** → each is "read" within a few seconds, landing
+   under the month printed on it with a High / Medium / Low confidence
+   badge (logged under *Receipts read* on http://localhost:4000). Tap an
+   uncertain one, fix anything, tap **Save as Checked**.
 3. **Tap "Exam requests"** in the top-right nav → the **exam request inbox**.
    Tap **Scan folder** (under the heading) — the seeded `upcoming-exams.csv` is read and three
    requests appear, already drafted: patient matched, appointment linked,

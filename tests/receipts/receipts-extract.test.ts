@@ -8,8 +8,10 @@ import { installFetchMock, jsonResponse, networkFailure } from '../helpers/fetch
  *  - Without a configured Claude key, extraction is refused with a
  *    message telling the user to add one in Settings.
  *  - On success, the receipt moves from captured -> extracted and its
- *    vendor/summary/total/tax/currency/date are populated from Claude's
- *    structured response.
+ *    vendor/summary/total/tax/currency/date and confidence are populated
+ *    from Claude's structured response. (Normally the extract queue does
+ *    this on upload — extract-queue.test.ts; this route is the manual
+ *    "Try again".)
  *  - Claude error responses map to specific, user-meaningful error codes
  *    (invalid key, rate limited, insufficient credit, etc.)
  */
@@ -71,6 +73,8 @@ describe('receipt extraction (Claude API)', () => {
     expect(res.body.tax_amount).toBeCloseTo(0.72);
     expect(res.body.currency).toBe('CAD');
     expect(res.body.receipt_date.slice(0, 10)).toBe('2024-05-01');
+    expect(res.body.confidence).toBe('high');
+    expect(res.body.month_folder).toBe('2024-05');
   });
 
   it('sums multiple tax lines (e.g. GST + PST) into tax_amount', async () => {

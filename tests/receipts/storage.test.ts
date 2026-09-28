@@ -8,7 +8,9 @@ import { StorageService } from '../../server/receipts/storage.js';
  * Spec (CONVERSION-PLAN.md "Image storage", "Sidecar JSON files"):
  *  - Images live in `Receipts/YYYY-MM/` monthly folders.
  *  - Each image has a sidecar `.json` file with the same basename.
- *  - Moving a receipt to a new month moves both the image and its sidecar.
+ *  - Re-filing a receipt (once its date/vendor are known) moves both the
+ *    image and its sidecar to `<YYYY-MM>/<YYYY-MM-DD>_<vendor>_<id>.<ext>`,
+ *    keeping the original random id so names can't collide.
  *  - Deleting a receipt's files cleans up now-empty month folders.
  *  - A saved file's extension matches its real mime type (not just a
  *    hardcoded ".jpg"), because extraction later infers the Claude vision
@@ -132,35 +134,48 @@ describe('StorageService', () => {
     expect(storage.loadSidecar('2026-01/nope.jpg')).toBeNull();
   });
 
-  it('moving a receipt to a new month relocates both image and sidecar', () => {
-    const oldDate = new Date('2026-01-10T12:00:00Z');
-    const { primaryPath } = storage.saveReceiptImages([img('img')], oldDate);
+  it('re-filing moves image and sidecar under the receipt date and vendor', () => {
+    const { primaryPath } = storage.saveReceiptImages([img('img')], new Date('2026-01-10T12:00:00Z'));
     storage.saveSidecar(primaryPath, { status: 'captured' });
+    const id = primaryPath.match(/_([0-9a-f]{8})\.jpg$/)![1];
 
-    const newDate = new Date('2026-07-20T12:00:00Z');
-    const newPath = storage.moveReceiptFileSet(primaryPath, newDate);
+    const newPath = storage.refileReceipt(primaryPath, '2026-07-20', 'Staples Business Depot #123');
 
-    expect(newPath.startsWith('2026-07/')).toBe(true);
+    expect(newPath).toBe(`2026-07/2026-07-20_staples-business-depot-123_${id}.jpg`);
     expect(fs.existsSync(storage.absolutePath(primaryPath))).toBe(false);
     expect(fs.existsSync(storage.absolutePath(newPath))).toBe(true);
     expect(storage.loadSidecar(newPath)).toEqual({ status: 'captured' });
   });
 
-  it('moving to the same month is a no-op that keeps the same path', () => {
-    const date = new Date('2026-01-10T12:00:00Z');
-    const { primaryPath } = storage.saveReceiptImages([img('img')], date);
-    const newPath = storage.moveReceiptImage(primaryPath, new Date('2026-01-25T00:00:00Z'));
-    expect(newPath).toBe(primaryPath);
-    expect(fs.existsSync(storage.absolutePath(primaryPath))).toBe(true);
+  it('files the 1st of a month in that month, whatever the local timezone', () => {
+    const { primaryPath } = storage.saveReceiptImages([img('img')], new Date('2026-01-10T12:00:00Z'));
+    expect(storage.refileReceipt(primaryPath, '2026-08-01', 'X').startsWith('2026-08/2026-08-01_')).toBe(true);
   });
 
-  it('cleans up the old month folder once it is empty after a move', () => {
-    const oldDate = new Date('2026-02-01T12:00:00Z');
-    const { primaryPath } = storage.saveReceiptImages([img('img')], oldDate);
-    const oldFolder = path.dirname(storage.absolutePath(primaryPath));
-    expect(fs.existsSync(oldFolder)).toBe(true);
+  it('keeps the page suffix of a multi-page receipt', () => {
+    const { additionalPaths } = storage.saveReceiptImages([img('front'), img('back')], new Date('2026-01-10T12:00:00Z'));
+    expect(storage.refileReceipt(additionalPaths[0], '2026-03-03', 'Costco')).toMatch(
+      /^2026-03\/2026-03-03_costco_[0-9a-f]{8}_p2\.jpg$/,
+    );
+  });
 
-    storage.moveReceiptImage(primaryPath, new Date('2026-08-01T12:00:00Z'));
+  it('omits the vendor part when there is no usable vendor name', () => {
+    const { primaryPath } = storage.saveReceiptImages([img('img')], new Date('2026-01-10T12:00:00Z'));
+    expect(storage.refileReceipt(primaryPath, '2026-03-03', '  ***  ')).toMatch(/^2026-03\/2026-03-03_[0-9a-f]{8}\.jpg$/);
+  });
+
+  it('re-filing to the same name is a no-op, and is stable across repeats', () => {
+    const { primaryPath } = storage.saveReceiptImages([img('img')], new Date('2026-01-10T12:00:00Z'));
+    const once = storage.refileReceipt(primaryPath, '2026-01-25', 'Bell');
+    expect(storage.refileReceipt(once, '2026-01-25', 'Bell')).toBe(once);
+    expect(fs.existsSync(storage.absolutePath(once))).toBe(true);
+  });
+
+  it('cleans up the old month folder once it is empty after a re-file', () => {
+    const { primaryPath } = storage.saveReceiptImages([img('img')], new Date('2026-02-01T12:00:00Z'));
+    const oldFolder = path.dirname(storage.absolutePath(primaryPath));
+
+    storage.refileReceipt(primaryPath, '2026-08-01', 'X');
     expect(fs.existsSync(oldFolder)).toBe(false);
   });
 
@@ -170,7 +185,7 @@ describe('StorageService', () => {
     const b = storage.saveReceiptImages([img('img-b')], oldDate);
     const oldFolder = path.dirname(storage.absolutePath(a.primaryPath));
 
-    storage.moveReceiptImage(a.primaryPath, new Date('2026-08-01T12:00:00Z'));
+    storage.refileReceipt(a.primaryPath, '2026-08-01', 'X');
     expect(fs.existsSync(oldFolder)).toBe(true);
     expect(fs.existsSync(storage.absolutePath(b.primaryPath))).toBe(true);
   });

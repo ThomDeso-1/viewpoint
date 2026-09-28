@@ -1,11 +1,13 @@
 import { Router, Request, Response } from 'express';
 import multer from 'multer';
 import { v4 as uuid } from 'uuid';
+import fs from 'fs';
 import path from 'path';
-import { getDb, type ReceiptRow } from '../db/db.js';
+import { getDb, type ReceiptRow, type ReceiptStatus } from '../db/db.js';
 import { StorageService } from '../receipts/storage.js';
-import { extractReceipt, ClaudeAPIError } from '../integrations/claude.js';
-import { retryReceipt, retryAll, triggerQueue } from '../receipts/upload-queue.js';
+import { ClaudeAPIError } from '../integrations/claude.js';
+import { extractAndFile, triggerQueue } from '../receipts/extract-queue.js';
+import { rateLimited } from '../platform/rate-limit.js';
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -15,6 +17,14 @@ const upload = multer({
     else cb(new Error('Only image files are allowed.'));
   },
 });
+
+const RECEIPT_STATUSES: ReceiptStatus[] = ['captured', 'extracted', 'reviewed', 'needsAttention'];
+
+/** Any parseable date → its 'YYYY-MM-DD', taking a leading ISO date as written. */
+function toYmd(value: string): string {
+  const m = /^\d{4}-\d{2}-\d{2}/.exec(String(value));
+  return m ? m[0] : new Date(value).toISOString().slice(0, 10);
+}
 
 export function receiptRoutes(storage: StorageService): Router {
   const router = Router();
@@ -31,6 +41,8 @@ export function receiptRoutes(storage: StorageService): Router {
     )
   `);
 
+  // Newest receipt date first — the date printed on the receipt once
+  // Claude has read it, the upload time until then.
   const selectAll = db.prepare(`
     SELECT * FROM receipts ORDER BY receipt_date DESC, created_at DESC
   `);
@@ -56,7 +68,9 @@ export function receiptRoutes(storage: StorageService): Router {
   `);
 
   // ── POST /api/receipts — Upload image(s), create receipt ──
-  router.post('/', upload.array('images', 10), (req: Request, res: Response): void => {
+  // Each upload is read by Claude straight away (extract-queue.ts), so
+  // this is a paid-API doorway and is rate limited like one.
+  router.post('/', rateLimited('receipt-upload', 30, 60_000), upload.array('images', 10), (req: Request, res: Response): void => {
     const files = req.files as Express.Multer.File[];
     if (!files || files.length === 0) {
       res.status(400).json({ error: 'No images uploaded.' });
@@ -97,6 +111,10 @@ export function receiptRoutes(storage: StorageService): Router {
       results.push(selectById.get(id) as ReceiptRow);
     }
 
+    // Read them now rather than on the next minute's poll. The response
+    // doesn't wait: the client sees `captured` and refreshes.
+    triggerQueue();
+
     res.status(201).json(results);
   });
 
@@ -120,10 +138,11 @@ export function receiptRoutes(storage: StorageService): Router {
       );
     }
 
-    // Group by month
+    // Group by the receipt's own month (not the folder it happens to sit
+    // in, which lagged behind until the old review step re-filed it).
     const grouped: Record<string, ReceiptRow[]> = {};
     for (const r of rows) {
-      (grouped[r.month_folder] ??= []).push(r);
+      (grouped[r.receipt_date.slice(0, 7)] ??= []).push(r);
     }
 
     // Sort months newest first
@@ -136,6 +155,27 @@ export function receiptRoutes(storage: StorageService): Router {
     res.json(result);
   });
 
+  // ── GET /api/receipts/summary — Counts for the list's status bar ──
+  // Must be registered before GET /:id, which would otherwise take
+  // "summary" as an id.
+  router.get('/summary', (_req: Request, res: Response): void => {
+    const row = db
+      .prepare(
+        `SELECT
+           SUM(status = 'captured')                                  AS processing,
+           SUM(status = 'extracted' AND COALESCE(confidence, '') <> 'high') AS toCheck,
+           SUM(status = 'needsAttention')                            AS unreadable
+         FROM receipts`,
+      )
+      .get() as { processing: number | null; toCheck: number | null; unreadable: number | null };
+
+    res.json({
+      processing: row.processing ?? 0,
+      toCheck: row.toCheck ?? 0,
+      unreadable: row.unreadable ?? 0,
+    });
+  });
+
   // ── GET /api/receipts/:id — Single receipt ──
   router.get('/:id', (req: Request, res: Response): void => {
     const row = selectById.get(req.params.id) as ReceiptRow | undefined;
@@ -144,6 +184,31 @@ export function receiptRoutes(storage: StorageService): Router {
       return;
     }
     res.json(row);
+  });
+
+  // ── GET /api/receipts/:id/image — The receipt photo, by id ──
+  // A stable link to the original image: unlike `/images/<path>`, it
+  // survives the file being re-filed when the date or vendor changes.
+  // `?download=1` saves it under its on-disk name
+  // (e.g. 2026-08-14_staples_1a2b3c4d.jpg). `?page=N` for extra pages.
+  router.get('/:id/image', (req: Request, res: Response): void => {
+    const row = selectById.get(req.params.id) as ReceiptRow | undefined;
+    if (!row) {
+      res.status(404).json({ error: 'Receipt not found.' });
+      return;
+    }
+
+    const pages = [row.primary_image, ...(JSON.parse(row.additional_images || '[]') as string[])];
+    const page = req.query.page === undefined ? 1 : Number(req.query.page);
+    const rel = Number.isInteger(page) ? pages[page - 1] : undefined;
+    const abs = rel ? storage.absolutePath(rel) : null;
+    if (!abs || !fs.existsSync(abs)) {
+      res.status(404).json({ error: 'Image not found.' });
+      return;
+    }
+
+    if (req.query.download) res.download(path.resolve(abs), path.basename(rel!));
+    else res.sendFile(path.resolve(abs));
   });
 
   // ── DELETE /api/receipts/:id — Delete receipt + files ──
@@ -165,8 +230,11 @@ export function receiptRoutes(storage: StorageService): Router {
     res.json({ deleted: true });
   });
 
-  // ── POST /api/receipts/:id/extract — Run Claude vision extraction ──
-  router.post('/:id/extract', async (req: Request, res: Response): Promise<void> => {
+  // ── POST /api/receipts/:id/extract — Read (or re-read) now ──
+  // Normally the extract queue does this on upload. This is the manual
+  // "Try again" for a receipt Claude couldn't read, and waits for the
+  // answer so the screen can show it.
+  router.post('/:id/extract', rateLimited('receipt-extract', 20, 60_000), async (req: Request, res: Response): Promise<void> => {
     const row = selectById.get(req.params.id) as ReceiptRow | undefined;
     if (!row) {
       res.status(404).json({ error: 'Receipt not found.' });
@@ -179,51 +247,8 @@ export function receiptRoutes(storage: StorageService): Router {
       return;
     }
 
-    // Collect all image paths
-    const additional: string[] = JSON.parse(row.additional_images || '[]');
-    const imagePaths = [row.primary_image, ...additional].map((p) =>
-      path.resolve(storage.absolutePath(p)),
-    );
-
     try {
-      const { result, rawJSON } = await extractReceipt(imagePaths, apiKey);
-      const now = new Date().toISOString();
-      const totalTax = result.taxes.reduce((sum, t) => sum + t.amount, 0);
-
-      db.prepare(`
-        UPDATE receipts SET
-          vendor = @vendor,
-          summary = @summary,
-          total_amount = @total_amount,
-          tax_amount = @tax_amount,
-          currency = @currency,
-          extracted_json = @extracted_json,
-          receipt_date = @receipt_date,
-          status = 'extracted',
-          updated_at = @updated_at
-        WHERE id = @id
-      `).run({
-        id: row.id,
-        vendor: result.vendor,
-        summary: result.summary_description,
-        total_amount: result.total,
-        tax_amount: totalTax,
-        currency: result.currency,
-        extracted_json: rawJSON,
-        receipt_date: result.receipt_date + 'T00:00:00.000Z',
-        updated_at: now,
-      });
-
-      // Update sidecar
-      storage.saveSidecar(row.primary_image, {
-        status: 'extracted',
-        capturedAt: row.capture_date,
-        extractedAt: now,
-        extraction: result,
-      });
-
-      const updated = selectById.get(row.id) as ReceiptRow;
-      res.json(updated);
+      res.json(await extractAndFile(storage, row.id, apiKey));
     } catch (err) {
       if (err instanceof ClaudeAPIError) {
         res.status(err.code === 'rate_limited' ? 429 : 400).json({
@@ -259,40 +284,38 @@ export function receiptRoutes(storage: StorageService): Router {
       res.status(400).json({ error: 'Invalid receipt_date.' });
       return;
     }
+    if (status && !RECEIPT_STATUSES.includes(status)) {
+      res.status(400).json({ error: 'Invalid status.' });
+      return;
+    }
 
     const now = new Date().toISOString();
 
-    // Re-file images into a different month folder if the receipt date moved.
-    let monthFolder = row.month_folder;
-    let primaryImage = row.primary_image;
-    let additionalImages = row.additional_images;
+    const supplied = (field: string): boolean =>
+      Object.prototype.hasOwnProperty.call(req.body, field);
 
-    if (receipt_date) {
-      const newDate = new Date(receipt_date);
-      const newMonth = storage.monthFolder(newDate);
-      if (newMonth !== row.month_folder) {
-        const additional: string[] = JSON.parse(row.additional_images || '[]');
-        primaryImage = storage.moveReceiptFileSet(row.primary_image, newDate);
-        additionalImages = JSON.stringify(
-          additional.map((p) => storage.moveReceiptFileSet(p, newDate)),
-        );
-        monthFolder = newMonth;
-      }
-    }
+    // Re-file the images if the date or vendor changed, so the folder on
+    // disk keeps matching what the list shows.
+    const nextDate = receipt_date ? toYmd(receipt_date) : row.receipt_date.slice(0, 10);
+    const nextVendor = supplied('vendor') ? (vendor ?? null) : row.vendor;
+    const primaryImage = storage.refileReceipt(row.primary_image, nextDate, nextVendor);
+    const additionalImages = JSON.stringify(
+      (JSON.parse(row.additional_images || '[]') as string[]).map((p) =>
+        storage.refileReceipt(p, nextDate, nextVendor),
+      ),
+    );
+    const monthFolder = nextDate.slice(0, 7);
 
     // Only fields actually present in the body are written. Previously
     // these four were coerced to null whenever they were absent, so a
     // partial update (e.g. just {status}) silently wiped the extracted
-    // vendor and amounts — after which the upload queue rejected the
-    // receipt for having no total. Sending an explicit null still clears
+    // vendor and amounts. Sending an explicit null still clears
     // a field; omitting it now leaves it alone, matching how
     // receipt_date/currency/status already behaved.
-    const supplied = (field: string): boolean =>
-      Object.prototype.hasOwnProperty.call(req.body, field);
 
     updateReceipt.run({
       id: row.id,
-      receipt_date: receipt_date || null,
+      receipt_date: receipt_date ? nextDate + 'T00:00:00.000Z' : null,
       month_folder: monthFolder,
       primary_image: primaryImage,
       additional_images: additionalImages,
@@ -305,7 +328,8 @@ export function receiptRoutes(storage: StorageService): Router {
       updated_at: now,
     });
 
-    // If approving (status → reviewed), update sidecar and trigger upload queue
+    // Operator checked it (status → reviewed): record their values in the
+    // sidecar, so the folder on disk carries the corrected data too.
     if (status === 'reviewed') {
       storage.saveSidecar(primaryImage, {
         status: 'reviewed',
@@ -320,30 +344,10 @@ export function receiptRoutes(storage: StorageService): Router {
           currency: currency || row.currency || 'CAD',
         },
       });
-
-      // Kick off Wave upload queue
-      triggerQueue();
     }
 
     const updated = selectById.get(row.id) as ReceiptRow;
     res.json(updated);
-  });
-
-  // ── POST /api/receipts/:id/retry — Retry a failed upload ──
-  router.post('/:id/retry', (req: Request, res: Response): void => {
-    const row = selectById.get(req.params.id) as ReceiptRow | undefined;
-    if (!row) {
-      res.status(404).json({ error: 'Receipt not found.' });
-      return;
-    }
-    retryReceipt(row.id);
-    res.json({ success: true });
-  });
-
-  // ── POST /api/receipts/retry-all — Retry all failed uploads ──
-  router.post('/retry-all', (_req: Request, res: Response): void => {
-    retryAll();
-    res.json({ success: true });
   });
 
   // ── GET /api/receipts/:id/duplicates — Check for duplicates ──
@@ -389,25 +393,6 @@ export function receiptRoutes(storage: StorageService): Router {
     }
 
     res.json({ warnings });
-  });
-
-  // ── GET /api/queue/status — Upload queue counts ──
-  router.get('/queue/status', (_req: Request, res: Response): void => {
-    const count = (status: string | string[]) => {
-      const statuses = Array.isArray(status) ? status : [status];
-      const placeholders = statuses.map(() => '?').join(',');
-      const row = db
-        .prepare(`SELECT COUNT(*) as c FROM receipts WHERE status IN (${placeholders})`)
-        .get(...statuses) as { c: number };
-      return row.c;
-    };
-
-    res.json({
-      uploaded: count('uploaded'),
-      pending: count(['reviewed', 'extracted']),
-      failed: count(['failed', 'needsAttention']),
-      captured: count('captured'),
-    });
   });
 
   return router;

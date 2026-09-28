@@ -113,46 +113,6 @@ export async function fetchAccounts(
   return all;
 }
 
-function isExpenseAccount(a: WaveAccount): boolean {
-  return a.typeName === 'Expenses' && !a.isArchived;
-}
-
-const ANCHOR_SUBTYPES = new Set(['Cash & Bank', 'Credit Card', 'Loan and Line of Credit']);
-const ANCHOR_TYPES = new Set(['Assets', 'Liabilities & Credit Cards']);
-
-function isAnchorAccount(a: WaveAccount): boolean {
-  return ANCHOR_TYPES.has(a.typeName) && ANCHOR_SUBTYPES.has(a.subtypeName) && !a.isArchived;
-}
-
-export async function fetchExpenseAccounts(
-  businessId: string,
-  token: string,
-): Promise<WaveAccount[]> {
-  const all = await fetchAccounts(businessId, token);
-  return all.filter(isExpenseAccount);
-}
-
-export async function fetchAnchorAccounts(
-  businessId: string,
-  token: string,
-): Promise<WaveAccount[]> {
-  const all = await fetchAccounts(businessId, token);
-  return all.filter(isAnchorAccount);
-}
-
-/**
- * Expense and anchor accounts share the same underlying account list —
- * fetched (and paginated) once here rather than twice, unlike calling
- * fetchExpenseAccounts + fetchAnchorAccounts separately.
- */
-export async function fetchExpenseAndAnchorAccounts(
-  businessId: string,
-  token: string,
-): Promise<{ expense: WaveAccount[]; anchor: WaveAccount[] }> {
-  const all = await fetchAccounts(businessId, token);
-  return { expense: all.filter(isExpenseAccount), anchor: all.filter(isAnchorAccount) };
-}
-
 export async function fetchIncomeAccounts(
   businessId: string,
   token: string,

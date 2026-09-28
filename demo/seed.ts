@@ -46,8 +46,6 @@ async function main(): Promise<void> {
     WAVE_ACCESS_TOKEN: 'demo-wave-token',
     WAVE_BUSINESS_ID: 'demo-business-1',
     WAVE_BUSINESS_NAME: 'Viewpoint Vision Care (Demo)',
-    WAVE_EXPENSE_ACCOUNT_ID: 'acct-expense-office',
-    WAVE_ANCHOR_ACCOUNT_ID: 'acct-bank-chequing',
     WAVE_SALES_TAX_ID: 'tax-hst',
     WAVE_INCOME_ACCOUNT_ID: 'acct-income-fees',
 
@@ -163,7 +161,7 @@ async function main(): Promise<void> {
         updated_at: date.toISOString(),
       });
     }
-    console.log('  ✓ 3 receipts captured (tap one to extract)');
+    console.log('  ✓ 3 receipts captured (read on the first queue pass)');
   } else {
     console.log('  · receipts already present, left alone');
   }
