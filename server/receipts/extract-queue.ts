@@ -153,7 +153,10 @@ const poller = makePoller({
   name: 'extract-queue',
   intervalMs: POLL_INTERVAL_MS,
   pass: async () => {
-    if (storageRef) await processQueue(storageRef);
+    if (!storageRef) return;
+    await processQueue(storageRef);
+    // After reading, so new receipts are moved under their final name.
+    await storageRef.syncToCloud(allImagePaths());
   },
 });
 
@@ -166,6 +169,14 @@ export function startPolling(storage: StorageService): void {
 }
 
 export const stopPolling = poller.stop;
+
+/** Every stored receipt image, extra pages included. */
+export function allImagePaths(): string[] {
+  const rows = getDb()
+    .prepare(`SELECT primary_image, additional_images FROM receipts`)
+    .all() as Pick<ReceiptRow, 'primary_image' | 'additional_images'>[];
+  return rows.flatMap((r) => [r.primary_image, ...parseList(r.additional_images)]);
+}
 
 function parseList(json: string | null): string[] {
   try {

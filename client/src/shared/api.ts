@@ -129,6 +129,27 @@ export function getReceiptSummary(): Promise<ReceiptSummary> {
   return request('/receipts/summary');
 }
 
+/** The cloud folder receipts are stored in, chosen on the Receipts screen. */
+export interface CloudStorageStatus {
+  options: { id: string; label: string }[];
+  enabled: boolean;
+  selectedId: string | null;
+  /** Receipts that haven't reached the chosen location yet. */
+  waiting: number;
+  error: string | null;
+}
+
+export function getCloudStorage(): Promise<CloudStorageStatus> {
+  return request('/receipts/cloud-storage');
+}
+
+export function setCloudStorage(id: string | null): Promise<CloudStorageStatus> {
+  return request('/receipts/cloud-storage', {
+    method: 'POST',
+    body: JSON.stringify({ id }),
+  });
+}
+
 /**
  * Stable link to a receipt's photo, by id — survives the file being
  * re-filed on disk. `download` saves it under its on-disk name.

@@ -75,6 +75,13 @@ entirely on this computer" is no longer the whole story:
 3. **Patient names and email addresses are sent to Wave** when an invoice
    is raised, and Wave emails the invoice to the patient.
 
+Separately, if a cloud service is chosen on the Receipts screen, receipt
+photos and their extracted details are moved, unencrypted, into that
+service's folder on the Mac and synced by the Mac's own account. That
+folder is then their only home, so `scripts/backup.sh` no longer covers
+them. The app holds no credentials for it. Patient files and the database
+are never moved there.
+
 Reading email and sending reminders both use Google OAuth against the
 business's own mailbox; the app stores only the encrypted tokens.
 

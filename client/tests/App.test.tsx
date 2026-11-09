@@ -18,6 +18,7 @@ import * as api from '../src/shared/api';
 beforeEach(() => {
   for (const fn of Object.values(api)) fn.mockReset();
   api.listReceipts.mockResolvedValue([]);
+  api.getCloudStorage.mockResolvedValue({ options: [], enabled: false, selectedId: null, waiting: 0, error: null });
   api.getReceiptSummary.mockResolvedValue({ processing: 0, toCheck: 0, unreadable: 0 });
   api.getHealthStatus.mockResolvedValue({ claudeConfigured: false, claudeHealthy: null, waveConfigured: false, waveHealthy: null });
   // ReceiptList reads this for the demo-mode banner.

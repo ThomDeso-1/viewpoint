@@ -82,7 +82,8 @@ viewpoint-receipts/
 │   │   ├── rate-limit.ts           fixed-window limiter for paid-API / ministry routes
 │   │   └── phi-guard.ts            refuses to boot over plain HTTP once PHI is in play
 │   ├── receipts/
-│   │   ├── storage.ts              monthly folders, image hash, sidecars, re-filing
+│   │   ├── storage.ts              monthly folders, image hash, sidecars, re-filing, move to cloud
+│   │   ├── cloud-folder.ts         finds iCloud Drive / other synced folders on this Mac
 │   │   └── extract-queue.ts        background poller → Claude reads new receipts, re-files by date/vendor
 │   ├── exams/
 │   │   ├── types.ts                all exam-workflow row types + status unions + extraction shape

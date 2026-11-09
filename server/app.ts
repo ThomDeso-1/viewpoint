@@ -9,6 +9,7 @@ import { fileURLToPath } from 'url';
 import { getDb } from './db/db.js';
 import { resolveDataDir } from './db/paths.js';
 import { StorageService } from './receipts/storage.js';
+import { cloudDir, previousCloudDir } from './receipts/cloud-folder.js';
 import { authMiddleware, requireAuth } from './platform/auth.js';
 import { apiNotFound, errorHandler } from './platform/http.js';
 import { authRoutes } from './routes/auth.js';
@@ -56,7 +57,16 @@ export function createApp(): Express {
   // Behind auth: these are photographs of the user's receipts, and were
   // previously served to anyone who could reach the port. Same-origin
   // <img> requests carry the session cookie, so the client is unaffected.
-  app.use('/images', requireAuth, express.static(path.join(DATA_DIR, 'Receipts')));
+  app.use('/images', requireAuth, express.static(path.join(DATA_DIR, 'Receipts')), (req, res, next) => {
+    // Not local? It has been moved to the chosen cloud folder, or is on its
+    // way out of the last one. Looked up per request: the choice can change.
+    const folders = [cloudDir(), previousCloudDir()].filter((d): d is string => !!d);
+    const tryFolder = (i: number): void => {
+      if (i === folders.length) next();
+      else express.static(folders[i])(req, res, () => tryFolder(i + 1));
+    };
+    tryFolder(0);
+  });
 
   app.use('/api/auth', authRoutes());
 

@@ -1,6 +1,14 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import {
+  cloudDir,
+  describeCloudError,
+  ensureCloudFolder,
+  previousCloudDir,
+  setCloudError,
+} from './cloud-folder.js';
+import { updateEnvConfig } from '../platform/env-config.js';
 
 /**
  * File extension to save an uploaded image under, based on its real mime
@@ -36,6 +44,12 @@ function vendorSlug(vendor: string | null): string {
  * Manages receipt image files on disk — saving into monthly folders,
  * loading, deleting, and computing hashes.
  *
+ * A file can sit in one of three roots, and callers never need to know
+ * which. New files are always written to the local root, so a cloud
+ * service being offline can't fail an upload; syncToCloud then moves them
+ * to the chosen cloud folder. The previous cloud folder only counts while
+ * files are being moved out of it after the operator switches.
+ *
  * Direct port of StorageService.swift.
  */
 export class StorageService {
@@ -46,8 +60,17 @@ export class StorageService {
     fs.mkdirSync(this.receiptsRoot, { recursive: true });
   }
 
-  /** Absolute path for a relative receipt path. */
+  /** Every place a file may be, newest first. Resolved per call: the choice can change. */
+  private roots(): string[] {
+    return [this.receiptsRoot, cloudDir(), previousCloudDir()].filter((r): r is string => !!r);
+  }
+
+  /** Absolute path for a relative receipt path, wherever the file currently is. */
   absolutePath(relativePath: string): string {
+    for (const root of this.roots()) {
+      const abs = path.join(root, relativePath);
+      if (fs.existsSync(abs)) return abs;
+    }
     return path.join(this.receiptsRoot, relativePath);
   }
 
@@ -115,22 +138,22 @@ export class StorageService {
     return crypto.createHash('sha256').update(data).digest('hex');
   }
 
-  /** Delete image files and clean up empty month folders. */
-  deleteReceiptFiles(primaryPath: string, additionalPaths: string[]): void {
-    const allPaths = [primaryPath, ...additionalPaths];
-    for (const p of allPaths) {
-      const abs = this.absolutePath(p);
-      if (fs.existsSync(abs)) fs.unlinkSync(abs);
-
-      // Clean empty month folder
-      const folder = path.dirname(abs);
+  /** Remove a file from every root. A cloud failure mustn't block deleting the receipt. */
+  private removeEverywhere(relativePath: string): void {
+    for (const root of this.roots()) {
+      const abs = path.join(root, relativePath);
       try {
-        const contents = fs.readdirSync(folder);
-        if (contents.length === 0) fs.rmdirSync(folder);
-      } catch {
-        // ignore
+        fs.rmSync(abs, { force: true });
+        removeFolderIfEmpty(path.dirname(abs));
+      } catch (err) {
+        if (root === this.receiptsRoot) throw err;
       }
     }
+  }
+
+  /** Delete image files and clean up empty month folders. */
+  deleteReceiptFiles(primaryPath: string, additionalPaths: string[]): void {
+    for (const p of [primaryPath, ...additionalPaths]) this.removeEverywhere(p);
   }
 
   /**
@@ -145,7 +168,9 @@ export class StorageService {
    *
    * The random batch id (and `_pN` page suffix) from the original name is
    * kept, so two receipts from the same vendor on the same day can't
-   * collide. Same target → no-op.
+   * collide. Same target → no-op. Also a no-op when the image can't be
+   * reached (cloud service signed out): the fields still save, and the
+   * name catches up the next time the receipt is edited.
    */
   refileReceipt(oldPath: string, ymd: string, vendor: string | null): string {
     const month = ymd.slice(0, 7);
@@ -156,43 +181,88 @@ export class StorageService {
     const newRelative = `${month}/${fileName}`;
     if (newRelative === oldPath) return oldPath;
 
-    const oldAbs = this.absolutePath(oldPath);
-    const newAbs = this.absolutePath(newRelative);
-    if (fs.existsSync(newAbs)) return oldPath; // never overwrite another receipt
+    const roots = this.roots();
+    if (!roots.some((root) => fs.existsSync(path.join(root, oldPath)))) return oldPath;
+    // never overwrite another receipt
+    if (roots.some((root) => fs.existsSync(path.join(root, newRelative)))) return oldPath;
 
-    fs.mkdirSync(path.dirname(newAbs), { recursive: true });
-    const oldSidecar = this.sidecarPath(oldPath);
-    const hasSidecar = fs.existsSync(oldSidecar);
-    fs.renameSync(oldAbs, newAbs);
-    if (hasSidecar) fs.renameSync(oldSidecar, this.sidecarPath(newRelative));
-
-    // Clean up now-empty old month folder
-    const oldFolder = path.dirname(oldAbs);
-    try {
-      const contents = fs.readdirSync(oldFolder);
-      if (contents.length === 0) fs.rmdirSync(oldFolder);
-    } catch {
-      // ignore
+    // A sidecar can briefly sit in a different root from its image: a fresh
+    // one is written locally until the next sync moves it.
+    for (const root of roots) {
+      renameIfPresent(root, oldPath, newRelative);
+      renameIfPresent(root, sidecarRelative(oldPath), sidecarRelative(newRelative));
     }
 
     return newRelative;
   }
 
-  // ── Sidecar files ──
+  // ── Cloud storage ──
 
-  private sidecarPath(imagePath: string): string {
-    const abs = this.absolutePath(imagePath);
-    const parsed = path.parse(abs);
-    return path.join(parsed.dir, `${parsed.name}.json`);
+  /**
+   * Move receipts to where the operator chose: the local copy is removed
+   * once the cloud copy is confirmed, because the point is to free up this
+   * Mac. Also empties the previous location after a switch.
+   *
+   * Stops at the first failure — they would all fail the same way — and
+   * records it for the Receipts screen. Nothing is removed from a source
+   * until its copy is verified, and the next pass picks up where this one
+   * stopped.
+   */
+  async syncToCloud(imagePaths: string[]): Promise<void> {
+    const target = cloudDir();
+    const previous = previousCloudDir();
+    if (!target && !previous) {
+      setCloudError(null);
+      return;
+    }
+    try {
+      // Throws if a service is signed out or blocked. Essential for
+      // `previous`: an unreadable folder looks empty, and clearing it on
+      // that basis would orphan every receipt inside.
+      if (target) ensureCloudFolder(target);
+      if (previous) ensureCloudFolder(previous);
+
+      const destination = target ?? this.receiptsRoot;
+      for (const imagePath of imagePaths) {
+        for (const rel of [imagePath, sidecarRelative(imagePath)]) {
+          if (previous) await moveFile(path.join(previous, rel), path.join(destination, rel), false);
+          if (target) await moveFile(path.join(this.receiptsRoot, rel), path.join(target, rel), true);
+        }
+      }
+
+      if (previous) updateEnvConfig({ RECEIPTS_CLOUD_PREVIOUS_DIR: '' });
+      setCloudError(null);
+    } catch (err) {
+      setCloudError(describeCloudError(err));
+    }
   }
 
+  /** How many of these images have not reached the chosen location yet. */
+  countWaitingToMove(imagePaths: string[]): number {
+    const target = cloudDir();
+    const previous = previousCloudDir();
+    return imagePaths.filter(
+      (rel) =>
+        (previous !== null && fs.existsSync(path.join(previous, rel))) ||
+        (target !== null && fs.existsSync(path.join(this.receiptsRoot, rel))),
+    ).length;
+  }
+
+  // ── Sidecar files ──
+
+  /**
+   * Always written locally, even for a receipt already in the cloud: a
+   * signed-out service then can't lose an operator's review, and the next
+   * sync moves it over the older cloud version.
+   */
   saveSidecar(imagePath: string, data: object): void {
-    const p = this.sidecarPath(imagePath);
+    const p = path.join(this.receiptsRoot, sidecarRelative(imagePath));
+    fs.mkdirSync(path.dirname(p), { recursive: true });
     fs.writeFileSync(p, JSON.stringify(data, null, 2));
   }
 
   loadSidecar(imagePath: string): object | null {
-    const p = this.sidecarPath(imagePath);
+    const p = this.absolutePath(sidecarRelative(imagePath));
     if (!fs.existsSync(p)) return null;
     try {
       return JSON.parse(fs.readFileSync(p, 'utf-8'));
@@ -202,9 +272,64 @@ export class StorageService {
   }
 
   deleteSidecarFiles(primaryPath: string, additionalPaths: string[]): void {
-    for (const p of [primaryPath, ...additionalPaths]) {
-      const sc = this.sidecarPath(p);
-      if (fs.existsSync(sc)) fs.unlinkSync(sc);
-    }
+    for (const p of [primaryPath, ...additionalPaths]) this.removeEverywhere(sidecarRelative(p));
+  }
+}
+
+function sidecarRelative(imagePath: string): string {
+  const parsed = path.parse(imagePath);
+  return path.join(parsed.dir, `${parsed.name}.json`);
+}
+
+function renameIfPresent(root: string, from: string, to: string): void {
+  const fromAbs = path.join(root, from);
+  if (!fs.existsSync(fromAbs)) return;
+  const toAbs = path.join(root, to);
+  fs.mkdirSync(path.dirname(toAbs), { recursive: true });
+  fs.renameSync(fromAbs, toAbs);
+  removeFolderIfEmpty(path.dirname(fromAbs));
+}
+
+/**
+ * Copy, verify, then remove the source. Async because a file iCloud has
+ * offloaded downloads during the copy, which mustn't freeze the server.
+ * `overwrite` is false when moving out of an old location, whose version
+ * of a sidecar is older than anything already at the destination.
+ */
+async function moveFile(src: string, dest: string, overwrite: boolean): Promise<void> {
+  if (!fs.existsSync(src)) return;
+  if (!overwrite && fs.existsSync(dest)) {
+    fs.rmSync(src, { force: true });
+    removeFolderIfEmpty(path.dirname(src));
+    return;
+  }
+
+  fs.mkdirSync(path.dirname(dest), { recursive: true });
+  // Write-then-rename, so a crash can't leave a truncated photo at `dest`.
+  const tmp = `${dest}.tmp-${process.pid}`;
+  try {
+    await fs.promises.copyFile(src, tmp);
+    fs.renameSync(tmp, dest);
+  } finally {
+    fs.rmSync(tmp, { force: true });
+  }
+
+  // The receipt was re-filed or deleted during the copy, so this name is stale.
+  if (!fs.existsSync(src)) {
+    fs.rmSync(dest, { force: true });
+    return;
+  }
+  if (fs.statSync(src).size !== fs.statSync(dest).size) {
+    throw new Error('copy verification failed');
+  }
+  fs.rmSync(src, { force: true });
+  removeFolderIfEmpty(path.dirname(src));
+}
+
+function removeFolderIfEmpty(folder: string): void {
+  try {
+    if (fs.readdirSync(folder).length === 0) fs.rmdirSync(folder);
+  } catch {
+    // ignore
   }
 }

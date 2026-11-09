@@ -14,6 +14,7 @@ import {
 import { AddToHomeScreenTip } from '../shared/AddToHomeScreenTip';
 import { SetupChecklist } from '../receipts/SetupChecklist';
 import { CaptureButton } from '../receipts/CaptureButton';
+import { CloudSaveLocation } from '../receipts/CloudSaveLocation';
 import { ReceiptRow } from '../receipts/ReceiptRow';
 import { ReceiptSummaryBar } from '../receipts/ReceiptSummaryBar';
 import { needsCheck } from '../receipts/receipt-status';
@@ -154,6 +155,8 @@ export function ReceiptList() {
         ))}
 
       <SetupChecklist settings={settings} />
+
+      <CloudSaveLocation />
 
       {summary && <ReceiptSummaryBar summary={summary} />}
 

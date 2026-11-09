@@ -6,8 +6,18 @@ import path from 'path';
 import { getDb, type ReceiptRow, type ReceiptStatus } from '../db/db.js';
 import { StorageService } from '../receipts/storage.js';
 import { ClaudeAPIError } from '../integrations/claude.js';
-import { extractAndFile, triggerQueue } from '../receipts/extract-queue.js';
+import { allImagePaths, extractAndFile, triggerQueue } from '../receipts/extract-queue.js';
+import {
+  cloudDir,
+  cloudFolderOptions,
+  getCloudError,
+  icloudStorageSupported,
+  previousCloudDir,
+  probeCloudFolder,
+  setCloudError,
+} from '../receipts/cloud-folder.js';
 import { rateLimited } from '../platform/rate-limit.js';
+import { updateEnvConfig } from '../platform/env-config.js';
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -66,6 +76,67 @@ export function receiptRoutes(storage: StorageService): Router {
       updated_at = @updated_at
     WHERE id = @id
   `);
+
+  /** Filesystem paths stay on the server: the client only sees ids and labels. */
+  const cloudStatus = () => {
+    const dir = cloudDir();
+    const options = cloudFolderOptions();
+    const selected = options.find((o) => o.dir === dir) ?? null;
+    return {
+      options: options.map(({ id, label }) => ({ id, label })),
+      enabled: dir !== null,
+      selectedId: selected?.id ?? null,
+      waiting: storage.countWaitingToMove(allImagePaths()),
+      error:
+        dir && !selected
+          ? "That cloud folder isn't available on this Mac. Check that you're still signed in to the service."
+          : getCloudError(),
+    };
+  };
+
+  // ── GET /api/receipts/cloud-storage — Where receipts are saved ──
+  // Registered before GET /:id, which would otherwise take it as an id.
+  router.get('/cloud-storage', (_req: Request, res: Response): void => {
+    res.json(cloudStatus());
+  });
+
+  // ── POST /api/receipts/cloud-storage — Choose a service, or {id: null} ──
+  router.post('/cloud-storage', (req: Request, res: Response): void => {
+    const { id } = req.body as { id?: unknown };
+    const current = cloudDir();
+
+    // Files can only be tracked in one old location at a time.
+    if (previousCloudDir()) {
+      res.status(409).json({ error: 'Receipts are still moving from the last location. Try again once that finishes.' });
+      return;
+    }
+
+    let next = '';
+    if (id !== null) {
+      const option = cloudFolderOptions().find((o) => o.id === id);
+      if (!option) {
+        res.status(400).json({ error: "That cloud service isn't set up on this Mac." });
+        return;
+      }
+      if (id === 'icloud' && !icloudStorageSupported()) {
+        res.status(400).json({ error: 'Storing receipts in iCloud Drive needs macOS Sonoma or later.' });
+        return;
+      }
+      const problem = probeCloudFolder(option.dir);
+      if (problem) {
+        res.status(400).json({ error: problem });
+        return;
+      }
+      next = option.dir;
+    }
+
+    if (next !== (current ?? '')) {
+      updateEnvConfig({ RECEIPTS_CLOUD_DIR: next, RECEIPTS_CLOUD_PREVIOUS_DIR: current ?? '' });
+      setCloudError(null);
+      triggerQueue(); // move the existing receipts now, not on the next poll
+    }
+    res.json(cloudStatus());
+  });
 
   // ── POST /api/receipts — Upload image(s), create receipt ──
   // Each upload is read by Claude straight away (extract-queue.ts), so
